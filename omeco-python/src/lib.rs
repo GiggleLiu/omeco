@@ -194,6 +194,20 @@ impl PyTreeSA {
         }
     }
 
+    /// Set the number of iterations per temperature level.
+    fn with_niters(&self, niters: usize) -> Self {
+        Self {
+            inner: self.inner.clone().with_niters(niters),
+        }
+    }
+
+    /// Set the inverse temperature schedule (betas).
+    fn with_betas(&self, betas: Vec<f64>) -> Self {
+        Self {
+            inner: self.inner.clone().with_betas(betas),
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "TreeSA(ntrials={}, niters={})",

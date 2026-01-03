@@ -112,6 +112,18 @@ impl TreeSA {
         self.ntrials = ntrials;
         self
     }
+
+    /// Set the number of iterations per temperature level.
+    pub fn with_niters(mut self, niters: usize) -> Self {
+        self.niters = niters;
+        self
+    }
+
+    /// Set the inverse temperature schedule.
+    pub fn with_betas(mut self, betas: Vec<f64>) -> Self {
+        self.betas = betas;
+        self
+    }
 }
 
 /// Build a label-to-integer mapping for an EinCode.
