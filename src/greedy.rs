@@ -319,7 +319,8 @@ fn build_nested<L: Label>(
             let right_labels = get_subtree_labels(right, leaf_labels);
 
             // Compute output labels for this contraction
-            let output_labels = compute_contraction_output(&left_labels, &right_labels, final_output);
+            let output_labels =
+                compute_contraction_output(&left_labels, &right_labels, final_output);
 
             // Build children
             let left_nested = build_nested(left, leaf_labels, final_output);
@@ -333,7 +334,10 @@ fn build_nested<L: Label>(
     }
 }
 
-fn get_subtree_labels<L: Label>(tree: &ContractionTree, leaf_labels: &HashMap<usize, Vec<L>>) -> Vec<L> {
+fn get_subtree_labels<L: Label>(
+    tree: &ContractionTree,
+    leaf_labels: &HashMap<usize, Vec<L>>,
+) -> Vec<L> {
     match tree {
         ContractionTree::Leaf(idx) => leaf_labels.get(idx).cloned().unwrap_or_default(),
         ContractionTree::Node { left, right } => {
@@ -344,11 +348,7 @@ fn get_subtree_labels<L: Label>(tree: &ContractionTree, leaf_labels: &HashMap<us
     }
 }
 
-fn compute_contraction_output<L: Label>(
-    left: &[L],
-    right: &[L],
-    final_output: &[L],
-) -> Vec<L> {
+fn compute_contraction_output<L: Label>(left: &[L], right: &[L], final_output: &[L]) -> Vec<L> {
     use std::collections::HashSet;
 
     let left_set: HashSet<_> = left.iter().cloned().collect();
@@ -360,17 +360,13 @@ fn compute_contraction_output<L: Label>(
     // Include labels that appear in only one input (external)
     // or appear in both inputs and are in the final output
     for l in left {
-        if !right_set.contains(l) || final_set.contains(l) {
-            if !output.contains(l) {
-                output.push(l.clone());
-            }
+        if (!right_set.contains(l) || final_set.contains(l)) && !output.contains(l) {
+            output.push(l.clone());
         }
     }
     for l in right {
-        if !left_set.contains(l) || final_set.contains(l) {
-            if !output.contains(l) {
-                output.push(l.clone());
-            }
+        if (!left_set.contains(l) || final_set.contains(l)) && !output.contains(l) {
+            output.push(l.clone());
         }
     }
 
@@ -458,10 +454,7 @@ mod tests {
 
     #[test]
     fn test_optimize_greedy() {
-        let code = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let mut size_dict = HashMap::new();
         size_dict.insert('i', 4);
         size_dict.insert('j', 8);
@@ -478,10 +471,7 @@ mod tests {
 
     #[test]
     fn test_tree_to_nested_einsum() {
-        let tree = ContractionTree::node(
-            ContractionTree::leaf(0),
-            ContractionTree::leaf(1),
-        );
+        let tree = ContractionTree::node(ContractionTree::leaf(0), ContractionTree::leaf(1));
         let ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
         let iy = vec!['i', 'k'];
 

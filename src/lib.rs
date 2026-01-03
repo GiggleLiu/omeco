@@ -97,8 +97,8 @@ pub mod utils;
 
 // Re-export main types
 pub use complexity::{
-    eincode_complexity, flop, nested_complexity, nested_flop,
-    peak_memory, sliced_complexity, ContractionComplexity,
+    eincode_complexity, flop, nested_complexity, nested_flop, peak_memory, sliced_complexity,
+    ContractionComplexity,
 };
 pub use eincode::{log2_size_dict, uniform_size_dict, EinCode, NestedEinsum, SlicedEinsum};
 pub use greedy::{optimize_greedy, ContractionTree, GreedyMethod, GreedyResult};
@@ -205,10 +205,7 @@ mod tests {
 
     #[test]
     fn test_optimize_code_treesa() {
-        let code = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
 
         let mut sizes = HashMap::new();
         sizes.insert('i', 4);
@@ -224,10 +221,7 @@ mod tests {
 
     #[test]
     fn test_contraction_complexity_wrapper() {
-        let code = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
 
         let mut sizes = HashMap::new();
         sizes.insert('i', 4);

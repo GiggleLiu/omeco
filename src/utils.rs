@@ -72,7 +72,10 @@ where
     L: std::hash::Hash + Eq,
     I: IntoIterator<Item = L>,
 {
-    labels.into_iter().map(|l| log2_sizes.get(&l).copied().unwrap_or(0.0)).sum()
+    labels
+        .into_iter()
+        .map(|l| log2_sizes.get(&l).copied().unwrap_or(0.0))
+        .sum()
 }
 
 #[cfg(test)]

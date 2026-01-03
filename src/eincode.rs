@@ -47,7 +47,10 @@ impl<L: Label> EinCode<L> {
 
     /// Create an EinCode for a trace operation (no output indices).
     pub fn trace(ixs: Vec<Vec<L>>) -> Self {
-        Self { ixs, iy: Vec::new() }
+        Self {
+            ixs,
+            iy: Vec::new(),
+        }
     }
 
     /// Get the number of input tensors.
@@ -189,9 +192,7 @@ impl<L: Label> NestedEinsum<L> {
     pub fn is_binary(&self) -> bool {
         match self {
             Self::Leaf { .. } => true,
-            Self::Node { args, .. } => {
-                args.len() == 2 && args.iter().all(|a| a.is_binary())
-            }
+            Self::Node { args, .. } => args.len() == 2 && args.iter().all(|a| a.is_binary()),
         }
     }
 
@@ -319,7 +320,10 @@ impl<L: Label> SlicedEinsum<L> {
 /// assert_eq!(sizes.get(&'i'), Some(&10));
 /// ```
 pub fn uniform_size_dict<L: Label>(code: &EinCode<L>, size: usize) -> HashMap<L, usize> {
-    code.unique_labels().into_iter().map(|l| (l, size)).collect()
+    code.unique_labels()
+        .into_iter()
+        .map(|l| (l, size))
+        .collect()
 }
 
 /// Convert a size dictionary to log2 sizes.
@@ -336,20 +340,16 @@ mod tests {
 
     #[test]
     fn test_eincode_new() {
-        let code: EinCode<char> = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         assert_eq!(code.num_tensors(), 2);
         assert!(code.is_valid());
     }
 
     #[test]
     fn test_eincode_unique_labels() {
-        let code: EinCode<char> = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let labels = code.unique_labels();
         assert_eq!(labels.len(), 3);
         assert!(labels.contains(&'i'));
@@ -359,20 +359,16 @@ mod tests {
 
     #[test]
     fn test_eincode_contracted_indices() {
-        let code: EinCode<char> = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let contracted = code.contracted_indices();
         assert_eq!(contracted, vec!['j']);
     }
 
     #[test]
     fn test_eincode_display() {
-        let code: EinCode<char> = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         assert_eq!(format!("{}", code), "ij,jk->ik");
     }
 
@@ -388,10 +384,7 @@ mod tests {
     fn test_nested_einsum_node() {
         let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
         let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
-        let eins = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let tree = NestedEinsum::node(vec![leaf0, leaf1], eins);
 
         assert!(!tree.is_leaf());
@@ -406,16 +399,10 @@ mod tests {
         let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
         let leaf2: NestedEinsum<char> = NestedEinsum::leaf(2);
 
-        let eins1 = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let tree1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
 
-        let eins2 = EinCode::new(
-            vec![vec!['i', 'k'], vec!['k', 'l']],
-            vec!['i', 'l'],
-        );
+        let eins2 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'l']], vec!['i', 'l']);
         let tree2 = NestedEinsum::node(vec![tree1, leaf2], eins2);
 
         assert_eq!(tree2.depth(), 2);
@@ -433,10 +420,8 @@ mod tests {
 
     #[test]
     fn test_uniform_size_dict() {
-        let code: EinCode<char> = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let sizes = uniform_size_dict(&code, 10);
         assert_eq!(sizes.len(), 3);
         assert_eq!(sizes.get(&'i'), Some(&10));

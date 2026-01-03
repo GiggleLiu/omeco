@@ -6,8 +6,7 @@
 
 use crate::eincode::{EinCode, NestedEinsum};
 use crate::expr_tree::{
-    apply_rule, contraction_output, rule_diff, tree_complexity, DecompositionType,
-    ExprTree, Rule,
+    apply_rule, contraction_output, rule_diff, tree_complexity, DecompositionType, ExprTree, Rule,
 };
 use crate::greedy::{optimize_greedy, GreedyMethod};
 use crate::score::ScoreFunction;
@@ -118,7 +117,12 @@ impl TreeSA {
 /// Build a label-to-integer mapping for an EinCode.
 fn build_label_map<L: Label>(code: &EinCode<L>) -> (HashMap<L, usize>, Vec<L>) {
     let labels = code.unique_labels();
-    let map: HashMap<L, usize> = labels.iter().cloned().enumerate().map(|(i, l)| (l, i)).collect();
+    let map: HashMap<L, usize> = labels
+        .iter()
+        .cloned()
+        .enumerate()
+        .map(|(i, l)| (l, i))
+        .collect();
     (map, labels)
 }
 
@@ -323,15 +327,17 @@ fn expr_tree_to_nested<L: Label>(
     inverse_map: &[L],
 ) -> NestedEinsum<L> {
     match tree {
-        ExprTree::Leaf(info) => {
-            NestedEinsum::leaf(info.tensor_id.unwrap_or(0))
-        }
+        ExprTree::Leaf(info) => NestedEinsum::leaf(info.tensor_id.unwrap_or(0)),
         ExprTree::Node { left, right, info } => {
             let left_nested = expr_tree_to_nested(left, original_ixs, inverse_map);
             let right_nested = expr_tree_to_nested(right, original_ixs, inverse_map);
 
             // Convert output dims back to labels
-            let iy: Vec<L> = info.out_dims.iter().map(|&i| inverse_map[i].clone()).collect();
+            let iy: Vec<L> = info
+                .out_dims
+                .iter()
+                .map(|&i| inverse_map[i].clone())
+                .collect();
 
             // Get input labels from children
             let left_labels = get_child_labels(&left_nested, original_ixs);
@@ -368,7 +374,10 @@ pub fn optimize_treesa<L: Label>(
 
     // Build label mapping
     let (label_map, labels) = build_label_map(code);
-    let log2_sizes: Vec<f64> = labels.iter().map(|l| (size_dict[l] as f64).log2()).collect();
+    let log2_sizes: Vec<f64> = labels
+        .iter()
+        .map(|l| (size_dict[l] as f64).log2())
+        .collect();
     let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
     let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
 
@@ -384,10 +393,10 @@ pub fn optimize_treesa<L: Label>(
 
             // Initialize tree
             let tree = match config.initializer {
-                Initializer::Greedy => {
-                    init_greedy(code, size_dict, &label_map, &int_ixs, &int_iy)
-                        .unwrap_or_else(|| init_random(&int_ixs, &int_iy, config.decomposition_type, &mut rng))
-                }
+                Initializer::Greedy => init_greedy(code, size_dict, &label_map, &int_ixs, &int_iy)
+                    .unwrap_or_else(|| {
+                        init_random(&int_ixs, &int_iy, config.decomposition_type, &mut rng)
+                    }),
                 Initializer::Random => {
                     init_random(&int_ixs, &int_iy, config.decomposition_type, &mut rng)
                 }
@@ -442,10 +451,7 @@ mod tests {
 
     #[test]
     fn test_optimize_treesa_simple() {
-        let code = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let mut size_dict = HashMap::new();
         size_dict.insert('i', 4);
         size_dict.insert('j', 8);
@@ -493,10 +499,7 @@ mod tests {
 
     #[test]
     fn test_build_label_map() {
-        let code = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let (map, labels) = build_label_map(&code);
 
         assert_eq!(labels.len(), 3);

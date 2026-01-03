@@ -68,9 +68,17 @@ pub fn eincode_complexity<L: Label>(
     let input_sizes: Vec<f64> = code
         .ixs
         .iter()
-        .map(|ix| ix.iter().map(|l| log2_sizes.get(l).copied().unwrap_or(0.0)).sum())
+        .map(|ix| {
+            ix.iter()
+                .map(|l| log2_sizes.get(l).copied().unwrap_or(0.0))
+                .sum()
+        })
         .collect();
-    let all_sizes: Vec<f64> = input_sizes.iter().cloned().chain(std::iter::once(sc)).collect();
+    let all_sizes: Vec<f64> = input_sizes
+        .iter()
+        .cloned()
+        .chain(std::iter::once(sc))
+        .collect();
     let rwc = log2sumexp2(&all_sizes);
 
     ContractionComplexity { tc, sc, rwc }
@@ -96,7 +104,11 @@ fn nested_complexity_inner<L: Label>(
         NestedEinsum::Leaf { tensor_index } => {
             let sc: f64 = original_ixs
                 .get(*tensor_index)
-                .map(|ix| ix.iter().map(|l| log2_sizes.get(l).copied().unwrap_or(0.0)).sum())
+                .map(|ix| {
+                    ix.iter()
+                        .map(|l| log2_sizes.get(l).copied().unwrap_or(0.0))
+                        .sum()
+                })
                 .unwrap_or(0.0);
             (f64::NEG_INFINITY, sc, f64::NEG_INFINITY)
         }
@@ -131,14 +143,26 @@ fn nested_complexity_inner<L: Label>(
                 .iter()
                 .map(|arg| get_output_size(arg, log2_sizes, original_ixs))
                 .collect();
-            let all_sizes: Vec<f64> = input_sizes.iter().cloned().chain(std::iter::once(this_sc)).collect();
+            let all_sizes: Vec<f64> = input_sizes
+                .iter()
+                .cloned()
+                .chain(std::iter::once(this_sc))
+                .collect();
             let this_rwc = log2sumexp2(&all_sizes);
 
             // Combine complexities
-            let all_tcs: Vec<f64> = child_tcs.iter().cloned().chain(std::iter::once(this_tc)).collect();
+            let all_tcs: Vec<f64> = child_tcs
+                .iter()
+                .cloned()
+                .chain(std::iter::once(this_tc))
+                .collect();
             let total_tc = log2sumexp2(&all_tcs);
             let total_sc = max_sc.max(this_sc);
-            let all_rwcs: Vec<f64> = child_rwcs.iter().cloned().chain(std::iter::once(this_rwc)).collect();
+            let all_rwcs: Vec<f64> = child_rwcs
+                .iter()
+                .cloned()
+                .chain(std::iter::once(this_rwc))
+                .collect();
             let total_rwc = log2sumexp2(&all_rwcs);
 
             (total_tc, total_sc, total_rwc)
@@ -152,18 +176,19 @@ fn get_output_size<L: Label>(
     original_ixs: &[Vec<L>],
 ) -> f64 {
     match code {
-        NestedEinsum::Leaf { tensor_index } => {
-            original_ixs
-                .get(*tensor_index)
-                .map(|ix| ix.iter().map(|l| log2_sizes.get(l).copied().unwrap_or(0.0)).sum())
-                .unwrap_or(0.0)
-        }
-        NestedEinsum::Node { eins, .. } => {
-            eins.iy
-                .iter()
-                .map(|l| log2_sizes.get(l).copied().unwrap_or(0.0))
-                .sum()
-        }
+        NestedEinsum::Leaf { tensor_index } => original_ixs
+            .get(*tensor_index)
+            .map(|ix| {
+                ix.iter()
+                    .map(|l| log2_sizes.get(l).copied().unwrap_or(0.0))
+                    .sum()
+            })
+            .unwrap_or(0.0),
+        NestedEinsum::Node { eins, .. } => eins
+            .iy
+            .iter()
+            .map(|l| log2_sizes.get(l).copied().unwrap_or(0.0))
+            .sum(),
     }
 }
 
@@ -207,10 +232,7 @@ pub fn flop<L: Label>(code: &EinCode<L>, size_dict: &HashMap<L, usize>) -> usize
 }
 
 /// Compute the total FLOP count for a NestedEinsum.
-pub fn nested_flop<L: Label>(
-    code: &NestedEinsum<L>,
-    size_dict: &HashMap<L, usize>,
-) -> usize {
+pub fn nested_flop<L: Label>(code: &NestedEinsum<L>, size_dict: &HashMap<L, usize>) -> usize {
     match code {
         NestedEinsum::Leaf { .. } => 0,
         NestedEinsum::Node { args, eins } => {
@@ -239,7 +261,13 @@ fn peak_memory_inner<L: Label>(
 ) -> (usize, usize) {
     match code {
         NestedEinsum::Leaf { tensor_index } => {
-            let size = tensor_size(original_ixs.get(*tensor_index).map(|v| v.as_slice()).unwrap_or(&[]), size_dict);
+            let size = tensor_size(
+                original_ixs
+                    .get(*tensor_index)
+                    .map(|v| v.as_slice())
+                    .unwrap_or(&[]),
+                size_dict,
+            );
             (size + temp_size, size)
         }
         NestedEinsum::Node { args, eins } => {
@@ -247,7 +275,8 @@ fn peak_memory_inner<L: Label>(
             let mut current_temp = temp_size;
 
             for arg in args {
-                let (peak, arg_size) = peak_memory_inner(arg, size_dict, original_ixs, current_temp);
+                let (peak, arg_size) =
+                    peak_memory_inner(arg, size_dict, original_ixs, current_temp);
                 max_peak = max_peak.max(peak);
                 current_temp += arg_size;
             }
@@ -295,10 +324,7 @@ mod tests {
 
     #[test]
     fn test_eincode_complexity() {
-        let code = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let mut size_dict = HashMap::new();
         size_dict.insert('i', 4);
         size_dict.insert('j', 8);
@@ -314,10 +340,7 @@ mod tests {
 
     #[test]
     fn test_flop() {
-        let code = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let mut size_dict = HashMap::new();
         size_dict.insert('i', 4);
         size_dict.insert('j', 8);
@@ -331,10 +354,7 @@ mod tests {
     fn test_nested_complexity() {
         let leaf0 = NestedEinsum::leaf(0);
         let leaf1 = NestedEinsum::leaf(1);
-        let eins = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
 
         let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
@@ -353,10 +373,7 @@ mod tests {
     fn test_nested_flop() {
         let leaf0 = NestedEinsum::leaf(0);
         let leaf1 = NestedEinsum::leaf(1);
-        let eins = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
 
         let mut size_dict = HashMap::new();
@@ -372,10 +389,7 @@ mod tests {
     fn test_peak_memory() {
         let leaf0 = NestedEinsum::leaf(0);
         let leaf1 = NestedEinsum::leaf(1);
-        let eins = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
 
         let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
@@ -392,10 +406,7 @@ mod tests {
 
     #[test]
     fn test_get_loop_indices() {
-        let code = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['i', 'k']],
-            vec![],
-        );
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k'], vec!['i', 'k']], vec![]);
         let loop_indices = get_loop_indices(&code);
 
         // i, j, k all appear more than once
@@ -408,10 +419,7 @@ mod tests {
     fn test_sliced_complexity() {
         let leaf0 = NestedEinsum::leaf(0);
         let leaf1 = NestedEinsum::leaf(1);
-        let eins = EinCode::new(
-            vec![vec!['i', 'j'], vec!['j', 'k']],
-            vec!['i', 'k'],
-        );
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
         let sliced = SlicedEinsum::new(vec!['j'], nested);
 

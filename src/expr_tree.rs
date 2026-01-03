@@ -246,17 +246,13 @@ pub fn contraction_output(ix1: &[usize], ix2: &[usize], final_output: &[usize]) 
     // 1. Appear in only one input (external edges)
     // 2. Appear in both inputs AND in the final output (batched indices)
     for &l in ix1 {
-        if !ix2_set.contains(&l) || final_set.contains(&l) {
-            if !output.contains(&l) {
-                output.push(l);
-            }
+        if (!ix2_set.contains(&l) || final_set.contains(&l)) && !output.contains(&l) {
+            output.push(l);
         }
     }
     for &l in ix2 {
-        if !ix1_set.contains(&l) || final_set.contains(&l) {
-            if !output.contains(&l) {
-                output.push(l);
-            }
+        if (!ix1_set.contains(&l) || final_set.contains(&l)) && !output.contains(&l) {
+            output.push(l);
         }
     }
 
@@ -273,7 +269,13 @@ pub fn tree_complexity(tree: &ExprTree, log2_sizes: &[f64]) -> (f64, f64, f64) {
         ExprTree::Node { left, right, info } => {
             let (tcl, scl, rwl) = tree_complexity(left, log2_sizes);
             let (tcr, scr, rwr) = tree_complexity(right, log2_sizes);
-            let (tc, sc, rw) = tcscrw(left.labels(), right.labels(), &info.out_dims, log2_sizes, true);
+            let (tc, sc, rw) = tcscrw(
+                left.labels(),
+                right.labels(),
+                &info.out_dims,
+                log2_sizes,
+                true,
+            );
 
             (
                 fast_log2sumexp2_3(tc, tcl, tcr),
@@ -357,12 +359,20 @@ pub fn rule_diff(
 
                             // Compute new complexity
                             let (tc_new_left, sc_new_left, rw_new_left) = match rule {
-                                Rule::Rule1 => {
-                                    tcscrw(a.labels(), c.labels(), &new_left_labels, log2_sizes, compute_rw)
-                                }
-                                Rule::Rule2 => {
-                                    tcscrw(c.labels(), b.labels(), &new_left_labels, log2_sizes, compute_rw)
-                                }
+                                Rule::Rule1 => tcscrw(
+                                    a.labels(),
+                                    c.labels(),
+                                    &new_left_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                Rule::Rule2 => tcscrw(
+                                    c.labels(),
+                                    b.labels(),
+                                    &new_left_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
                                 _ => unreachable!(),
                             };
 
@@ -437,12 +447,20 @@ pub fn rule_diff(
 
                             // Compute new complexity
                             let (tc_new_right, sc_new_right, rw_new_right) = match rule {
-                                Rule::Rule3 => {
-                                    tcscrw(a.labels(), c.labels(), &new_right_labels, log2_sizes, compute_rw)
-                                }
-                                Rule::Rule4 => {
-                                    tcscrw(b.labels(), a.labels(), &new_right_labels, log2_sizes, compute_rw)
-                                }
+                                Rule::Rule3 => tcscrw(
+                                    a.labels(),
+                                    c.labels(),
+                                    &new_right_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                Rule::Rule4 => tcscrw(
+                                    b.labels(),
+                                    a.labels(),
+                                    &new_right_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
                                 _ => unreachable!(),
                             };
 
@@ -507,13 +525,11 @@ pub fn apply_rule(tree: ExprTree, rule: Rule, new_labels: Vec<usize>) -> ExprTre
                     // ((a,b),c) → ((a,c),b)
                     match *left {
                         ExprTree::Node {
-                            left: a,
-                            right: b,
-                            ..
+                            left: a, right: b, ..
                         } => {
                             let new_left = ExprTree::Node {
                                 left: a,
-                                right: right,
+                                right,
                                 info: ExprInfo::internal(new_labels),
                             };
                             ExprTree::Node {
@@ -522,20 +538,14 @@ pub fn apply_rule(tree: ExprTree, rule: Rule, new_labels: Vec<usize>) -> ExprTre
                                 info,
                             }
                         }
-                        _ => ExprTree::Node {
-                            left,
-                            right,
-                            info,
-                        },
+                        _ => ExprTree::Node { left, right, info },
                     }
                 }
                 Rule::Rule2 => {
                     // ((a,b),c) → ((c,b),a)
                     match *left {
                         ExprTree::Node {
-                            left: a,
-                            right: b,
-                            ..
+                            left: a, right: b, ..
                         } => {
                             let new_left = ExprTree::Node {
                                 left: right,
@@ -548,20 +558,14 @@ pub fn apply_rule(tree: ExprTree, rule: Rule, new_labels: Vec<usize>) -> ExprTre
                                 info,
                             }
                         }
-                        _ => ExprTree::Node {
-                            left,
-                            right,
-                            info,
-                        },
+                        _ => ExprTree::Node { left, right, info },
                     }
                 }
                 Rule::Rule3 => {
                     // (a,(b,c)) → (b,(a,c))
                     match *right {
                         ExprTree::Node {
-                            left: b,
-                            right: c,
-                            ..
+                            left: b, right: c, ..
                         } => {
                             let new_right = ExprTree::Node {
                                 left,
@@ -574,20 +578,14 @@ pub fn apply_rule(tree: ExprTree, rule: Rule, new_labels: Vec<usize>) -> ExprTre
                                 info,
                             }
                         }
-                        _ => ExprTree::Node {
-                            left,
-                            right,
-                            info,
-                        },
+                        _ => ExprTree::Node { left, right, info },
                     }
                 }
                 Rule::Rule4 => {
                     // (a,(b,c)) → (c,(b,a))
                     match *right {
                         ExprTree::Node {
-                            left: b,
-                            right: c,
-                            ..
+                            left: b, right: c, ..
                         } => {
                             let new_right = ExprTree::Node {
                                 left: b,
@@ -600,11 +598,7 @@ pub fn apply_rule(tree: ExprTree, rule: Rule, new_labels: Vec<usize>) -> ExprTre
                                 info,
                             }
                         }
-                        _ => ExprTree::Node {
-                            left,
-                            right,
-                            info,
-                        },
+                        _ => ExprTree::Node { left, right, info },
                     }
                 }
                 Rule::Rule5 => {
