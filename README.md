@@ -1,6 +1,7 @@
 # omeco
 
 [![CI](https://github.com/GiggleLiu/omeco/workflows/CI/badge.svg)](https://github.com/GiggleLiu/omeco/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/GiggleLiu/omeco/branch/master/graph/badge.svg)](https://codecov.io/gh/GiggleLiu/omeco)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Tensor network contraction order optimization in Rust.
