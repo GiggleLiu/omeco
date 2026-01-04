@@ -471,4 +471,103 @@ mod tests {
         // Space complexity: i + k = 2 + 2 = 4
         assert!((dims.space_complexity() - 4.0).abs() < 1e-10);
     }
+
+    #[test]
+    fn test_edges_method() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        let edges_0 = il.edges(&0).unwrap();
+        assert_eq!(edges_0.len(), 2);
+        assert!(edges_0.contains(&'i'));
+        assert!(edges_0.contains(&'j'));
+    }
+
+    #[test]
+    fn test_vertices_iter() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        let vertices: Vec<_> = il.vertices().collect();
+        assert_eq!(vertices.len(), 3);
+    }
+
+    #[test]
+    fn test_no_common_edges() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Vertices 0 and 2 don't share edges
+        assert!(!il.are_neighbors(&0, &2));
+        let shared = il.shared_edges(&0, &2);
+        assert!(shared.is_empty());
+    }
+
+    #[test]
+    fn test_is_external() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // 'i' is open, so it's external
+        assert!(il.is_external(&'i', &0, &1));
+        // 'j' connects only 0 and 1, so it's not external
+        assert!(!il.is_external(&'j', &0, &1));
+    }
+
+    #[test]
+    fn test_single_tensor() {
+        let mut v2e = HashMap::new();
+        v2e.insert(0, vec!['i', 'j']);
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'j']);
+
+        assert_eq!(il.nv(), 1);
+        assert_eq!(il.ne(), 2);
+        assert!(il.is_open(&'i'));
+        assert!(il.is_open(&'j'));
+    }
+
+    #[test]
+    fn test_vertices_of_edge() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // 'j' connects vertices 0 and 1
+        let vertices = il.vertices_of_edge(&'j').unwrap();
+        assert_eq!(vertices.len(), 2);
+        assert!(vertices.contains(&0));
+        assert!(vertices.contains(&1));
+    }
+
+    #[test]
+    fn test_replace_vertex() {
+        let v2e = simple_v2e();
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        il.replace_vertex(&0, 100);
+        assert_eq!(il.nv(), 3);
+        assert!(il.edges(&100).is_some());
+        assert!(il.edges(&0).is_none());
+    }
+
+    #[test]
+    fn test_set_edges() {
+        let v2e = simple_v2e();
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        il.set_edges(0, vec!['a', 'b']);
+        let edges = il.edges(&0).unwrap();
+        assert_eq!(edges.len(), 2);
+        assert!(edges.contains(&'a'));
+        assert!(edges.contains(&'b'));
+    }
+
+    #[test]
+    fn test_is_empty() {
+        let il: IncidenceList<usize, char> = IncidenceList::new(HashMap::new(), vec![]);
+        assert!(il.is_empty());
+
+        let v2e = simple_v2e();
+        let il2: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+        assert!(!il2.is_empty());
+    }
 }

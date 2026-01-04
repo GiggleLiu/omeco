@@ -247,7 +247,7 @@ fn optimize_tree_sa<R: Rng>(
 ) -> ExprTree {
     // Track global space complexity (updated periodically)
     let (_, mut global_sc, _) = tree_complexity(&tree, log2_sizes);
-    
+
     for &beta in betas {
         for _ in 0..niters {
             // Sweep through all nodes, trying mutations at each
@@ -278,14 +278,14 @@ fn sweep_mutate<R: Rng>(
             // First, recursively process children
             let new_left = sweep_mutate(*left, beta, log2_sizes, score, decomp, global_sc, rng);
             let new_right = sweep_mutate(*right, beta, log2_sizes, score, decomp, global_sc, rng);
-            
+
             // Then try to mutate at this node
             let tree = ExprTree::Node {
                 left: Box::new(new_left),
                 right: Box::new(new_right),
                 info,
             };
-            
+
             try_mutate_node(tree, beta, log2_sizes, score, decomp, global_sc, rng)
         }
     }
@@ -303,22 +303,22 @@ fn try_mutate_node<R: Rng>(
     rng: &mut R,
 ) -> ExprTree {
     let rules = Rule::applicable_rules(&tree, decomp);
-    
+
     if rules.is_empty() {
         return tree;
     }
-    
+
     // Select a random rule
     let rule = rules[rng.random_range(0..rules.len())];
-    
+
     // Compute the complexity change
     if let Some(diff) = rule_diff(&tree, rule, log2_sizes, score.rw_weight > 0.0) {
         // Compute energy change (time complexity difference)
         let dtc = diff.tc1 - diff.tc0;
-        
+
         // Use global SC for space penalty check (approximation that works well)
         let sc_new = global_sc.max(global_sc + diff.dsc);
-        
+
         // Energy change calculation with space penalty
         let sc_penalty = if sc_new > score.sc_target {
             score.sc_weight
@@ -326,19 +326,19 @@ fn try_mutate_node<R: Rng>(
             0.0
         };
         let d_energy = sc_penalty * diff.dsc + dtc;
-        
+
         // Metropolis acceptance criterion
         let accept = if d_energy <= 0.0 {
             true
         } else {
             rng.random::<f64>() < (-beta * d_energy).exp()
         };
-        
+
         if accept {
             return apply_rule(tree, rule, diff.new_labels);
         }
     }
-    
+
     tree
 }
 
@@ -526,5 +526,107 @@ mod tests {
         assert!(map.contains_key(&'i'));
         assert!(map.contains_key(&'j'));
         assert!(map.contains_key(&'k'));
+    }
+
+    #[test]
+    fn test_treesa_with_random_init() {
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+
+        let mut config = TreeSA::fast();
+        config.initializer = Initializer::Random;
+
+        let result = optimize_treesa(&code, &size_dict, &config);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_treesa_path_decomposition() {
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 8);
+        size_dict.insert('l', 4);
+
+        let mut config = TreeSA::fast();
+        config.decomposition_type = DecompositionType::Path;
+
+        let result = optimize_treesa(&code, &size_dict, &config);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_treesa_with_sc_target() {
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+
+        let mut config = TreeSA::fast();
+        config.score.sc_target = 10.0;
+        config.score.sc_weight = 1.0;
+
+        let result = optimize_treesa(&code, &size_dict, &config);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_treesa_with_rw_weight() {
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+
+        let mut config = TreeSA::fast();
+        config.score.rw_weight = 0.5;
+
+        let result = optimize_treesa(&code, &size_dict, &config);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_treesa_single_tensor() {
+        let code = EinCode::new(vec![vec!['i', 'j']], vec!['i', 'j']);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+
+        let config = TreeSA::fast();
+        let result = optimize_treesa(&code, &size_dict, &config);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().leaf_count(), 1);
+    }
+
+    #[test]
+    fn test_score_function() {
+        let score = ScoreFunction {
+            tc_weight: 1.0,
+            sc_target: 10.0,
+            sc_weight: 2.0,
+            rw_weight: 0.5,
+        };
+
+        assert_eq!(score.sc_target, 10.0);
+        assert_eq!(score.sc_weight, 2.0);
+        assert_eq!(score.rw_weight, 0.5);
+    }
+
+    #[test]
+    fn test_init_random_path_decomp() {
+        let int_ixs = vec![vec![0, 1], vec![1, 2], vec![2, 3]];
+        let int_iy = vec![0, 3];
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, DecompositionType::Path, &mut rng);
+        assert_eq!(tree.leaf_count(), 3);
     }
 }

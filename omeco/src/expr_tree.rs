@@ -774,4 +774,200 @@ mod tests {
         // sc = max(output, input1, input2) = max(i+k, i+j, j+k) = max(4, 5, 5) = 5
         assert!((sc - 5.0).abs() < 1e-10);
     }
+
+    #[test]
+    fn test_rule_diff_rule1() {
+        // ((0,1),2) structure for Rule1/Rule2
+        let tree = simple_tree();
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+
+        let diff = rule_diff(&tree, Rule::Rule1, &log2_sizes, true);
+        assert!(diff.is_some());
+        let diff = diff.unwrap();
+        // The diff should have valid complexity values
+        assert!(diff.tc0 > 0.0);
+        assert!(diff.tc1 > 0.0);
+    }
+
+    #[test]
+    fn test_rule_diff_rule2() {
+        let tree = simple_tree();
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+
+        let diff = rule_diff(&tree, Rule::Rule2, &log2_sizes, false);
+        assert!(diff.is_some());
+        let diff = diff.unwrap();
+        assert!(diff.tc0 > 0.0);
+        assert!(diff.tc1 > 0.0);
+        // rw should be 0 when compute_rw is false
+        assert_eq!(diff.rw0, 0.0);
+        assert_eq!(diff.rw1, 0.0);
+    }
+
+    #[test]
+    fn test_rule_diff_rule3_rule4() {
+        // (0,(1,2)) structure for Rule3/Rule4
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0); // i,j
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1); // j,k
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2); // k,l
+
+        let inner = ExprTree::node(leaf1, leaf2, vec![1, 3]); // j,l
+        let tree = ExprTree::node(leaf0, inner, vec![0, 3]); // i,l
+
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+
+        let diff3 = rule_diff(&tree, Rule::Rule3, &log2_sizes, true);
+        assert!(diff3.is_some());
+
+        let diff4 = rule_diff(&tree, Rule::Rule4, &log2_sizes, true);
+        assert!(diff4.is_some());
+    }
+
+    #[test]
+    fn test_rule_diff_rule5() {
+        // ((0,1),(2,3)) structure for Rule5
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let leaf3 = ExprTree::leaf(vec![3, 4], 3);
+
+        let left = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+        let right = ExprTree::node(leaf2, leaf3, vec![2, 4]);
+        let tree = ExprTree::node(left, right, vec![0, 4]);
+
+        let log2_sizes = vec![2.0, 3.0, 3.0, 3.0, 2.0];
+
+        let diff = rule_diff(&tree, Rule::Rule5, &log2_sizes, true);
+        assert!(diff.is_some());
+    }
+
+    #[test]
+    fn test_apply_rule1() {
+        let tree = simple_tree();
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+
+        let diff = rule_diff(&tree, Rule::Rule1, &log2_sizes, false).unwrap();
+        let new_tree = apply_rule(tree, Rule::Rule1, diff.new_labels);
+
+        assert_eq!(new_tree.leaf_count(), 3);
+        assert!(!new_tree.is_leaf());
+    }
+
+    #[test]
+    fn test_apply_rule3() {
+        // (0,(1,2)) structure
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+
+        let inner = ExprTree::node(leaf1, leaf2, vec![1, 3]);
+        let tree = ExprTree::node(leaf0, inner, vec![0, 3]);
+
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+        let diff = rule_diff(&tree, Rule::Rule3, &log2_sizes, false).unwrap();
+        let new_tree = apply_rule(tree, Rule::Rule3, diff.new_labels);
+
+        assert_eq!(new_tree.leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_apply_rule5() {
+        // ((0,1),(2,3)) structure
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let leaf3 = ExprTree::leaf(vec![3, 4], 3);
+
+        let left = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+        let right = ExprTree::node(leaf2, leaf3, vec![2, 4]);
+        let tree = ExprTree::node(left, right, vec![0, 4]);
+
+        let log2_sizes = vec![2.0, 3.0, 3.0, 3.0, 2.0];
+        let diff = rule_diff(&tree, Rule::Rule5, &log2_sizes, false).unwrap();
+        let new_tree = apply_rule(tree, Rule::Rule5, diff.new_labels);
+
+        assert_eq!(new_tree.leaf_count(), 4);
+    }
+
+    #[test]
+    fn test_applicable_rules_path_decomp() {
+        // For path decomposition: ((0,1),2) - left is node, right is leaf -> Rule1
+        let tree = simple_tree();
+        let rules = Rule::applicable_rules(&tree, DecompositionType::Path);
+        assert!(rules.contains(&Rule::Rule1));
+        assert!(!rules.contains(&Rule::Rule5));
+    }
+
+    #[test]
+    fn test_applicable_rules_path_decomp_left_leaf() {
+        // (0,(1,2)) - left is leaf, right is node -> Rule5
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let inner = ExprTree::node(leaf1, leaf2, vec![1, 3]);
+        let tree = ExprTree::node(leaf0, inner, vec![0, 3]);
+
+        let rules = Rule::applicable_rules(&tree, DecompositionType::Path);
+        assert!(rules.contains(&Rule::Rule5));
+        assert!(!rules.contains(&Rule::Rule1));
+    }
+
+    #[test]
+    fn test_rule_diff_on_leaf() {
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let log2_sizes = vec![2.0, 3.0];
+
+        let diff = rule_diff(&leaf, Rule::Rule1, &log2_sizes, false);
+        assert!(diff.is_none());
+    }
+
+    #[test]
+    fn test_tree_complexity_single_leaf() {
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let log2_sizes = vec![2.0, 3.0];
+
+        let (tc, sc, rw) = tree_complexity(&leaf, &log2_sizes);
+        // Single leaf has no contractions
+        assert!(tc < 1e-10 || tc == f64::NEG_INFINITY);
+        assert!((sc - 5.0).abs() < 1e-10); // i+j = 2+3 = 5
+        assert!(rw < 1e-10 || rw == f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn test_applicable_rules_both_children_nodes() {
+        // ((0,1),(2,3)) - both children are nodes -> Rules 1,2,3,4
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let leaf3 = ExprTree::leaf(vec![3, 4], 3);
+
+        let left = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+        let right = ExprTree::node(leaf2, leaf3, vec![2, 4]);
+        let tree = ExprTree::node(left, right, vec![0, 4]);
+
+        let rules = Rule::applicable_rules(&tree, DecompositionType::Tree);
+        assert!(rules.contains(&Rule::Rule1));
+        assert!(rules.contains(&Rule::Rule2));
+        assert!(rules.contains(&Rule::Rule3));
+        assert!(rules.contains(&Rule::Rule4));
+        // Rule5 not returned for Tree decomposition
+        assert!(!rules.contains(&Rule::Rule5));
+    }
+
+    #[test]
+    fn test_contraction_output_all_contracted() {
+        // When all indices are contracted
+        let output = contraction_output(&[0, 1], &[0, 1], &[]);
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn test_tcscrw_no_rw() {
+        let log2_sizes = vec![2.0, 3.0, 2.0];
+        let (tc, sc, rw) = tcscrw(&[0, 1], &[1, 2], &[0, 2], &log2_sizes, false);
+
+        assert!(tc > 0.0);
+        assert!(sc > 0.0);
+        assert_eq!(rw, 0.0);
+    }
 }
