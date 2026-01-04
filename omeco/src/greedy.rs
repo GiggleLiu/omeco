@@ -398,6 +398,43 @@ mod tests {
     }
 
     #[test]
+    fn test_greedy_method_new() {
+        let method = GreedyMethod::new(0.5, 1.0);
+        assert_eq!(method.alpha, 0.5);
+        assert_eq!(method.temperature, 1.0);
+    }
+
+    #[test]
+    fn test_greedy_method_stochastic() {
+        let method = GreedyMethod::stochastic(2.5);
+        assert_eq!(method.alpha, 0.0);
+        assert_eq!(method.temperature, 2.5);
+    }
+
+    #[test]
+    fn test_contraction_tree_leaf() {
+        let leaf = ContractionTree::leaf(42);
+        assert!(matches!(leaf, ContractionTree::Leaf(42)));
+    }
+
+    #[test]
+    fn test_contraction_tree_node() {
+        let left = ContractionTree::leaf(0);
+        let right = ContractionTree::leaf(1);
+        let node = ContractionTree::node(left, right);
+        assert!(matches!(node, ContractionTree::Node { .. }));
+    }
+
+    #[test]
+    fn test_greedy_empty() {
+        let il: IncidenceList<usize, char> = IncidenceList::new(HashMap::new(), vec![]);
+        let log2_sizes: HashMap<char, f64> = HashMap::new();
+
+        let result = tree_greedy(&il, &log2_sizes, 0.0, 0.0);
+        assert!(result.is_none());
+    }
+
+    #[test]
     fn test_greedy_single_tensor() {
         let ixs = vec![vec!['i', 'j']];
         let iy = vec!['i', 'j'];
@@ -453,6 +490,40 @@ mod tests {
     }
 
     #[test]
+    fn test_greedy_with_alpha() {
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']];
+        let iy = vec!['i', 'l'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let mut log2_sizes = HashMap::new();
+        log2_sizes.insert('i', 2.0);
+        log2_sizes.insert('j', 3.0);
+        log2_sizes.insert('k', 3.0);
+        log2_sizes.insert('l', 2.0);
+
+        // Test with alpha = 0.5
+        let result = tree_greedy(&il, &log2_sizes, 0.5, 0.0);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_greedy_with_temperature() {
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']];
+        let iy = vec!['i', 'l'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let mut log2_sizes = HashMap::new();
+        log2_sizes.insert('i', 2.0);
+        log2_sizes.insert('j', 3.0);
+        log2_sizes.insert('k', 3.0);
+        log2_sizes.insert('l', 2.0);
+
+        // Test with positive temperature (stochastic)
+        let result = tree_greedy(&il, &log2_sizes, 0.0, 1.0);
+        assert!(result.is_some());
+    }
+
+    #[test]
     fn test_optimize_greedy() {
         let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let mut size_dict = HashMap::new();
@@ -470,6 +541,20 @@ mod tests {
     }
 
     #[test]
+    fn test_optimize_greedy_stochastic() {
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+
+        let config = GreedyMethod::stochastic(1.0);
+        let result = optimize_greedy(&code, &size_dict, &config);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
     fn test_tree_to_nested_einsum() {
         let tree = ContractionTree::node(ContractionTree::leaf(0), ContractionTree::leaf(1));
         let ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
@@ -478,5 +563,82 @@ mod tests {
         let nested = tree_to_nested_einsum(&tree, &ixs, &iy);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_tree_to_nested_einsum_chain() {
+        // ((0,1),2)
+        let inner = ContractionTree::node(ContractionTree::leaf(0), ContractionTree::leaf(1));
+        let tree = ContractionTree::node(inner, ContractionTree::leaf(2));
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']];
+        let iy = vec!['i', 'l'];
+
+        let nested = tree_to_nested_einsum(&tree, &ixs, &iy);
+        assert!(nested.is_binary());
+        assert_eq!(nested.leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_cost_ordering() {
+        // Test that Cost implements correct min-heap ordering
+        let cost1 = Cost(1.0);
+        let cost2 = Cost(2.0);
+        
+        // Lower cost should have higher priority (reverse ordering)
+        assert!(cost1 > cost2);
+        assert!(cost2 < cost1);
+        assert!(cost1 == Cost(1.0));
+    }
+
+    #[test]
+    fn test_greedy_disconnected_tensors() {
+        // Two tensors that don't share any indices
+        let ixs = vec![vec!['i', 'j'], vec!['k', 'l']];
+        let iy = vec!['i', 'j', 'k', 'l'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let mut log2_sizes = HashMap::new();
+        log2_sizes.insert('i', 2.0);
+        log2_sizes.insert('j', 2.0);
+        log2_sizes.insert('k', 2.0);
+        log2_sizes.insert('l', 2.0);
+
+        let result = tree_greedy(&il, &log2_sizes, 0.0, 0.0);
+        // Even disconnected tensors should produce a result
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_greedy_trace() {
+        // Trace operation: contract all indices
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'i']];
+        let iy = vec![];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let mut log2_sizes = HashMap::new();
+        log2_sizes.insert('i', 2.0);
+        log2_sizes.insert('j', 2.0);
+
+        let result = tree_greedy(&il, &log2_sizes, 0.0, 0.0);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_compute_contraction_output_no_final() {
+        // Test contraction output with empty final output
+        let output = compute_contraction_output(&['i', 'j'], &['j', 'k'], &[]);
+        assert!(output.contains(&'i'));
+        assert!(output.contains(&'k'));
+        assert!(!output.contains(&'j')); // contracted
+    }
+
+    #[test]
+    fn test_compute_contraction_output_with_batched() {
+        // Test with batched index (appears in both inputs and output)
+        let output = compute_contraction_output(&['i', 'j', 'b'], &['j', 'k', 'b'], &['i', 'k', 'b']);
+        assert!(output.contains(&'i'));
+        assert!(output.contains(&'k'));
+        assert!(output.contains(&'b')); // batched, kept
+        assert!(!output.contains(&'j')); // contracted
     }
 }

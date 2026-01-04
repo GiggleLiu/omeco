@@ -118,6 +118,15 @@ mod tests {
     }
 
     #[test]
+    fn test_new_score() {
+        let score = ScoreFunction::new(2.0, 3.0, 0.5, 15.0);
+        assert_eq!(score.tc_weight, 2.0);
+        assert_eq!(score.sc_weight, 3.0);
+        assert_eq!(score.rw_weight, 0.5);
+        assert_eq!(score.sc_target, 15.0);
+    }
+
+    #[test]
     fn test_evaluate_below_target() {
         let score = ScoreFunction::default();
         // tc=10, sc=5 (below target of 20), rw=8
@@ -138,12 +147,42 @@ mod tests {
     }
 
     #[test]
+    fn test_evaluate_with_rw_weight() {
+        let score = ScoreFunction::new(1.0, 0.0, 1.0, 100.0);
+        // tc=10, sc=5, rw=8
+        let result = score.evaluate(10.0, 5.0, 8.0);
+        // tc: 2^10 = 1024, rw: 2^8 = 256
+        let expected = 1024.0 + 256.0;
+        assert!((result - expected).abs() < 1e-10);
+    }
+
+    #[test]
     fn test_time_optimized() {
         let score = ScoreFunction::time_optimized();
+        assert_eq!(score.tc_weight, 1.0);
         assert_eq!(score.sc_weight, 0.0);
+        assert_eq!(score.rw_weight, 0.0);
+        assert!(score.sc_target.is_infinite());
         // Space penalty should be zero even with high sc
         let result = score.evaluate(10.0, 100.0, 0.0);
         assert!((result - 1024.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_space_optimized() {
+        let score = ScoreFunction::space_optimized(10.0);
+        assert_eq!(score.tc_weight, 0.0);
+        assert_eq!(score.sc_weight, 1.0);
+        assert_eq!(score.rw_weight, 0.0);
+        assert_eq!(score.sc_target, 10.0);
+
+        // Should only penalize space above target
+        let result_below = score.evaluate(10.0, 5.0, 8.0);
+        assert!((result_below - 0.0).abs() < 1e-10);
+
+        let result_above = score.evaluate(10.0, 12.0, 8.0);
+        // sc penalty: 2^12 - 2^10 = 4096 - 1024 = 3072
+        assert!((result_above - 3072.0).abs() < 1e-10);
     }
 
     #[test]
@@ -152,5 +191,17 @@ mod tests {
         assert!(!score.exceeds_target(10.0));
         assert!(!score.exceeds_target(20.0));
         assert!(score.exceeds_target(21.0));
+    }
+
+    #[test]
+    fn test_score_serialization() {
+        let score = ScoreFunction::new(1.0, 2.0, 0.5, 15.0);
+        let json = serde_json::to_string(&score).unwrap();
+        let decoded: ScoreFunction = serde_json::from_str(&json).unwrap();
+
+        assert!((score.tc_weight - decoded.tc_weight).abs() < 1e-10);
+        assert!((score.sc_weight - decoded.sc_weight).abs() < 1e-10);
+        assert!((score.rw_weight - decoded.rw_weight).abs() < 1e-10);
+        assert!((score.sc_target - decoded.sc_target).abs() < 1e-10);
     }
 }

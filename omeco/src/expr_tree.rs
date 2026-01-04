@@ -970,4 +970,260 @@ mod tests {
         assert!(sc > 0.0);
         assert_eq!(rw, 0.0);
     }
+
+    #[test]
+    fn test_expr_info_internal() {
+        let info = ExprInfo::internal(vec![0, 1, 2]);
+        assert_eq!(info.out_dims, vec![0, 1, 2]);
+        assert!(info.tensor_id.is_none());
+        assert!(info.cached.is_none());
+    }
+
+    #[test]
+    fn test_expr_info_leaf() {
+        let info = ExprInfo::leaf(vec![0, 1], 42);
+        assert_eq!(info.out_dims, vec![0, 1]);
+        assert_eq!(info.tensor_id, Some(42));
+        assert!(info.cached.is_none());
+    }
+
+    #[test]
+    fn test_expr_tree_info() {
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let info = leaf.info();
+        assert_eq!(info.out_dims, vec![0, 1]);
+        assert_eq!(info.tensor_id, Some(0));
+    }
+
+    #[test]
+    fn test_expr_tree_info_mut() {
+        let mut leaf = ExprTree::leaf(vec![0, 1], 0);
+        {
+            let info = leaf.info_mut();
+            info.out_dims = vec![2, 3];
+        }
+        assert_eq!(leaf.labels(), &[2, 3]);
+    }
+
+    #[test]
+    fn test_tree_complexity_cached() {
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let mut tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+        let log2_sizes = vec![2.0, 3.0, 2.0];
+
+        // First call computes and caches
+        let cached1 = tree_complexity_cached(&mut tree, &log2_sizes);
+        assert!(cached1.tc > 0.0);
+        assert!(cached1.sc > 0.0);
+
+        // Second call returns cached value
+        let cached2 = tree_complexity_cached(&mut tree, &log2_sizes);
+        assert!((cached1.tc - cached2.tc).abs() < 1e-10);
+        assert!((cached1.sc - cached2.sc).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_tree_complexity_cached_node() {
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let mut tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+
+        let log2_sizes = vec![2.0, 3.0, 2.0];
+
+        let cached = tree_complexity_cached(&mut tree, &log2_sizes);
+        assert!(cached.tc > 0.0);
+        assert!(cached.sc > 0.0);
+    }
+
+    #[test]
+    fn test_tree_sc_only() {
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+
+        let log2_sizes = vec![2.0, 3.0, 2.0];
+        let sc = tree_sc_only(&tree, &log2_sizes);
+
+        // Same as full tree_complexity sc
+        let (_, full_sc, _) = tree_complexity(&tree, &log2_sizes);
+        assert!((sc - full_sc).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_tree_sc_only_leaf() {
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let log2_sizes = vec![2.0, 3.0];
+
+        let sc = tree_sc_only(&leaf, &log2_sizes);
+        assert!((sc - 5.0).abs() < 1e-10); // 2 + 3
+    }
+
+    #[test]
+    fn test_apply_rule_on_leaf() {
+        // Applying rule on leaf should return the leaf unchanged
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let result = apply_rule(leaf.clone(), Rule::Rule1, vec![]);
+        
+        assert!(result.is_leaf());
+    }
+
+    #[test]
+    fn test_apply_rule2() {
+        // Test Rule2: ((a,b),c) → ((c,b),a)
+        let tree = simple_tree();
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+
+        let diff = rule_diff(&tree, Rule::Rule2, &log2_sizes, false).unwrap();
+        let new_tree = apply_rule(tree, Rule::Rule2, diff.new_labels);
+
+        assert_eq!(new_tree.leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_apply_rule4() {
+        // Test Rule4: (a,(b,c)) → (c,(b,a))
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+
+        let inner = ExprTree::node(leaf1, leaf2, vec![1, 3]);
+        let tree = ExprTree::node(leaf0, inner, vec![0, 3]);
+
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+        let diff = rule_diff(&tree, Rule::Rule4, &log2_sizes, false).unwrap();
+        let new_tree = apply_rule(tree, Rule::Rule4, diff.new_labels);
+
+        assert_eq!(new_tree.leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_apply_rule_wrong_structure() {
+        // Apply Rule1/Rule2 when left child is a leaf (should return unchanged)
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let tree = ExprTree::node(leaf0.clone(), leaf1.clone(), vec![0, 2]);
+
+        // Tree is (leaf, leaf) - Rule1 expects ((a,b),c)
+        let result = apply_rule(tree, Rule::Rule1, vec![]);
+        // Should return unchanged since left is not a Node
+        assert_eq!(result.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_apply_rule3_wrong_structure() {
+        // Apply Rule3/Rule4 when right child is a leaf
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+
+        // Tree is (leaf, leaf) - Rule3 expects (a,(b,c))
+        let result = apply_rule(tree, Rule::Rule3, vec![]);
+        assert_eq!(result.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_rule_diff_wrong_structure_rule1() {
+        // Rule1/Rule2 on a tree where left is a leaf
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+
+        let log2_sizes = vec![2.0, 3.0, 2.0];
+        let diff = rule_diff(&tree, Rule::Rule1, &log2_sizes, false);
+        assert!(diff.is_none()); // Cannot apply Rule1 to (leaf, leaf)
+    }
+
+    #[test]
+    fn test_rule_diff_wrong_structure_rule3() {
+        // Rule3/Rule4 on a tree where right is a leaf
+        let tree = simple_tree(); // ((leaf,leaf), leaf)
+        
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+        let diff = rule_diff(&tree, Rule::Rule3, &log2_sizes, false);
+        assert!(diff.is_none()); // Cannot apply Rule3 because right is leaf
+    }
+
+    #[test]
+    fn test_applicable_rules_both_leaves() {
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+
+        // Both children are leaves - no rules applicable for Tree decomp
+        let rules = Rule::applicable_rules(&tree, DecompositionType::Tree);
+        assert!(rules.is_empty());
+
+        // For Path decomp with left as leaf -> Rule5
+        let rules_path = Rule::applicable_rules(&tree, DecompositionType::Path);
+        assert!(rules_path.contains(&Rule::Rule5));
+    }
+
+    #[test]
+    fn test_applicable_rules_right_is_node() {
+        // (leaf, (leaf, leaf)) structure
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let inner = ExprTree::node(leaf1, leaf2, vec![1, 3]);
+        let tree = ExprTree::node(leaf0, inner, vec![0, 3]);
+
+        let rules = Rule::applicable_rules(&tree, DecompositionType::Tree);
+        // Left is leaf, right is node -> Rules 3,4
+        assert!(rules.contains(&Rule::Rule3));
+        assert!(rules.contains(&Rule::Rule4));
+        assert!(!rules.contains(&Rule::Rule1));
+        assert!(!rules.contains(&Rule::Rule2));
+    }
+
+    #[test]
+    fn test_tree_complexity_with_cached() {
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let mut tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+
+        let log2_sizes = vec![2.0, 3.0, 2.0];
+
+        // First cache the complexity
+        tree_complexity_cached(&mut tree, &log2_sizes);
+
+        // Now tree_complexity should return cached values
+        let (tc, sc, rw) = tree_complexity(&tree, &log2_sizes);
+        assert!(tc > 0.0);
+        assert!(sc > 0.0);
+        assert!(rw > 0.0 || rw == f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn test_leaf_ids_deep_tree() {
+        // Create a deeper tree and verify leaf order
+        let leaf0 = ExprTree::leaf(vec![0], 0);
+        let leaf1 = ExprTree::leaf(vec![1], 1);
+        let leaf2 = ExprTree::leaf(vec![2], 2);
+        let leaf3 = ExprTree::leaf(vec![3], 3);
+
+        let inner1 = ExprTree::node(leaf0, leaf1, vec![0, 1]);
+        let inner2 = ExprTree::node(leaf2, leaf3, vec![2, 3]);
+        let tree = ExprTree::node(inner1, inner2, vec![0, 1, 2, 3]);
+
+        let ids = tree.leaf_ids();
+        assert_eq!(ids, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_contraction_output_duplicates() {
+        // Test that output doesn't contain duplicates
+        let output = contraction_output(&[0, 1, 2], &[1, 2, 3], &[0, 3]);
+        
+        // Count occurrences
+        let mut counts = std::collections::HashMap::new();
+        for &x in &output {
+            *counts.entry(x).or_insert(0) += 1;
+        }
+        
+        // No duplicates
+        for (_, count) in counts {
+            assert_eq!(count, 1);
+        }
+    }
 }

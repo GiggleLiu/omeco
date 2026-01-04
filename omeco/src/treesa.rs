@@ -629,4 +629,156 @@ mod tests {
         let tree = init_random(&int_ixs, &int_iy, DecompositionType::Path, &mut rng);
         assert_eq!(tree.leaf_count(), 3);
     }
+
+    #[test]
+    fn test_treesa_with_betas() {
+        let config = TreeSA::default().with_betas(vec![0.1, 0.5, 1.0]);
+        assert_eq!(config.betas, vec![0.1, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn test_treesa_with_ntrials() {
+        let config = TreeSA::default().with_ntrials(5);
+        assert_eq!(config.ntrials, 5);
+    }
+
+    #[test]
+    fn test_treesa_with_niters() {
+        let config = TreeSA::default().with_niters(100);
+        assert_eq!(config.niters, 100);
+    }
+
+    #[test]
+    fn test_treesa_with_sc_target_builder() {
+        let config = TreeSA::default().with_sc_target(15.0);
+        assert_eq!(config.score.sc_target, 15.0);
+    }
+
+    #[test]
+    fn test_treesa_path() {
+        let config = TreeSA::path();
+        assert_eq!(config.decomposition_type, DecompositionType::Path);
+        assert_eq!(config.initializer, Initializer::Random);
+    }
+
+    #[test]
+    fn test_treesa_new() {
+        let score = ScoreFunction::new(1.0, 2.0, 0.5, 10.0);
+        let config = TreeSA::new(
+            vec![0.1, 0.2, 0.3],
+            5,
+            10,
+            Initializer::Random,
+            score,
+        );
+        assert_eq!(config.betas, vec![0.1, 0.2, 0.3]);
+        assert_eq!(config.ntrials, 5);
+        assert_eq!(config.niters, 10);
+        assert_eq!(config.initializer, Initializer::Random);
+    }
+
+    #[test]
+    fn test_convert_to_int_indices() {
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let mut label_map = HashMap::new();
+        label_map.insert('i', 0);
+        label_map.insert('j', 1);
+        label_map.insert('k', 2);
+
+        let int_ixs = convert_to_int_indices(&ixs, &label_map);
+        assert_eq!(int_ixs, vec![vec![0, 1], vec![1, 2]]);
+    }
+
+    #[test]
+    fn test_init_random_single_tensor() {
+        let int_ixs = vec![vec![0, 1]];
+        let int_iy = vec![0, 1];
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, DecompositionType::Tree, &mut rng);
+        assert!(tree.is_leaf());
+        assert_eq!(tree.leaf_count(), 1);
+    }
+
+    #[test]
+    fn test_init_random_odd_number() {
+        // Test with odd number of tensors for tree decomposition
+        let int_ixs = vec![vec![0, 1], vec![1, 2], vec![2, 3], vec![3, 4], vec![4, 0]];
+        let int_iy = vec![];
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, DecompositionType::Tree, &mut rng);
+        assert_eq!(tree.leaf_count(), 5);
+    }
+
+    #[test]
+    fn test_optimize_treesa_empty() {
+        let code: EinCode<char> = EinCode::new(vec![], vec![]);
+        let size_dict: HashMap<char, usize> = HashMap::new();
+
+        let config = TreeSA::fast();
+        let result = optimize_treesa(&code, &size_dict, &config);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_optimize_treesa_many_tensors() {
+        // Test with more tensors
+        let code = EinCode::new(
+            vec![
+                vec!['a', 'b'],
+                vec!['b', 'c'],
+                vec!['c', 'd'],
+                vec!['d', 'e'],
+            ],
+            vec!['a', 'e'],
+        );
+        let mut size_dict = HashMap::new();
+        size_dict.insert('a', 4);
+        size_dict.insert('b', 8);
+        size_dict.insert('c', 8);
+        size_dict.insert('d', 8);
+        size_dict.insert('e', 4);
+
+        let config = TreeSA::fast();
+        let result = optimize_treesa(&code, &size_dict, &config);
+
+        assert!(result.is_some());
+        let nested = result.unwrap();
+        assert_eq!(nested.leaf_count(), 4);
+    }
+
+    #[test]
+    fn test_optimize_treesa_path_multiple_tensors() {
+        let code = EinCode::new(
+            vec![
+                vec!['i', 'j'],
+                vec!['j', 'k'],
+                vec!['k', 'l'],
+            ],
+            vec!['i', 'l'],
+        );
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 8);
+        size_dict.insert('l', 4);
+
+        let config = TreeSA::path().with_ntrials(1).with_niters(5).with_betas(vec![0.1, 0.5]);
+        let result = optimize_treesa(&code, &size_dict, &config);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_initializer_default() {
+        let init = Initializer::default();
+        assert_eq!(init, Initializer::Greedy);
+    }
+
+    #[test]
+    fn test_decomposition_type_default() {
+        let decomp = DecompositionType::default();
+        assert_eq!(decomp, DecompositionType::Tree);
+    }
 }

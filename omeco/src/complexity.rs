@@ -339,6 +339,23 @@ mod tests {
     }
 
     #[test]
+    fn test_contraction_complexity_methods() {
+        let complexity = ContractionComplexity::new(10.0, 5.0, 8.0);
+        
+        // Test flops
+        let flops = complexity.flops();
+        assert!((flops - 1024.0).abs() < 1e-10); // 2^10 = 1024
+        
+        // Test peak_memory
+        let peak = complexity.peak_memory();
+        assert!((peak - 32.0).abs() < 1e-10); // 2^5 = 32
+        
+        // Test readwrites
+        let rw = complexity.readwrites();
+        assert!((rw - 256.0).abs() < 1e-10); // 2^8 = 256
+    }
+
+    #[test]
     fn test_flop() {
         let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         let mut size_dict = HashMap::new();
@@ -348,6 +365,17 @@ mod tests {
 
         let flops = flop(&code, &size_dict);
         assert_eq!(flops, 4 * 8 * 4); // 128
+    }
+
+    #[test]
+    fn test_flop_missing_label() {
+        let code = EinCode::new(vec![vec!['i', 'j']], vec!['i']);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        // 'j' is missing - should default to 1
+
+        let flops = flop(&code, &size_dict);
+        assert_eq!(flops, 4); // 4 * 1
     }
 
     #[test]
@@ -370,6 +398,35 @@ mod tests {
     }
 
     #[test]
+    fn test_nested_complexity_leaf_only() {
+        let leaf = NestedEinsum::leaf(0);
+        let original_ixs = vec![vec!['i', 'j']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+
+        let complexity = nested_complexity(&leaf, &size_dict, &original_ixs);
+        
+        // Leaf has no contraction, tc should be NEG_INFINITY
+        assert!(complexity.tc == f64::NEG_INFINITY || complexity.tc < 0.0);
+        // sc should be log2(4*8) = 5
+        assert!((complexity.sc - 5.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_nested_complexity_invalid_tensor_index() {
+        let leaf = NestedEinsum::leaf(99); // Invalid index
+        let original_ixs = vec![vec!['i', 'j']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+
+        let complexity = nested_complexity(&leaf, &size_dict, &original_ixs);
+        // Should handle gracefully
+        assert!((complexity.sc - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
     fn test_nested_flop() {
         let leaf0 = NestedEinsum::leaf(0);
         let leaf1 = NestedEinsum::leaf(1);
@@ -383,6 +440,16 @@ mod tests {
 
         let flops = nested_flop(&nested, &size_dict);
         assert_eq!(flops, 128);
+    }
+
+    #[test]
+    fn test_nested_flop_leaf() {
+        let leaf = NestedEinsum::leaf(0);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        
+        let flops = nested_flop(&leaf, &size_dict);
+        assert_eq!(flops, 0); // Leaf has no contractions
     }
 
     #[test]
@@ -405,6 +472,35 @@ mod tests {
     }
 
     #[test]
+    fn test_peak_memory_leaf() {
+        let leaf = NestedEinsum::leaf(0);
+        let original_ixs = vec![vec!['i', 'j']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+
+        let peak = peak_memory(&leaf, &size_dict, &original_ixs);
+        assert_eq!(peak, 32); // 4 * 8
+    }
+
+    #[test]
+    fn test_peak_memory_empty_output() {
+        // Test trace operation where output is empty
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'i']], vec![]); // Trace
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'i']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+
+        let peak = peak_memory(&nested, &size_dict, &original_ixs);
+        assert!(peak > 0);
+    }
+
+    #[test]
     fn test_get_loop_indices() {
         let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k'], vec!['i', 'k']], vec![]);
         let loop_indices = get_loop_indices(&code);
@@ -413,6 +509,15 @@ mod tests {
         assert!(loop_indices.contains(&'i'));
         assert!(loop_indices.contains(&'j'));
         assert!(loop_indices.contains(&'k'));
+    }
+
+    #[test]
+    fn test_get_loop_indices_no_loops() {
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['k', 'l']], vec!['i', 'j', 'k', 'l']);
+        let loop_indices = get_loop_indices(&code);
+
+        // No indices appear more than once
+        assert!(loop_indices.is_empty());
     }
 
     #[test]
@@ -435,5 +540,105 @@ mod tests {
         // sc should be lower than unsliced version
         let unsliced_complexity = nested_complexity(&sliced.eins, &size_dict, &original_ixs);
         assert!(complexity.sc <= unsliced_complexity.sc);
+    }
+
+    #[test]
+    fn test_sliced_complexity_no_slicing() {
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+        let sliced = SlicedEinsum::new(vec![], nested.clone()); // No slicing
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+
+        let sliced_c = sliced_complexity(&sliced, &size_dict, &original_ixs);
+        let unsliced_c = nested_complexity(&nested, &size_dict, &original_ixs);
+        
+        // Without slicing, complexities should be equal
+        assert!((sliced_c.tc - unsliced_c.tc).abs() < 1e-10);
+        assert!((sliced_c.sc - unsliced_c.sc).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_tensor_size_empty_labels() {
+        // Test tensor_size with empty labels returns 1
+        let size_dict: HashMap<char, usize> = HashMap::new();
+        let size = tensor_size(&[], &size_dict);
+        assert_eq!(size, 1);
+    }
+
+    #[test]
+    fn test_eincode_complexity_trace() {
+        // Trace operation: all indices are contracted
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'i']], vec![]); // Output is empty
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+
+        let complexity = eincode_complexity(&code, &size_dict);
+        
+        // tc = log2(4 * 8) = log2(32) = 5
+        assert!((complexity.tc - 5.0).abs() < 1e-10);
+        // sc = 0 (empty output)
+        assert!((complexity.sc - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_nested_complexity_deep_tree() {
+        // Three-level deep tree
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let leaf2 = NestedEinsum::leaf(2);
+        let leaf3 = NestedEinsum::leaf(3);
+
+        let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+
+        let eins2 = EinCode::new(vec![vec!['k', 'l'], vec!['l', 'm']], vec!['k', 'm']);
+        let tree2 = NestedEinsum::node(vec![leaf2, leaf3], eins2);
+
+        let eins3 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'm']], vec!['i', 'm']);
+        let tree3 = NestedEinsum::node(vec![tree1, tree2], eins3);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l'], vec!['l', 'm']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+        size_dict.insert('l', 8);
+        size_dict.insert('m', 4);
+
+        let complexity = nested_complexity(&tree3, &size_dict, &original_ixs);
+        assert!(complexity.tc > 0.0);
+        assert!(complexity.sc > 0.0);
+        assert!(complexity.rwc > 0.0);
+    }
+
+    #[test]
+    fn test_peak_memory_deep_tree() {
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let leaf2 = NestedEinsum::leaf(2);
+
+        let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+
+        let eins2 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'l']], vec!['i', 'l']);
+        let tree2 = NestedEinsum::node(vec![tree1, leaf2], eins2);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+        size_dict.insert('l', 8);
+
+        let peak = peak_memory(&tree2, &size_dict, &original_ixs);
+        assert!(peak > 0);
     }
 }

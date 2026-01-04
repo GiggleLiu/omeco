@@ -570,4 +570,240 @@ mod tests {
         let il2: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
         assert!(!il2.is_empty());
     }
+
+    #[test]
+    fn test_edges_all() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        let edges: Vec<_> = il.edges_all().collect();
+        assert_eq!(edges.len(), 4);
+        assert!(edges.contains(&&'i'));
+        assert!(edges.contains(&&'j'));
+        assert!(edges.contains(&&'k'));
+        assert!(edges.contains(&&'l'));
+    }
+
+    #[test]
+    fn test_remove_edges() {
+        let v2e = simple_v2e();
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Remove edge 'j'
+        il.remove_edges(&['j']);
+        
+        // 'j' should no longer exist
+        assert!(il.vertices_of_edge(&'j').is_none());
+        
+        // Tensors 0 and 1 should no longer share edges
+        assert!(!il.are_neighbors(&0, &1));
+    }
+
+    #[test]
+    fn test_remove_open_edge() {
+        let v2e = simple_v2e();
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        assert!(il.is_open(&'i'));
+        il.remove_edges(&['i']);
+        assert!(!il.is_open(&'i'));
+    }
+
+    #[test]
+    fn test_replace_vertex_same() {
+        let v2e = simple_v2e();
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Replacing with same vertex should be no-op
+        il.replace_vertex(&0, 0);
+        assert!(il.edges(&0).is_some());
+        assert_eq!(il.nv(), 3);
+    }
+
+    #[test]
+    fn test_replace_vertex_merge() {
+        let v2e = simple_v2e();
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Merge vertex 0 into vertex 1
+        il.replace_vertex(&0, 1);
+        
+        // Vertex 0 should be gone
+        assert!(il.edges(&0).is_none());
+        
+        // Vertex 1 should have edges from both
+        let edges = il.edges(&1).unwrap();
+        assert!(edges.contains(&'i') || edges.contains(&'j'));
+    }
+
+    #[test]
+    fn test_delete_vertex_removes_empty_edges() {
+        let mut v2e = HashMap::new();
+        v2e.insert(0, vec!['a', 'b']);
+        v2e.insert(1, vec!['b']); // 'b' shared
+        v2e.insert(2, vec!['b', 'c']); // 'b' connected to 3 vertices
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['a', 'c']);
+
+        // Delete vertex 0 - 'a' should be removed (only connected to 0, even though open)
+        // 'b' should remain because it's still connected to 1 and 2
+        il.delete_vertex(&0);
+        
+        assert_eq!(il.nv(), 2);
+        assert!(il.vertices_of_edge(&'a').is_none());
+        // 'b' should still exist with vertices 1 and 2
+        let b_verts = il.vertices_of_edge(&'b').unwrap();
+        assert_eq!(b_verts.len(), 2);
+    }
+
+    #[test]
+    fn test_neighbors_no_neighbors() {
+        let mut v2e = HashMap::new();
+        v2e.insert(0, vec!['a']);
+        v2e.insert(1, vec!['b']); // Different edges, no neighbors
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['a', 'b']);
+
+        let neighbors = il.neighbors(&0);
+        assert!(neighbors.is_empty());
+    }
+
+    #[test]
+    fn test_shared_edges_nonexistent_vertex() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Test with non-existent vertex
+        let shared = il.shared_edges(&0, &99);
+        assert!(shared.is_empty());
+    }
+
+    #[test]
+    fn test_is_internal_nonexistent_edge() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Non-existent edge
+        assert!(!il.is_internal(&'z', &0, &1));
+    }
+
+    #[test]
+    fn test_is_external_nonexistent_edge() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Non-existent edge
+        assert!(!il.is_external(&'z', &0, &1));
+    }
+
+    #[test]
+    fn test_set_edges_new_vertex() {
+        let v2e = simple_v2e();
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Add a completely new vertex
+        il.set_edges(99, vec!['x', 'y']);
+        
+        assert_eq!(il.nv(), 4);
+        let edges = il.edges(&99).unwrap();
+        assert!(edges.contains(&'x'));
+        assert!(edges.contains(&'y'));
+    }
+
+    #[test]
+    fn test_contraction_dims_d1_d2() {
+        // Test case where edges are only in one tensor and not external
+        let mut v2e = HashMap::new();
+        v2e.insert(0, vec!['a', 'j']);
+        v2e.insert(1, vec!['j', 'b']);
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec![]); // No open edges
+
+        let mut log2_sizes = HashMap::new();
+        log2_sizes.insert('a', 2.0);
+        log2_sizes.insert('j', 3.0);
+        log2_sizes.insert('b', 4.0);
+
+        let dims = ContractionDims::compute(&il, &log2_sizes, &0, &1);
+
+        // 'a' is only in 0, not external -> d1
+        assert!((dims.d1 - 2.0).abs() < 1e-10);
+        // 'b' is only in 1, not external -> d2
+        assert!((dims.d2 - 4.0).abs() < 1e-10);
+        // 'j' is in both, not external -> d12
+        assert!((dims.d12 - 3.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_contraction_dims_d012() {
+        // Test d012: edge in both tensors AND is external (batched index)
+        let mut v2e = HashMap::new();
+        v2e.insert(0, vec!['b', 'j']);
+        v2e.insert(1, vec!['j', 'b']);
+        v2e.insert(2, vec!['b']); // Third tensor shares 'b'
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['b']);
+
+        let mut log2_sizes = HashMap::new();
+        log2_sizes.insert('b', 2.0);
+        log2_sizes.insert('j', 3.0);
+
+        let dims = ContractionDims::compute(&il, &log2_sizes, &0, &1);
+
+        // 'b' is in both tensors and is external (open or connected to other tensors) -> d012
+        assert!((dims.d012 - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_neighbors_nonexistent_vertex() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Neighbors of non-existent vertex
+        let neighbors = il.neighbors(&99);
+        assert!(neighbors.is_empty());
+    }
+
+    #[test]
+    fn test_are_neighbors_nonexistent() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Check with non-existent vertex
+        assert!(!il.are_neighbors(&0, &99));
+        assert!(!il.are_neighbors(&99, &0));
+    }
+
+    #[test]
+    fn test_replace_vertex_nonexistent() {
+        let v2e = simple_v2e();
+        let mut il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Replace non-existent vertex (should be no-op)
+        il.replace_vertex(&99, 100);
+        assert_eq!(il.nv(), 3);
+        assert!(il.edges(&99).is_none());
+        assert!(il.edges(&100).is_none());
+    }
+
+    #[test]
+    fn test_edges_nonexistent_vertex() {
+        let v2e = simple_v2e();
+        let il: IncidenceList<usize, char> = IncidenceList::new(v2e, vec!['i', 'l']);
+
+        // Edges of non-existent vertex
+        assert!(il.edges(&99).is_none());
+    }
+
+    #[test]
+    fn test_contraction_dims_missing_size() {
+        // Test when some edges are missing from size dict
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let iy = vec!['i', 'k'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let mut log2_sizes = HashMap::new();
+        log2_sizes.insert('i', 2.0);
+        // 'j' and 'k' missing - should default to 0.0
+
+        let dims = ContractionDims::compute(&il, &log2_sizes, &0, &1);
+        // Should still compute without panic
+        assert!(dims.d01 >= 0.0 || dims.d01.is_nan() == false);
+    }
 }

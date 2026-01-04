@@ -347,6 +347,13 @@ mod tests {
     }
 
     #[test]
+    fn test_eincode_trace() {
+        let code: EinCode<char> = EinCode::trace(vec![vec!['i', 'j'], vec!['j', 'i']]);
+        assert_eq!(code.num_tensors(), 2);
+        assert!(code.iy.is_empty());
+    }
+
+    #[test]
     fn test_eincode_unique_labels() {
         let code: EinCode<char> =
             EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
@@ -354,6 +361,16 @@ mod tests {
         assert_eq!(labels.len(), 3);
         assert!(labels.contains(&'i'));
         assert!(labels.contains(&'j'));
+        assert!(labels.contains(&'k'));
+    }
+
+    #[test]
+    fn test_eincode_unique_labels_with_output_only() {
+        // Output label not in inputs (edge case)
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j']], vec!['i', 'j', 'k']);
+        let labels = code.unique_labels();
+        assert_eq!(labels.len(), 3);
         assert!(labels.contains(&'k'));
     }
 
@@ -366,10 +383,53 @@ mod tests {
     }
 
     #[test]
+    fn test_eincode_contracted_indices_none() {
+        // All indices are kept
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['k', 'l']], vec!['i', 'j', 'k', 'l']);
+        let contracted = code.contracted_indices();
+        assert!(contracted.is_empty());
+    }
+
+    #[test]
+    fn test_eincode_output_indices() {
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        assert_eq!(code.output_indices(), &['i', 'k']);
+    }
+
+    #[test]
+    fn test_eincode_input_indices() {
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        assert_eq!(code.input_indices(0), Some(&['i', 'j'][..]));
+        assert_eq!(code.input_indices(1), Some(&['j', 'k'][..]));
+        assert_eq!(code.input_indices(99), None); // Invalid index
+    }
+
+    #[test]
+    fn test_eincode_is_valid() {
+        let valid_code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        assert!(valid_code.is_valid());
+
+        // Invalid: output contains index not in inputs
+        let invalid_code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j']], vec!['i', 'k']);
+        assert!(!invalid_code.is_valid());
+    }
+
+    #[test]
     fn test_eincode_display() {
         let code: EinCode<char> =
             EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
         assert_eq!(format!("{}", code), "ij,jk->ik");
+    }
+
+    #[test]
+    fn test_eincode_display_empty_output() {
+        let code: EinCode<char> = EinCode::trace(vec![vec!['i', 'j'], vec!['j', 'i']]);
+        assert_eq!(format!("{}", code), "ij,ji->");
     }
 
     #[test]
@@ -394,6 +454,79 @@ mod tests {
     }
 
     #[test]
+    fn test_nested_einsum_tensor_index_on_node() {
+        let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        // Node should return None for tensor_index
+        assert_eq!(tree.tensor_index(), None);
+    }
+
+    #[test]
+    fn test_nested_einsum_node_count() {
+        let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
+        let leaf2: NestedEinsum<char> = NestedEinsum::leaf(2);
+
+        let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+
+        let eins2 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'l']], vec!['i', 'l']);
+        let tree2 = NestedEinsum::node(vec![tree1, leaf2], eins2);
+
+        // node_count: 2 internal nodes + 3 leaves = 5
+        assert_eq!(tree2.node_count(), 5);
+    }
+
+    #[test]
+    fn test_nested_einsum_output_labels_leaf() {
+        let leaf: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let input_labels = vec![vec!['i', 'j'], vec!['j', 'k']];
+        
+        let output = leaf.output_labels(&input_labels);
+        assert_eq!(output, vec!['i', 'j']);
+    }
+
+    #[test]
+    fn test_nested_einsum_output_labels_node() {
+        let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let input_labels = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let output = tree.output_labels(&input_labels);
+        assert_eq!(output, vec!['i', 'k']);
+    }
+
+    #[test]
+    fn test_nested_einsum_output_labels_invalid_index() {
+        let leaf: NestedEinsum<char> = NestedEinsum::leaf(99); // Invalid index
+        let input_labels = vec![vec!['i', 'j']];
+        
+        let output = leaf.output_labels(&input_labels);
+        assert!(output.is_empty()); // Should return empty for invalid index
+    }
+
+    #[test]
+    fn test_nested_einsum_is_binary_non_binary() {
+        let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
+        let leaf2: NestedEinsum<char> = NestedEinsum::leaf(2);
+        
+        // Non-binary: 3 children
+        let eins = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+        let tree = NestedEinsum::node(vec![leaf0, leaf1, leaf2], eins);
+
+        assert!(!tree.is_binary());
+    }
+
+    #[test]
     fn test_nested_einsum_depth() {
         let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
         let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
@@ -410,12 +543,27 @@ mod tests {
     }
 
     #[test]
+    fn test_nested_einsum_depth_leaf() {
+        let leaf: NestedEinsum<char> = NestedEinsum::leaf(0);
+        assert_eq!(leaf.depth(), 0);
+    }
+
+    #[test]
     fn test_sliced_einsum() {
         let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
         let sliced = SlicedEinsum::new(vec!['j'], leaf0);
 
         assert!(sliced.is_sliced());
         assert_eq!(sliced.num_slices(), 1);
+    }
+
+    #[test]
+    fn test_sliced_einsum_unsliced() {
+        let leaf: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let sliced = SlicedEinsum::unsliced(leaf);
+
+        assert!(!sliced.is_sliced());
+        assert_eq!(sliced.num_slices(), 0);
     }
 
     #[test]
@@ -427,5 +575,67 @@ mod tests {
         assert_eq!(sizes.get(&'i'), Some(&10));
         assert_eq!(sizes.get(&'j'), Some(&10));
         assert_eq!(sizes.get(&'k'), Some(&10));
+    }
+
+    #[test]
+    fn test_log2_size_dict() {
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 16);
+
+        let log2_sizes = log2_size_dict(&size_dict);
+        
+        assert!((log2_sizes.get(&'i').unwrap() - 2.0).abs() < 1e-10);
+        assert!((log2_sizes.get(&'j').unwrap() - 3.0).abs() < 1e-10);
+        assert!((log2_sizes.get(&'k').unwrap() - 4.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_eincode_serialization() {
+        let code: EinCode<char> =
+            EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        
+        // Test serialization/deserialization
+        let json = serde_json::to_string(&code).unwrap();
+        let decoded: EinCode<char> = serde_json::from_str(&json).unwrap();
+        
+        assert_eq!(code, decoded);
+    }
+
+    #[test]
+    fn test_nested_einsum_serialization() {
+        let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let json = serde_json::to_string(&tree).unwrap();
+        let decoded: NestedEinsum<char> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(tree, decoded);
+    }
+
+    #[test]
+    fn test_sliced_einsum_serialization() {
+        let leaf: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let sliced = SlicedEinsum::new(vec!['j'], leaf);
+
+        let json = serde_json::to_string(&sliced).unwrap();
+        let decoded: SlicedEinsum<char> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(sliced, decoded);
+    }
+
+    #[test]
+    fn test_nested_einsum_depth_no_children() {
+        // Test depth when a node has no args (edge case)
+        let leaf0: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let leaf1: NestedEinsum<char> = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        // depth of (leaf, leaf) should be 1
+        assert_eq!(tree.depth(), 1);
     }
 }

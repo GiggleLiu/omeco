@@ -124,6 +124,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_fast_log2sumexp2_equal() {
@@ -146,10 +147,45 @@ mod tests {
     }
 
     #[test]
+    fn test_fast_log2sumexp2_large_difference() {
+        // When difference is very large, result should be close to max
+        let result = fast_log2sumexp2(-100.0, 10.0);
+        assert!((result - 10.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_fast_log2sumexp2_reversed_order() {
+        // Test with a < b and b < a
+        let result1 = fast_log2sumexp2(3.0, 5.0);
+        let result2 = fast_log2sumexp2(5.0, 3.0);
+        assert!((result1 - result2).abs() < 1e-10);
+    }
+
+    #[test]
     fn test_fast_log2sumexp2_3() {
         let result = fast_log2sumexp2_3(10.0, 10.0, 10.0);
         let expected = (3.0 * 2_f64.powi(10)).log2();
         assert!((result - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_fast_log2sumexp2_3_all_neg_inf() {
+        let result = fast_log2sumexp2_3(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        assert!(result == f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn test_fast_log2sumexp2_3_one_neg_inf() {
+        let result = fast_log2sumexp2_3(f64::NEG_INFINITY, 10.0, 10.0);
+        let expected = (2.0 * 2_f64.powi(10)).log2();
+        assert!((result - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_fast_log2sumexp2_3_large_difference() {
+        // When all values are much smaller than max
+        let result = fast_log2sumexp2_3(-100.0, -100.0, 10.0);
+        assert!((result - 10.0).abs() < 1e-10);
     }
 
     #[test]
@@ -162,5 +198,63 @@ mod tests {
     fn test_log2sumexp2_empty() {
         let result = log2sumexp2(&[]);
         assert!(result == f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn test_log2sumexp2_all_neg_inf() {
+        let result = log2sumexp2(&[f64::NEG_INFINITY, f64::NEG_INFINITY]);
+        assert!(result == f64::NEG_INFINITY);
+    }
+
+    #[test]
+    fn test_log2sumexp2_single() {
+        let result = log2sumexp2(&[10.0]);
+        assert!((result - 10.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_log2_prod() {
+        let mut log2_sizes: HashMap<char, f64> = HashMap::new();
+        log2_sizes.insert('i', 2.0);
+        log2_sizes.insert('j', 3.0);
+        log2_sizes.insert('k', 4.0);
+
+        let result = log2_prod(['i', 'j', 'k'].iter().cloned(), &log2_sizes);
+        assert!((result - 9.0).abs() < 1e-10); // 2 + 3 + 4
+    }
+
+    #[test]
+    fn test_log2_prod_missing_label() {
+        let mut log2_sizes: HashMap<char, f64> = HashMap::new();
+        log2_sizes.insert('i', 2.0);
+
+        // 'j' is missing, should default to 0.0
+        let result = log2_prod(['i', 'j'].iter().cloned(), &log2_sizes);
+        assert!((result - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_log2_prod_empty() {
+        let log2_sizes: HashMap<char, f64> = HashMap::new();
+        let result = log2_prod(std::iter::empty::<char>(), &log2_sizes);
+        assert!((result - 0.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_fast_exp2_very_negative() {
+        // Test that fast_exp2 returns 0 for very negative values
+        // This is implicitly tested via fast_log2sumexp2_3 with large differences
+        let result = fast_log2sumexp2_3(-100.0, -100.0, 10.0);
+        // Should effectively be just 10.0 since -100 terms are negligible
+        assert!((result - 10.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_fast_log2sumexp2_3_all_same() {
+        // All values are the same
+        let result = fast_log2sumexp2_3(-100.0, -100.0, -100.0);
+        // log2(3 * 2^-100) = -100 + log2(3) ≈ -98.415
+        let expected = -100.0 + 3_f64.log2();
+        assert!((result - expected).abs() < 1e-10);
     }
 }
