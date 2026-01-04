@@ -247,7 +247,7 @@ fn optimize_tree_sa<R: Rng>(
 ) -> ExprTree {
     // Track global space complexity (updated periodically)
     let (_, mut global_sc, _) = tree_complexity(&tree, log2_sizes);
-
+    
     for &beta in betas {
         for _ in 0..niters {
             // Sweep through all nodes, trying mutations at each
@@ -278,14 +278,14 @@ fn sweep_mutate<R: Rng>(
             // First, recursively process children
             let new_left = sweep_mutate(*left, beta, log2_sizes, score, decomp, global_sc, rng);
             let new_right = sweep_mutate(*right, beta, log2_sizes, score, decomp, global_sc, rng);
-
+            
             // Then try to mutate at this node
             let tree = ExprTree::Node {
                 left: Box::new(new_left),
                 right: Box::new(new_right),
                 info,
             };
-
+            
             try_mutate_node(tree, beta, log2_sizes, score, decomp, global_sc, rng)
         }
     }
@@ -303,22 +303,22 @@ fn try_mutate_node<R: Rng>(
     rng: &mut R,
 ) -> ExprTree {
     let rules = Rule::applicable_rules(&tree, decomp);
-
+    
     if rules.is_empty() {
         return tree;
     }
-
+    
     // Select a random rule
     let rule = rules[rng.random_range(0..rules.len())];
-
+    
     // Compute the complexity change
     if let Some(diff) = rule_diff(&tree, rule, log2_sizes, score.rw_weight > 0.0) {
         // Compute energy change (time complexity difference)
         let dtc = diff.tc1 - diff.tc0;
-
+        
         // Use global SC for space penalty check (approximation that works well)
         let sc_new = global_sc.max(global_sc + diff.dsc);
-
+        
         // Energy change calculation with space penalty
         let sc_penalty = if sc_new > score.sc_target {
             score.sc_weight
@@ -326,19 +326,19 @@ fn try_mutate_node<R: Rng>(
             0.0
         };
         let d_energy = sc_penalty * diff.dsc + dtc;
-
+        
         // Metropolis acceptance criterion
         let accept = if d_energy <= 0.0 {
             true
         } else {
             rng.random::<f64>() < (-beta * d_energy).exp()
         };
-
+        
         if accept {
             return apply_rule(tree, rule, diff.new_labels);
         }
     }
-
+    
     tree
 }
 
