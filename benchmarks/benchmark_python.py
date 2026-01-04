@@ -4,6 +4,7 @@ Benchmark TreeSA contraction order optimization in Python.
 Uses omeco (Rust via PyO3)
 """
 
+import json
 import time
 import random
 from typing import Dict, List, Tuple
@@ -158,14 +159,24 @@ def run_benchmark(name: str, ixs, iy, sizes, ntrials=1, niters=50):
     print()
     
     return {
+        "tensors": len(ixs),
+        "indices": len(sizes),
+        "ntrials": ntrials,
+        "niters": niters,
         "greedy_avg_ms": greedy_time / 10 * 1000,
-        "treesa_avg_ms": treesa_time / 3 * 1000,
         "greedy_tc": greedy_cc.tc,
+        "greedy_sc": greedy_cc.sc,
+        "greedy_rwc": greedy_cc.rwc,
+        "treesa_avg_ms": treesa_time / 3 * 1000,
         "treesa_tc": treesa_cc.tc,
+        "treesa_sc": treesa_cc.sc,
+        "treesa_rwc": treesa_cc.rwc,
     }
 
 
 def main():
+    import os
+    
     print()
     print("Python TreeSA Benchmark")
     print("omeco (Rust via PyO3)")
@@ -176,7 +187,7 @@ def main():
     
     # Small: matrix chain
     ixs, iy, sizes = chain_network(10, 100)
-    results["chain_10"] = run_benchmark("Matrix Chain (n=10)", ixs, iy, sizes)
+    results["chain_10"] = run_benchmark("Matrix Chain (n=10)", ixs, iy, sizes, ntrials=1, niters=50)
     
     # Medium: small grid
     ixs, iy, sizes = grid_network(4, 4, 2)
@@ -194,10 +205,53 @@ def main():
     print("=" * 60)
     print("Summary (Python/Rust):")
     print("-" * 60)
-    print(f"{'Problem':<20} {'Greedy (ms)':<15} {'TreeSA (ms)':<15}")
+    print(f"{'Problem':<20} {'Greedy (ms)':<15} {'TreeSA (ms)':<15} {'Greedy tc':<12} {'TreeSA tc':<12}")
     print("-" * 60)
     for name, r in results.items():
-        print(f"{name:<20} {r['greedy_avg_ms']:<15.3f} {r['treesa_avg_ms']:<15.2f}")
+        print(f"{name:<20} {r['greedy_avg_ms']:<15.3f} {r['treesa_avg_ms']:<15.2f} {r['greedy_tc']:<12.2f} {r['treesa_tc']:<12.2f}")
+    
+    # Save Greedy results to JSON
+    greedy_output = {
+        "language": "rust",
+        "backend": "omeco (Rust via PyO3)",
+        "method": "greedy",
+        "results": {name: {
+            "tensors": r["tensors"],
+            "indices": r["indices"],
+            "avg_ms": r["greedy_avg_ms"],
+            "tc": r["greedy_tc"],
+            "sc": r["greedy_sc"],
+            "rwc": r["greedy_rwc"],
+        } for name, r in results.items()}
+    }
+    greedy_path = os.path.join(os.path.dirname(__file__), "results_rust_greedy.json")
+    with open(greedy_path, "w") as f:
+        json.dump(greedy_output, f, indent=2)
+    
+    # Save TreeSA results to JSON
+    treesa_output = {
+        "language": "rust",
+        "backend": "omeco (Rust via PyO3)",
+        "method": "treesa",
+        "results": {name: {
+            "tensors": r["tensors"],
+            "indices": r["indices"],
+            "ntrials": r["ntrials"],
+            "niters": r["niters"],
+            "avg_ms": r["treesa_avg_ms"],
+            "tc": r["treesa_tc"],
+            "sc": r["treesa_sc"],
+            "rwc": r["treesa_rwc"],
+        } for name, r in results.items()}
+    }
+    treesa_path = os.path.join(os.path.dirname(__file__), "results_rust_treesa.json")
+    with open(treesa_path, "w") as f:
+        json.dump(treesa_output, f, indent=2)
+    
+    print()
+    print(f"Results saved to:")
+    print(f"  {greedy_path}")
+    print(f"  {treesa_path}")
 
 
 if __name__ == "__main__":

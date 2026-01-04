@@ -1,0 +1,47 @@
+{
+  "backend": "OMEinsumContractionOrders.jl",
+  "method": "treesa",
+  "language": "julia",
+  "results": {
+    "reg3_250": {
+      "rwc": 36.3266937469938,
+      "tc": 47.171704423519614,
+      "ntrials": 1,
+      "niters": 100,
+      "indices": 374,
+      "tensors": 250,
+      "sc": 34.0,
+      "avg_ms": 5098.901725
+    },
+    "grid_5x5": {
+      "rwc": 10.401946123976536,
+      "tc": 10.957102041562287,
+      "ntrials": 1,
+      "niters": 100,
+      "indices": 40,
+      "tensors": 25,
+      "sc": 6.0,
+      "avg_ms": 297.7296436666667
+    },
+    "grid_4x4": {
+      "rwc": 9.068778277985412,
+      "tc": 9.257387842692651,
+      "ntrials": 1,
+      "niters": 100,
+      "indices": 24,
+      "tensors": 16,
+      "sc": 5.0,
+      "avg_ms": 150.66876100000002
+    },
+    "chain_10": {
+      "rwc": 18.042599881712917,
+      "tc": 23.101493570766486,
+      "ntrials": 1,
+      "niters": 50,
+      "indices": 11,
+      "tensors": 10,
+      "sc": 13.287712379549449,
+      "avg_ms": 31.59502766666667
+    }
+  }
+}

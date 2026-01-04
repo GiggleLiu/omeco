@@ -1,0 +1,47 @@
+{
+  "language": "rust",
+  "backend": "omeco (Rust via PyO3)",
+  "method": "treesa",
+  "results": {
+    "chain_10": {
+      "tensors": 10,
+      "indices": 11,
+      "ntrials": 1,
+      "niters": 50,
+      "avg_ms": 22.87532400805503,
+      "tc": 23.101493570766486,
+      "sc": 13.287712379549449,
+      "rwc": 18.042599881712917
+    },
+    "grid_4x4": {
+      "tensors": 16,
+      "indices": 24,
+      "ntrials": 1,
+      "niters": 100,
+      "avg_ms": 132.38669699057937,
+      "tc": 9.179909090014934,
+      "sc": 4.0,
+      "rwc": 8.980139577639159
+    },
+    "grid_5x5": {
+      "tensors": 25,
+      "indices": 40,
+      "ntrials": 1,
+      "niters": 100,
+      "avg_ms": 264.00754135102034,
+      "tc": 10.957102041562285,
+      "sc": 6.0,
+      "rwc": 10.401946123976538
+    },
+    "reg3_250": {
+      "tensors": 250,
+      "indices": 372,
+      "ntrials": 1,
+      "niters": 100,
+      "avg_ms": 4547.46470200674,
+      "tc": 48.012237722240954,
+      "sc": 33.0,
+      "rwc": 35.986538430691766
+    }
+  }
+}

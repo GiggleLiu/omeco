@@ -240,6 +240,7 @@ fn init_random<R: Rng>(
 }
 
 /// Run simulated annealing on a single tree.
+/// Each iteration sweeps through all nodes in the tree, attempting mutations.
 fn optimize_tree_sa<R: Rng>(
     mut tree: ExprTree,
     log2_sizes: &[f64],
@@ -249,80 +250,53 @@ fn optimize_tree_sa<R: Rng>(
     decomp: DecompositionType,
     rng: &mut R,
 ) -> ExprTree {
+    // Track global space complexity (updated periodically)
+    let (_, mut global_sc, _) = tree_complexity(&tree, log2_sizes);
+    
     for &beta in betas {
         for _ in 0..niters {
-            // Each iteration: randomly walk down and try ONE mutation
-            tree = random_walk_mutate(tree, beta, log2_sizes, score, decomp, rng);
+            // Sweep through all nodes, trying mutations at each
+            tree = sweep_mutate(tree, beta, log2_sizes, score, decomp, global_sc, rng);
         }
+        // Update global SC at each temperature level
+        let (_, sc, _) = tree_complexity(&tree, log2_sizes);
+        global_sc = sc;
     }
     tree
 }
 
-/// Perform a random walk down the tree and try a mutation at a random node.
-/// This is the core SA step - ONE mutation attempt per call.
+/// Sweep through all nodes in the tree, attempting a mutation at each.
+/// This visits every internal node once per call.
 #[inline]
-fn random_walk_mutate<R: Rng>(
+fn sweep_mutate<R: Rng>(
     tree: ExprTree,
     beta: f64,
     log2_sizes: &[f64],
     score: &ScoreFunction,
     decomp: DecompositionType,
+    global_sc: f64,
     rng: &mut R,
 ) -> ExprTree {
     match tree {
         ExprTree::Leaf(_) => tree,
         ExprTree::Node { left, right, info } => {
-            // Randomly decide: try mutation here (50%) or descend (50%)
-            let left_is_leaf = left.is_leaf();
-            let right_is_leaf = right.is_leaf();
+            // First, recursively process children
+            let new_left = sweep_mutate(*left, beta, log2_sizes, score, decomp, global_sc, rng);
+            let new_right = sweep_mutate(*right, beta, log2_sizes, score, decomp, global_sc, rng);
             
-            // If both children are leaves, we must try to mutate here
-            if left_is_leaf && right_is_leaf {
-                // No applicable rules for (leaf, leaf), just return
-                return ExprTree::Node { left, right, info };
-            }
+            // Then try to mutate at this node
+            let tree = ExprTree::Node {
+                left: Box::new(new_left),
+                right: Box::new(new_right),
+                info,
+            };
             
-            // Randomly choose: mutate here or descend to a child
-            let choice = rng.random_range(0..3);
-            
-            if choice == 0 {
-                // Try to mutate at this node
-                let tree = ExprTree::Node { left, right, info };
-                try_mutate_node(tree, beta, log2_sizes, score, decomp, rng)
-            } else if choice == 1 && !left_is_leaf {
-                // Descend into left subtree
-                let new_left = random_walk_mutate(*left, beta, log2_sizes, score, decomp, rng);
-                ExprTree::Node {
-                    left: Box::new(new_left),
-                    right,
-                    info,
-                }
-            } else if !right_is_leaf {
-                // Descend into right subtree
-                let new_right = random_walk_mutate(*right, beta, log2_sizes, score, decomp, rng);
-                ExprTree::Node {
-                    left,
-                    right: Box::new(new_right),
-                    info,
-                }
-            } else if !left_is_leaf {
-                // Right was leaf, go left
-                let new_left = random_walk_mutate(*left, beta, log2_sizes, score, decomp, rng);
-                ExprTree::Node {
-                    left: Box::new(new_left),
-                    right,
-                    info,
-                }
-            } else {
-                // Both are leaves, try mutation here
-                let tree = ExprTree::Node { left, right, info };
-                try_mutate_node(tree, beta, log2_sizes, score, decomp, rng)
-            }
+            try_mutate_node(tree, beta, log2_sizes, score, decomp, global_sc, rng)
         }
     }
 }
 
-/// Try to apply a mutation rule at the given node.
+/// Try to apply a mutation rule at the given node using Metropolis criterion.
 #[inline]
 fn try_mutate_node<R: Rng>(
     tree: ExprTree,
@@ -330,6 +304,7 @@ fn try_mutate_node<R: Rng>(
     log2_sizes: &[f64],
     score: &ScoreFunction,
     decomp: DecompositionType,
+    global_sc: f64,
     rng: &mut R,
 ) -> ExprTree {
     let rules = Rule::applicable_rules(&tree, decomp);
@@ -343,14 +318,13 @@ fn try_mutate_node<R: Rng>(
     
     // Compute the complexity change
     if let Some(diff) = rule_diff(&tree, rule, log2_sizes, score.rw_weight > 0.0) {
-        // Compute energy change
+        // Compute energy change (time complexity difference)
         let dtc = diff.tc1 - diff.tc0;
         
-        // Get current space complexity for this local region
-        let (_, sc, _) = tree_complexity(&tree, log2_sizes);
-        let sc_new = sc.max(sc + diff.dsc);
+        // Use global SC for space penalty check (approximation that works well)
+        let sc_new = global_sc.max(global_sc + diff.dsc);
         
-        // Energy change calculation
+        // Energy change calculation with space penalty
         let sc_penalty = if sc_new > score.sc_target {
             score.sc_weight
         } else {
@@ -358,7 +332,7 @@ fn try_mutate_node<R: Rng>(
         };
         let d_energy = sc_penalty * diff.dsc + dtc;
         
-        // Metropolis acceptance
+        // Metropolis acceptance criterion
         let accept = if d_energy <= 0.0 {
             true
         } else {

@@ -254,6 +254,38 @@ let result = optimize_code(&code, &sizes, &GreedyMethod::default());
 3. **Set sc_target based on available memory** - Constrains space complexity
 4. **Use GreedyMethod for very large networks** - O(n² log n) vs O(n² × iterations)
 
+## Benchmarks
+
+We benchmark TreeSA performance by comparing the Rust implementation (exposed to Python via PyO3) against the original Julia implementation ([OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl)).
+
+**Hardware:** Intel Xeon Gold 6226R @ 2.90GHz
+
+**Configuration:** `ntrials=1`, `niters=50-100`, `βs=0.01:0.05:15.0`
+
+### TreeSA Results
+
+| Problem | Tensors | Indices | Rust (ms) | Julia (ms) | Rust tc | Julia tc | Speedup |
+|---------|---------|---------|-----------|------------|---------|----------|---------|
+| chain_10 | 10 | 11 | 22.9 | 31.6 | 23.10 | 23.10 | **1.38x** |
+| grid_4x4 | 16 | 24 | 132.4 | 150.7 | 9.18 | 9.26 | **1.14x** |
+| grid_5x5 | 25 | 40 | 264.0 | 297.7 | 10.96 | 10.96 | **1.13x** |
+| reg3_250 | 250 | 372 | 4547 | 5099 | 48.01 | 47.17 | **1.12x** |
+
+**Key observations:**
+- Rust is **10-40% faster** than Julia for TreeSA optimization
+- Both implementations find solutions with comparable time complexity (tc)
+- The `reg3_250` benchmark (random 3-regular graph with 250 nodes) shows TreeSA reduces tc from ~66 (greedy) to ~48, a **27% improvement**
+
+To run the benchmarks yourself:
+
+```bash
+# Rust (via Python)
+cd benchmarks && python benchmark_python.py
+
+# Julia
+cd benchmarks && julia --project=. benchmark_julia.jl
+```
+
 ## License
 
 MIT

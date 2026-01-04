@@ -8,6 +8,7 @@ using OMEinsumContractionOrders
 using OMEinsum
 using Printf
 using Random
+using JSON
 
 # Test cases: increasingly complex tensor networks
 function chain_network(n::Int, d::Int)
@@ -115,7 +116,7 @@ function random_regular_graph(n::Int, degree::Int, d::Int; seed::Int=42)
     return ixs, iy, sizes
 end
 
-function run_benchmark(name::String, ixs, iy, sizes; ntrials=10, niters=50)
+function run_benchmark(name::String, ixs, iy, sizes; ntrials=1, niters=50)
     println("=" ^ 60)
     println("Benchmark: $name")
     println("  Tensors: $(length(ixs))")
@@ -159,7 +160,20 @@ function run_benchmark(name::String, ixs, iy, sizes; ntrials=10, niters=50)
     println("  Time (3 runs): $(round(treesa_time*1000, digits=2))ms, avg: $(round(treesa_time/3*1000, digits=2))ms")
     println()
     
-    return (greedy_avg=greedy_time/10*1000, treesa_avg=treesa_time/3*1000, greedy_tc=greedy_cc.tc, treesa_tc=treesa_cc.tc)
+    return Dict(
+        "tensors" => length(ixs),
+        "indices" => length(sizes),
+        "ntrials" => ntrials,
+        "niters" => niters,
+        "greedy_avg_ms" => greedy_time/10*1000,
+        "greedy_tc" => greedy_cc.tc,
+        "greedy_sc" => greedy_cc.sc,
+        "greedy_rwc" => greedy_cc.rwc,
+        "treesa_avg_ms" => treesa_time/3*1000,
+        "treesa_tc" => treesa_cc.tc,
+        "treesa_sc" => treesa_cc.sc,
+        "treesa_rwc" => treesa_cc.rwc,
+    )
 end
 
 function main()
@@ -169,34 +183,79 @@ function main()
     println("=" ^ 60)
     println()
     
-    results = Dict{String, NamedTuple}()
+    results = Dict{String, Any}()
     
     # Small: matrix chain
     ixs, iy, sizes = chain_network(10, 100)
-    results["chain_10"] = run_benchmark("Matrix Chain (n=10)", ixs, iy, sizes)
+    results["chain_10"] = run_benchmark("Matrix Chain (n=10)", ixs, iy, sizes, ntrials=1, niters=50)
     
     # Medium: small grid
     ixs, iy, sizes = grid_network(4, 4, 2)
-    results["grid_4x4"] = run_benchmark("Grid 4x4", ixs, iy, sizes, ntrials=10, niters=100)
+    results["grid_4x4"] = run_benchmark("Grid 4x4", ixs, iy, sizes, ntrials=1, niters=100)
     
     # Large: bigger grid
     ixs, iy, sizes = grid_network(5, 5, 2)
-    results["grid_5x5"] = run_benchmark("Grid 5x5", ixs, iy, sizes, ntrials=10, niters=100)
+    results["grid_5x5"] = run_benchmark("Grid 5x5", ixs, iy, sizes, ntrials=1, niters=100)
     
     # Random 3-regular graph n=250
     ixs, iy, sizes = random_regular_graph(250, 3, 2)
-    results["reg3_250"] = run_benchmark("Random 3-regular n=250", ixs, iy, sizes, ntrials=10, niters=100)
+    results["reg3_250"] = run_benchmark("Random 3-regular n=250", ixs, iy, sizes, ntrials=1, niters=100)
     
     # Summary
     println("=" ^ 60)
     println("Summary (Julia):")
     println("-" ^ 60)
-    @printf("%-20s %-15s %-15s\n", "Problem", "Greedy (ms)", "TreeSA (ms)")
+    @printf("%-20s %-15s %-15s %-12s %-12s\n", "Problem", "Greedy (ms)", "TreeSA (ms)", "Greedy tc", "TreeSA tc")
     println("-" ^ 60)
     for name in ["chain_10", "grid_4x4", "grid_5x5", "reg3_250"]
         r = results[name]
-        @printf("%-20s %-15.3f %-15.2f\n", name, r.greedy_avg, r.treesa_avg)
+        @printf("%-20s %-15.3f %-15.2f %-12.2f %-12.2f\n", name, r["greedy_avg_ms"], r["treesa_avg_ms"], r["greedy_tc"], r["treesa_tc"])
     end
+    
+    # Save Greedy results to JSON
+    greedy_output = Dict(
+        "language" => "julia",
+        "backend" => "OMEinsumContractionOrders.jl",
+        "method" => "greedy",
+        "results" => Dict(name => Dict(
+            "tensors" => r["tensors"],
+            "indices" => r["indices"],
+            "avg_ms" => r["greedy_avg_ms"],
+            "tc" => r["greedy_tc"],
+            "sc" => r["greedy_sc"],
+            "rwc" => r["greedy_rwc"],
+        ) for (name, r) in results)
+    )
+    greedy_path = joinpath(@__DIR__, "results_julia_greedy.json")
+    open(greedy_path, "w") do f
+        JSON.print(f, greedy_output, 2)
+    end
+    
+    # Save TreeSA results to JSON
+    treesa_output = Dict(
+        "language" => "julia",
+        "backend" => "OMEinsumContractionOrders.jl",
+        "method" => "treesa",
+        "results" => Dict(name => Dict(
+            "tensors" => r["tensors"],
+            "indices" => r["indices"],
+            "ntrials" => r["ntrials"],
+            "niters" => r["niters"],
+            "avg_ms" => r["treesa_avg_ms"],
+            "tc" => r["treesa_tc"],
+            "sc" => r["treesa_sc"],
+            "rwc" => r["treesa_rwc"],
+        ) for (name, r) in results)
+    )
+    treesa_path = joinpath(@__DIR__, "results_julia_treesa.json")
+    open(treesa_path, "w") do f
+        JSON.print(f, treesa_output, 2)
+    end
+    
+    println()
+    println("Results saved to:")
+    println("  $greedy_path")
+    println("  $treesa_path")
 end
 
 main()
