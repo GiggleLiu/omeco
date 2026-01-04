@@ -664,13 +664,7 @@ mod tests {
     #[test]
     fn test_treesa_new() {
         let score = ScoreFunction::new(1.0, 2.0, 0.5, 10.0);
-        let config = TreeSA::new(
-            vec![0.1, 0.2, 0.3],
-            5,
-            10,
-            Initializer::Random,
-            score,
-        );
+        let config = TreeSA::new(vec![0.1, 0.2, 0.3], 5, 10, Initializer::Random, score);
         assert_eq!(config.betas, vec![0.1, 0.2, 0.3]);
         assert_eq!(config.ntrials, 5);
         assert_eq!(config.niters, 10);
@@ -751,11 +745,7 @@ mod tests {
     #[test]
     fn test_optimize_treesa_path_multiple_tensors() {
         let code = EinCode::new(
-            vec![
-                vec!['i', 'j'],
-                vec!['j', 'k'],
-                vec!['k', 'l'],
-            ],
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
             vec!['i', 'l'],
         );
         let mut size_dict = HashMap::new();
@@ -764,7 +754,10 @@ mod tests {
         size_dict.insert('k', 8);
         size_dict.insert('l', 4);
 
-        let config = TreeSA::path().with_ntrials(1).with_niters(5).with_betas(vec![0.1, 0.5]);
+        let config = TreeSA::path()
+            .with_ntrials(1)
+            .with_niters(5)
+            .with_betas(vec![0.1, 0.5]);
         let result = optimize_treesa(&code, &size_dict, &config);
 
         assert!(result.is_some());

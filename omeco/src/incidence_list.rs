@@ -591,10 +591,10 @@ mod tests {
 
         // Remove edge 'j'
         il.remove_edges(&['j']);
-        
+
         // 'j' should no longer exist
         assert!(il.vertices_of_edge(&'j').is_none());
-        
+
         // Tensors 0 and 1 should no longer share edges
         assert!(!il.are_neighbors(&0, &1));
     }
@@ -627,10 +627,10 @@ mod tests {
 
         // Merge vertex 0 into vertex 1
         il.replace_vertex(&0, 1);
-        
+
         // Vertex 0 should be gone
         assert!(il.edges(&0).is_none());
-        
+
         // Vertex 1 should have edges from both
         let edges = il.edges(&1).unwrap();
         assert!(edges.contains(&'i') || edges.contains(&'j'));
@@ -647,7 +647,7 @@ mod tests {
         // Delete vertex 0 - 'a' should be removed (only connected to 0, even though open)
         // 'b' should remain because it's still connected to 1 and 2
         il.delete_vertex(&0);
-        
+
         assert_eq!(il.nv(), 2);
         assert!(il.vertices_of_edge(&'a').is_none());
         // 'b' should still exist with vertices 1 and 2
@@ -701,7 +701,7 @@ mod tests {
 
         // Add a completely new vertex
         il.set_edges(99, vec!['x', 'y']);
-        
+
         assert_eq!(il.nv(), 4);
         let edges = il.edges(&99).unwrap();
         assert!(edges.contains(&'x'));
@@ -804,6 +804,6 @@ mod tests {
 
         let dims = ContractionDims::compute(&il, &log2_sizes, &0, &1);
         // Should still compute without panic
-        assert!(dims.d01 >= 0.0 || dims.d01.is_nan() == false);
+        assert!(dims.d01 >= 0.0 || !dims.d01.is_nan());
     }
 }

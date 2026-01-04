@@ -583,7 +583,7 @@ mod tests {
         // Test that Cost implements correct min-heap ordering
         let cost1 = Cost(1.0);
         let cost2 = Cost(2.0);
-        
+
         // Lower cost should have higher priority (reverse ordering)
         assert!(cost1 > cost2);
         assert!(cost2 < cost1);
@@ -635,7 +635,8 @@ mod tests {
     #[test]
     fn test_compute_contraction_output_with_batched() {
         // Test with batched index (appears in both inputs and output)
-        let output = compute_contraction_output(&['i', 'j', 'b'], &['j', 'k', 'b'], &['i', 'k', 'b']);
+        let output =
+            compute_contraction_output(&['i', 'j', 'b'], &['j', 'k', 'b'], &['i', 'k', 'b']);
         assert!(output.contains(&'i'));
         assert!(output.contains(&'k'));
         assert!(output.contains(&'b')); // batched, kept

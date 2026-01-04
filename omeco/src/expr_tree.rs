@@ -1064,7 +1064,7 @@ mod tests {
         // Applying rule on leaf should return the leaf unchanged
         let leaf = ExprTree::leaf(vec![0, 1], 0);
         let result = apply_rule(leaf.clone(), Rule::Rule1, vec![]);
-        
+
         assert!(result.is_leaf());
     }
 
@@ -1138,7 +1138,7 @@ mod tests {
     fn test_rule_diff_wrong_structure_rule3() {
         // Rule3/Rule4 on a tree where right is a leaf
         let tree = simple_tree(); // ((leaf,leaf), leaf)
-        
+
         let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
         let diff = rule_diff(&tree, Rule::Rule3, &log2_sizes, false);
         assert!(diff.is_none()); // Cannot apply Rule3 because right is leaf
@@ -1214,13 +1214,13 @@ mod tests {
     fn test_contraction_output_duplicates() {
         // Test that output doesn't contain duplicates
         let output = contraction_output(&[0, 1, 2], &[1, 2, 3], &[0, 3]);
-        
+
         // Count occurrences
         let mut counts = std::collections::HashMap::new();
         for &x in &output {
             *counts.entry(x).or_insert(0) += 1;
         }
-        
+
         // No duplicates
         for (_, count) in counts {
             assert_eq!(count, 1);

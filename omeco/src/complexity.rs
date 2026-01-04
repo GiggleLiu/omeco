@@ -341,15 +341,15 @@ mod tests {
     #[test]
     fn test_contraction_complexity_methods() {
         let complexity = ContractionComplexity::new(10.0, 5.0, 8.0);
-        
+
         // Test flops
         let flops = complexity.flops();
         assert!((flops - 1024.0).abs() < 1e-10); // 2^10 = 1024
-        
+
         // Test peak_memory
         let peak = complexity.peak_memory();
         assert!((peak - 32.0).abs() < 1e-10); // 2^5 = 32
-        
+
         // Test readwrites
         let rw = complexity.readwrites();
         assert!((rw - 256.0).abs() < 1e-10); // 2^8 = 256
@@ -406,7 +406,7 @@ mod tests {
         size_dict.insert('j', 8);
 
         let complexity = nested_complexity(&leaf, &size_dict, &original_ixs);
-        
+
         // Leaf has no contraction, tc should be NEG_INFINITY
         assert!(complexity.tc == f64::NEG_INFINITY || complexity.tc < 0.0);
         // sc should be log2(4*8) = 5
@@ -447,7 +447,7 @@ mod tests {
         let leaf = NestedEinsum::leaf(0);
         let mut size_dict = HashMap::new();
         size_dict.insert('i', 4);
-        
+
         let flops = nested_flop(&leaf, &size_dict);
         assert_eq!(flops, 0); // Leaf has no contractions
     }
@@ -513,7 +513,10 @@ mod tests {
 
     #[test]
     fn test_get_loop_indices_no_loops() {
-        let code = EinCode::new(vec![vec!['i', 'j'], vec!['k', 'l']], vec!['i', 'j', 'k', 'l']);
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['k', 'l']],
+            vec!['i', 'j', 'k', 'l'],
+        );
         let loop_indices = get_loop_indices(&code);
 
         // No indices appear more than once
@@ -558,7 +561,7 @@ mod tests {
 
         let sliced_c = sliced_complexity(&sliced, &size_dict, &original_ixs);
         let unsliced_c = nested_complexity(&nested, &size_dict, &original_ixs);
-        
+
         // Without slicing, complexities should be equal
         assert!((sliced_c.tc - unsliced_c.tc).abs() < 1e-10);
         assert!((sliced_c.sc - unsliced_c.sc).abs() < 1e-10);
@@ -581,7 +584,7 @@ mod tests {
         size_dict.insert('j', 8);
 
         let complexity = eincode_complexity(&code, &size_dict);
-        
+
         // tc = log2(4 * 8) = log2(32) = 5
         assert!((complexity.tc - 5.0).abs() < 1e-10);
         // sc = 0 (empty output)
@@ -605,7 +608,12 @@ mod tests {
         let eins3 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'm']], vec!['i', 'm']);
         let tree3 = NestedEinsum::node(vec![tree1, tree2], eins3);
 
-        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l'], vec!['l', 'm']];
+        let original_ixs = vec![
+            vec!['i', 'j'],
+            vec!['j', 'k'],
+            vec!['k', 'l'],
+            vec!['l', 'm'],
+        ];
         let mut size_dict = HashMap::new();
         size_dict.insert('i', 4);
         size_dict.insert('j', 8);
