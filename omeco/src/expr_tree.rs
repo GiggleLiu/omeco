@@ -144,18 +144,13 @@ impl ExprTree {
 }
 
 /// Decomposition type for the tree structure.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DecompositionType {
     /// Full binary tree (allows any tree structure)
+    #[default]
     Tree,
     /// Path decomposition (linear chain, right child is always a leaf)
     Path,
-}
-
-impl Default for DecompositionType {
-    fn default() -> Self {
-        Self::Tree
-    }
 }
 
 /// The mutation rules that can be applied to an ExprTree.
@@ -220,7 +215,7 @@ impl Rule {
 /// Check if a slice contains an element (linear search, fast for small slices)
 #[inline(always)]
 fn slice_contains(slice: &[usize], elem: usize) -> bool {
-    slice.iter().any(|&x| x == elem)
+    slice.contains(&elem)
 }
 
 /// Compute the time, space, and read-write complexity for a single contraction.

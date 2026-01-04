@@ -33,18 +33,13 @@ pub struct TreeSA {
 }
 
 /// Method for initializing the contraction tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Initializer {
     /// Use greedy algorithm to initialize
+    #[default]
     Greedy,
     /// Random tree initialization
     Random,
-}
-
-impl Default for Initializer {
-    fn default() -> Self {
-        Self::Greedy
-    }
 }
 
 impl Default for TreeSA {
