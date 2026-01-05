@@ -40,7 +40,7 @@ omeco = "0.1"
 ```python
 from omeco import (
     optimize_code, slice_code, contraction_complexity, sliced_complexity,
-    GreedyMethod, TreeSA, TreeSASlicer
+    GreedyMethod, TreeSA, TreeSASlicer, ScoreFunction
 )
 
 # Matrix chain: A[0,1] × B[1,2] × C[2,3] → D[0,3]
@@ -54,7 +54,7 @@ complexity = contraction_complexity(tree, ixs, sizes)
 print(f"Time: 2^{complexity.tc:.2f}, Space: 2^{complexity.sc:.2f}")
 
 # 2) Slice to reduce memory (automatic optimization)
-slicer = TreeSASlicer.fast().with_sc_target(10.0)
+slicer = TreeSASlicer.fast(score=ScoreFunction(sc_target=10.0))
 sliced = slice_code(tree, ixs, sizes, slicer)
 sliced_comp = sliced_complexity(sliced, ixs, sizes)
 print(f"Sliced indices: {sliced.slicing()}")
@@ -62,11 +62,6 @@ print(f"Sliced space: 2^{sliced_comp.sc:.2f}")
 
 # Use with PyTorch (see examples/pytorch_tensor_network_example.py)
 tree_dict = tree.to_dict()  # Convert to dict for traversal
-
-# Slice to reduce memory (target sc=10 means ~1024 elements max)
-from omeco import slice_code, TreeSASlicer, sliced_complexity
-sliced = slice_code(tree, ixs, sizes, TreeSASlicer.fast().with_sc_target(10.0))
-print(f"Sliced indices: {sliced.slicing()}")
 ```
 
 ## Rust Quick Start
