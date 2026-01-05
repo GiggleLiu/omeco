@@ -106,7 +106,7 @@ This trades time for space - each sliced index adds a loop but reduces peak memo
 
 ```python
 from omeco import optimize_code, slice_code, contraction_complexity, sliced_complexity
-from omeco import TreeSA, TreeSASlicer
+from omeco import TreeSA, TreeSASlicer, ScoreFunction
 
 ixs = [[0, 1], [1, 2], [2, 3]]
 out = [0, 3]
@@ -118,19 +118,31 @@ c = contraction_complexity(tree, ixs, sizes)
 print(f"Original: tc=2^{c.tc:.2f}, sc=2^{c.sc:.2f}")
 
 # Step 2: Slice to reduce memory (target sc=10 means ~1024 elements max)
-slicer = TreeSASlicer.fast().with_sc_target(10.0)
+slicer = TreeSASlicer.fast(score=ScoreFunction(sc_target=10.0))
 sliced = slice_code(tree, ixs, sizes, slicer)
 
 c_sliced = sliced_complexity(sliced, ixs, sizes)
 print(f"Sliced:   tc=2^{c_sliced.tc:.2f}, sc=2^{c_sliced.sc:.2f}")
 print(f"Indices to loop over: {sliced.slicing()}")
+
+# With fixed slices (indices that must be sliced)
+slicer = TreeSASlicer(fixed_slices=[1, 2], score=ScoreFunction(sc_target=10.0))
+sliced = slice_code(tree, ixs, sizes, slicer)
 ```
 
+**ScoreFunction Parameters:**
+- `tc_weight`: Weight for time complexity (default: 1.0)
+- `sc_weight`: Weight for space complexity penalty (default: 1.0)
+- `rw_weight`: Weight for read-write complexity (default: 0.0)
+- `sc_target`: Target space complexity threshold (default: 20.0)
+
 **TreeSASlicer Parameters:**
-- `sc_target`: Target space complexity (log2 scale). Default: 30.0
-- `ntrials`: Number of parallel optimization trials. Default: 10
-- `niters`: Iterations per temperature level. Default: 10
-- `optimization_ratio`: Controls iteration count for slicing. Default: 2.0
+- `ntrials`: Number of parallel optimization trials (default: 10)
+- `niters`: Iterations per temperature level (default: 10)
+- `betas`: Inverse temperature schedule (default: 14.0 to 15.0)
+- `fixed_slices`: List of index labels that must be sliced (default: [])
+- `optimization_ratio`: Controls iteration count for slicing (default: 2.0)
+- `score`: ScoreFunction for evaluating solutions (default: ScoreFunction(sc_target=30.0))
 
 **Presets:**
 - `TreeSASlicer()` - Default configuration

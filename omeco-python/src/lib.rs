@@ -162,7 +162,80 @@ impl From<ContractionComplexity> for PyContractionComplexity {
     }
 }
 
+/// Score function for evaluating contraction quality.
+///
+/// The score is computed as:
+///     score = tc_weight * 2^tc + rw_weight * 2^rw + sc_weight * max(0, 2^sc - 2^sc_target)
+///
+/// Where:
+/// - tc is the time complexity (log2 of FLOP count)
+/// - sc is the space complexity (log2 of max intermediate tensor size)
+/// - rw is the read-write complexity (log2 of total I/O operations)
+#[pyclass(name = "ScoreFunction")]
+#[derive(Clone)]
+pub struct PyScoreFunction {
+    inner: ScoreFunction,
+}
+
+#[pymethods]
+impl PyScoreFunction {
+    /// Create a new ScoreFunction.
+    ///
+    /// Args:
+    ///     tc_weight: Weight for time complexity (default: 1.0).
+    ///     sc_weight: Weight for space complexity penalty (default: 1.0).
+    ///     rw_weight: Weight for read-write complexity (default: 0.0).
+    ///     sc_target: Target space complexity threshold (default: 20.0).
+    ///                Space complexity is only penalized if it exceeds this target.
+    #[new]
+    #[pyo3(signature = (tc_weight=1.0, sc_weight=1.0, rw_weight=0.0, sc_target=20.0))]
+    fn new(tc_weight: f64, sc_weight: f64, rw_weight: f64, sc_target: f64) -> Self {
+        Self {
+            inner: ScoreFunction::new(tc_weight, sc_weight, rw_weight, sc_target),
+        }
+    }
+
+    /// Get the time complexity weight.
+    #[getter]
+    fn tc_weight(&self) -> f64 {
+        self.inner.tc_weight
+    }
+
+    /// Get the space complexity weight.
+    #[getter]
+    fn sc_weight(&self) -> f64 {
+        self.inner.sc_weight
+    }
+
+    /// Get the read-write complexity weight.
+    #[getter]
+    fn rw_weight(&self) -> f64 {
+        self.inner.rw_weight
+    }
+
+    /// Get the space complexity target.
+    #[getter]
+    fn sc_target(&self) -> f64 {
+        self.inner.sc_target
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ScoreFunction(tc_weight={}, sc_weight={}, rw_weight={}, sc_target={})",
+            self.inner.tc_weight, self.inner.sc_weight, self.inner.rw_weight, self.inner.sc_target
+        )
+    }
+}
+
 /// Greedy optimizer for contraction order.
+///
+/// Args:
+///     alpha: Balance between output size and input size reduction.
+///            For pairwise interaction: L = size(out) - alpha * (size(in1) + size(in2)).
+///            Default: 0.0.
+///     temperature: Boltzmann sampling temperature. If 0.0, the minimum loss is selected;
+///                  for non-zero, selection uses Boltzmann distribution p ~ exp(-loss/temperature).
+///                  Default: 0.0.
 #[pyclass(name = "GreedyMethod")]
 #[derive(Clone)]
 pub struct PyGreedyMethod {
@@ -174,14 +247,26 @@ impl PyGreedyMethod {
     /// Create a new greedy optimizer.
     ///
     /// Args:
-    ///     alpha: Balance between output size and input size reduction (0.0-1.0).
-    ///     temperature: Boltzmann sampling temperature (0.0 = deterministic).
+    ///     alpha: Balance between output size and input size reduction (default: 0.0).
+    ///     temperature: Boltzmann sampling temperature (default: 0.0 = deterministic).
     #[new]
     #[pyo3(signature = (alpha=0.0, temperature=0.0))]
     fn new(alpha: f64, temperature: f64) -> Self {
         Self {
             inner: GreedyMethod::new(alpha, temperature),
         }
+    }
+
+    /// Get the alpha parameter.
+    #[getter]
+    fn alpha(&self) -> f64 {
+        self.inner.alpha
+    }
+
+    /// Get the temperature parameter.
+    #[getter]
+    fn temperature(&self) -> f64 {
+        self.inner.temperature
     }
 
     fn __repr__(&self) -> String {
@@ -193,6 +278,12 @@ impl PyGreedyMethod {
 }
 
 /// Simulated annealing optimizer for contraction order.
+///
+/// Args:
+///     ntrials: Number of independent trials to run (default: 10).
+///     niters: Iterations per temperature level (default: 50).
+///     betas: Inverse temperature schedule. If None, uses default schedule (default: None).
+///     score: Score function for evaluating solutions (default: ScoreFunction()).
 #[pyclass(name = "TreeSA")]
 #[derive(Clone)]
 pub struct PyTreeSA {
@@ -201,54 +292,85 @@ pub struct PyTreeSA {
 
 #[pymethods]
 impl PyTreeSA {
-    /// Create a new TreeSA optimizer with default settings.
+    /// Create a new TreeSA optimizer.
+    ///
+    /// Args:
+    ///     ntrials: Number of independent trials to run (default: 10).
+    ///     niters: Iterations per temperature level (default: 50).
+    ///     betas: Inverse temperature schedule. If None, uses default schedule.
+    ///     score: Score function for evaluating solutions. If None, uses default.
     #[new]
-    fn new() -> Self {
+    #[pyo3(signature = (ntrials=10, niters=50, betas=None, score=None))]
+    fn new(
+        ntrials: usize,
+        niters: usize,
+        betas: Option<Vec<f64>>,
+        score: Option<PyScoreFunction>,
+    ) -> Self {
+        let default_betas: Vec<f64> = (1..=300).map(|i| 0.01 + 0.05 * i as f64).collect();
+        let betas = betas.unwrap_or(default_betas);
+        let score = score.map(|s| s.inner).unwrap_or_default();
+
         Self {
-            inner: TreeSA::default(),
+            inner: TreeSA {
+                betas,
+                ntrials,
+                niters,
+                score,
+                ..Default::default()
+            },
         }
     }
 
     /// Create a fast TreeSA configuration (fewer iterations).
+    ///
+    /// Args:
+    ///     score: Score function for evaluating solutions. If None, uses default.
     #[staticmethod]
-    fn fast() -> Self {
-        Self {
-            inner: TreeSA::fast(),
+    #[pyo3(signature = (score=None))]
+    fn fast(score: Option<PyScoreFunction>) -> Self {
+        let mut inner = TreeSA::fast();
+        if let Some(s) = score {
+            inner.score = s.inner;
         }
+        Self { inner }
     }
 
-    /// Set the space complexity target.
-    fn with_sc_target(&self, sc_target: f64) -> Self {
-        Self {
-            inner: self.inner.clone().with_sc_target(sc_target),
-        }
+    /// Get the number of trials.
+    #[getter]
+    fn ntrials(&self) -> usize {
+        self.inner.ntrials
     }
 
-    /// Set the number of parallel trials.
-    fn with_ntrials(&self, ntrials: usize) -> Self {
-        Self {
-            inner: self.inner.clone().with_ntrials(ntrials),
-        }
+    /// Get the number of iterations.
+    #[getter]
+    fn niters(&self) -> usize {
+        self.inner.niters
     }
 
-    /// Set the number of iterations per temperature level.
-    fn with_niters(&self, niters: usize) -> Self {
-        Self {
-            inner: self.inner.clone().with_niters(niters),
-        }
+    /// Get the inverse temperature schedule.
+    #[getter]
+    fn betas(&self) -> Vec<f64> {
+        self.inner.betas.clone()
     }
 
-    /// Set the inverse temperature schedule (betas).
-    fn with_betas(&self, betas: Vec<f64>) -> Self {
-        Self {
-            inner: self.inner.clone().with_betas(betas),
+    /// Get the score function.
+    #[getter]
+    fn score(&self) -> PyScoreFunction {
+        PyScoreFunction {
+            inner: self.inner.score.clone(),
         }
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "TreeSA(ntrials={}, niters={})",
-            self.inner.ntrials, self.inner.niters
+            "TreeSA(ntrials={}, niters={}, score={})",
+            self.inner.ntrials,
+            self.inner.niters,
+            PyScoreFunction {
+                inner: self.inner.score.clone()
+            }
+            .__repr__()
         )
     }
 }
@@ -257,10 +379,21 @@ impl PyTreeSA {
 ///
 /// This optimizer iteratively adds slices to reduce memory requirements,
 /// trading time complexity for space complexity.
+///
+/// Args:
+///     ntrials: Number of parallel trials (default: 10).
+///     niters: Iterations per temperature level (default: 10).
+///     betas: Inverse temperature schedule. If None, uses default (14.0 to 15.0).
+///     fixed_slices: List of index labels that must be sliced. These indices will always
+///                   be included in the slicing and cannot be removed during optimization.
+///     optimization_ratio: Ratio for iteration count (default: 2.0).
+///     score: Score function for evaluating solutions (default: ScoreFunction(sc_target=30.0)).
 #[pyclass(name = "TreeSASlicer")]
 #[derive(Clone)]
 pub struct PyTreeSASlicer {
     inner: TreeSASlicer,
+    /// Fixed slices as user-provided labels (converted to indices in slice_code)
+    fixed_slices_labels: Vec<i64>,
 }
 
 #[pymethods]
@@ -268,65 +401,107 @@ impl PyTreeSASlicer {
     /// Create a new TreeSASlicer optimizer.
     ///
     /// Args:
-    ///     sc_target: Target space complexity (log2 scale). Default: 30.0.
-    ///     ntrials: Number of parallel trials. Default: 10.
-    ///     niters: Iterations per temperature level. Default: 10.
-    ///     optimization_ratio: Ratio for iteration count. Default: 2.0.
+    ///     ntrials: Number of parallel trials (default: 10).
+    ///     niters: Iterations per temperature level (default: 10).
+    ///     betas: Inverse temperature schedule. If None, uses default (14.0 to 15.0).
+    ///     fixed_slices: List of index labels that must be sliced (default: []).
+    ///     optimization_ratio: Ratio for iteration count (default: 2.0).
+    ///     score: Score function for evaluating solutions. If None, uses default with sc_target=30.0.
     #[new]
-    #[pyo3(signature = (sc_target=30.0, ntrials=10, niters=10, optimization_ratio=2.0))]
-    fn new(sc_target: f64, ntrials: usize, niters: usize, optimization_ratio: f64) -> Self {
-        let score = ScoreFunction::default().with_sc_target(sc_target);
+    #[pyo3(signature = (ntrials=10, niters=10, betas=None, fixed_slices=None, optimization_ratio=2.0, score=None))]
+    fn new(
+        ntrials: usize,
+        niters: usize,
+        betas: Option<Vec<f64>>,
+        fixed_slices: Option<Vec<i64>>,
+        optimization_ratio: f64,
+        score: Option<PyScoreFunction>,
+    ) -> Self {
+        let default_betas: Vec<f64> = (0..=20).map(|i| 14.0 + 0.05 * i as f64).collect();
+        let betas = betas.unwrap_or(default_betas);
+        let fixed_slices_labels = fixed_slices.unwrap_or_default();
+        let score = score
+            .map(|s| s.inner)
+            .unwrap_or_else(|| ScoreFunction::default().with_sc_target(30.0));
         Self {
             inner: TreeSASlicer {
+                betas,
                 score,
                 ntrials,
                 niters,
                 optimization_ratio,
                 ..Default::default()
             },
+            fixed_slices_labels,
         }
     }
 
     /// Create a fast TreeSASlicer configuration (fewer iterations).
+    ///
+    /// Args:
+    ///     fixed_slices: List of index labels that must be sliced (default: []).
+    ///     score: Score function for evaluating solutions. If None, uses default.
     #[staticmethod]
-    fn fast() -> Self {
+    #[pyo3(signature = (fixed_slices=None, score=None))]
+    fn fast(fixed_slices: Option<Vec<i64>>, score: Option<PyScoreFunction>) -> Self {
+        let mut inner = TreeSASlicer::fast();
+        if let Some(s) = score {
+            inner.score = s.inner;
+        }
         Self {
-            inner: TreeSASlicer::fast(),
+            inner,
+            fixed_slices_labels: fixed_slices.unwrap_or_default(),
         }
     }
 
-    /// Set the space complexity target.
-    fn with_sc_target(&self, sc_target: f64) -> Self {
-        Self {
-            inner: self.inner.clone().with_sc_target(sc_target),
-        }
+    /// Get the number of trials.
+    #[getter]
+    fn ntrials(&self) -> usize {
+        self.inner.ntrials
     }
 
-    /// Set the number of parallel trials.
-    fn with_ntrials(&self, ntrials: usize) -> Self {
-        Self {
-            inner: self.inner.clone().with_ntrials(ntrials),
-        }
+    /// Get the number of iterations.
+    #[getter]
+    fn niters(&self) -> usize {
+        self.inner.niters
     }
 
-    /// Set the number of iterations per temperature level.
-    fn with_niters(&self, niters: usize) -> Self {
-        Self {
-            inner: self.inner.clone().with_niters(niters),
-        }
+    /// Get the inverse temperature schedule.
+    #[getter]
+    fn betas(&self) -> Vec<f64> {
+        self.inner.betas.clone()
     }
 
-    /// Set the optimization ratio.
-    fn with_optimization_ratio(&self, ratio: f64) -> Self {
-        Self {
-            inner: self.inner.clone().with_optimization_ratio(ratio),
+    /// Get the fixed slices (index labels).
+    #[getter]
+    fn fixed_slices(&self) -> Vec<i64> {
+        self.fixed_slices_labels.clone()
+    }
+
+    /// Get the optimization ratio.
+    #[getter]
+    fn optimization_ratio(&self) -> f64 {
+        self.inner.optimization_ratio
+    }
+
+    /// Get the score function.
+    #[getter]
+    fn score(&self) -> PyScoreFunction {
+        PyScoreFunction {
+            inner: self.inner.score.clone(),
         }
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "TreeSASlicer(sc_target={:.1}, ntrials={}, niters={})",
-            self.inner.score.sc_target, self.inner.ntrials, self.inner.niters
+            "TreeSASlicer(ntrials={}, niters={}, fixed_slices={:?}, score={})",
+            self.inner.ntrials,
+            self.inner.niters,
+            self.fixed_slices_labels,
+            PyScoreFunction {
+                inner: self.inner.score.clone()
+            }
+            .__repr__()
         )
     }
 }
@@ -377,7 +552,7 @@ fn optimize_treesa(
     optimizer: Option<PyTreeSA>,
 ) -> PyResult<PyNestedEinsum> {
     let code = EinCode::new(ixs, out);
-    let opt = optimizer.unwrap_or_else(PyTreeSA::new);
+    let opt = optimizer.unwrap_or_else(|| PyTreeSA::new(10, 50, None, None));
 
     opt.inner
         .optimize(&code, &sizes)
@@ -451,13 +626,16 @@ fn uniform_size_dict(ixs: Vec<Vec<i64>>, out: Vec<i64>, size: usize) -> HashMap<
 ///     SlicedEinsum with the sliced indices and optimized tree.
 ///
 /// Example:
-///     >>> from omeco import optimize_code, slice_code, TreeSASlicer, GreedyMethod
+///     >>> from omeco import optimize_code, slice_code, TreeSASlicer, ScoreFunction, GreedyMethod
 ///     >>> ixs = [[0, 1], [1, 2], [2, 3]]
 ///     >>> out = [0, 3]
 ///     >>> sizes = {0: 100, 1: 50, 2: 80, 3: 100}
 ///     >>> tree = optimize_code(ixs, out, sizes, GreedyMethod())
-///     >>> sliced = slice_code(tree, ixs, sizes, TreeSASlicer(sc_target=10.0))
+///     >>> sliced = slice_code(tree, ixs, sizes, TreeSASlicer(score=ScoreFunction(sc_target=10.0)))
 ///     >>> print(sliced.slicing())  # Indices that will be looped over
+///
+///     # With fixed slices:
+///     >>> sliced = slice_code(tree, ixs, sizes, TreeSASlicer(fixed_slices=[1, 2]))
 #[pyfunction]
 #[pyo3(signature = (tree, ixs, sizes, slicer=None))]
 fn slice_code(
@@ -466,9 +644,35 @@ fn slice_code(
     sizes: HashMap<i64, usize>,
     slicer: Option<PyTreeSASlicer>,
 ) -> PyResult<PySlicedEinsum> {
-    let config = slicer.unwrap_or_else(|| PyTreeSASlicer::new(30.0, 10, 10, 2.0));
+    let config = slicer.unwrap_or_else(|| PyTreeSASlicer::new(10, 10, None, None, 2.0, None));
 
-    omeco::slice_code(&tree.inner, &sizes, &config.inner, &ixs)
+    // Build label map from ixs to convert fixed_slices labels to indices
+    let mut all_labels: Vec<i64> = Vec::new();
+    for ix in &ixs {
+        for &l in ix {
+            if !all_labels.contains(&l) {
+                all_labels.push(l);
+            }
+        }
+    }
+    let label_map: HashMap<i64, usize> = all_labels
+        .iter()
+        .enumerate()
+        .map(|(i, &l)| (l, i))
+        .collect();
+
+    // Convert fixed_slices labels to indices
+    let fixed_slices_indices: Vec<usize> = config
+        .fixed_slices_labels
+        .iter()
+        .filter_map(|&label| label_map.get(&label).copied())
+        .collect();
+
+    // Create a modified config with the converted fixed_slices
+    let mut inner_config = config.inner.clone();
+    inner_config.fixed_slices = fixed_slices_indices;
+
+    omeco::slice_code(&tree.inner, &sizes, &inner_config, &ixs)
         .map(|inner| PySlicedEinsum { inner })
         .ok_or_else(|| PyValueError::new_err("Slicing failed"))
 }
@@ -527,6 +731,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNestedEinsum>()?;
     m.add_class::<PySlicedEinsum>()?;
     m.add_class::<PyContractionComplexity>()?;
+    m.add_class::<PyScoreFunction>()?;
     m.add_class::<PyGreedyMethod>()?;
     m.add_class::<PyTreeSA>()?;
     m.add_class::<PyTreeSASlicer>()?;

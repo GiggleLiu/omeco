@@ -5,6 +5,7 @@ from omeco import (
     GreedyMethod,
     TreeSA,
     TreeSASlicer,
+    ScoreFunction,
     optimize_code,
     optimize_greedy,
     optimize_treesa,
@@ -105,13 +106,14 @@ def test_greedy_method_params():
 
 
 def test_treesa_config():
-    """Test TreeSA configuration methods."""
-    opt = TreeSA().with_sc_target(10.0).with_ntrials(2)
-    
+    """Test TreeSA configuration with ScoreFunction."""
+    score = ScoreFunction(sc_target=10.0)
+    opt = TreeSA(ntrials=2, score=score)
+
     ixs = [[0, 1], [1, 2]]
     out = [0, 2]
     sizes = {0: 4, 1: 8, 2: 4}
-    
+
     tree = optimize_treesa(ixs, out, sizes, opt)
     assert tree is not None
 
@@ -244,7 +246,7 @@ def test_slice_code_basic():
     sizes = uniform_size_dict(ixs, out, 64)
 
     tree = optimize_code(ixs, out, sizes, GreedyMethod())
-    slicer = TreeSASlicer.fast().with_sc_target(10.0)
+    slicer = TreeSASlicer.fast(score=ScoreFunction(sc_target=10.0))
 
     sliced = slice_code(tree, ixs, sizes, slicer)
     assert sliced is not None
@@ -260,7 +262,7 @@ def test_slice_code_reduces_space():
     tree = optimize_code(ixs, out, sizes, GreedyMethod())
     original = contraction_complexity(tree, ixs, sizes)
 
-    slicer = TreeSASlicer.fast().with_sc_target(8.0)
+    slicer = TreeSASlicer.fast(score=ScoreFunction(sc_target=8.0))
     sliced = slice_code(tree, ixs, sizes, slicer)
 
     sliced_comp = sliced_complexity(sliced, ixs, sizes)
@@ -282,14 +284,17 @@ def test_slice_code_default_slicer():
 
 
 def test_treesaslicer_config():
-    """Test TreeSASlicer configuration methods."""
-    slicer = TreeSASlicer(sc_target=15.0, ntrials=5, niters=8)
+    """Test TreeSASlicer configuration with ScoreFunction."""
+    score = ScoreFunction(sc_target=15.0)
+    slicer = TreeSASlicer(ntrials=5, niters=8, score=score)
 
-    # Test builder methods
-    slicer2 = slicer.with_sc_target(20.0).with_ntrials(3).with_niters(10)
+    # Test getters
+    assert slicer.ntrials == 5
+    assert slicer.niters == 8
+    assert slicer.score.sc_target == 15.0
 
     # Test repr
-    repr_str = repr(slicer2)
+    repr_str = repr(slicer)
     assert "TreeSASlicer" in repr_str
 
 
@@ -305,3 +310,199 @@ def test_treesaslicer_fast():
     sliced = slice_code(tree, ixs, sizes, slicer)
 
     assert sliced is not None
+
+
+# ============== New tests for ScoreFunction ==============
+
+
+def test_score_function_default():
+    """Test ScoreFunction with default parameters."""
+    score = ScoreFunction()
+    assert score.tc_weight == 1.0
+    assert score.sc_weight == 1.0
+    assert score.rw_weight == 0.0
+    assert score.sc_target == 20.0
+
+
+def test_score_function_custom():
+    """Test ScoreFunction with custom parameters."""
+    score = ScoreFunction(tc_weight=2.0, sc_weight=0.5, rw_weight=0.1, sc_target=15.0)
+    assert score.tc_weight == 2.0
+    assert score.sc_weight == 0.5
+    assert score.rw_weight == 0.1
+    assert score.sc_target == 15.0
+
+
+def test_score_function_repr():
+    """Test ScoreFunction __repr__."""
+    score = ScoreFunction(sc_target=10.0)
+    repr_str = repr(score)
+    assert "ScoreFunction" in repr_str
+    assert "sc_target=10" in repr_str
+
+
+def test_score_function_with_treesa():
+    """Test ScoreFunction with TreeSA optimizer."""
+    score = ScoreFunction(tc_weight=1.0, sc_weight=2.0, sc_target=10.0)
+    opt = TreeSA(ntrials=2, niters=10, score=score)
+
+    assert opt.score.tc_weight == 1.0
+    assert opt.score.sc_weight == 2.0
+    assert opt.score.sc_target == 10.0
+
+    ixs = [[0, 1], [1, 2]]
+    out = [0, 2]
+    sizes = {0: 4, 1: 8, 2: 4}
+
+    tree = optimize_code(ixs, out, sizes, opt)
+    assert tree is not None
+
+
+def test_score_function_with_treesaslicer():
+    """Test ScoreFunction with TreeSASlicer."""
+    score = ScoreFunction(sc_target=10.0, sc_weight=2.0)
+    slicer = TreeSASlicer(ntrials=2, niters=5, score=score)
+
+    assert slicer.score.sc_target == 10.0
+    assert slicer.score.sc_weight == 2.0
+
+
+# ============== New tests for GreedyMethod getters ==============
+
+
+def test_greedy_method_getters():
+    """Test GreedyMethod getter properties."""
+    opt = GreedyMethod(alpha=0.5, temperature=1.0)
+    assert opt.alpha == 0.5
+    assert opt.temperature == 1.0
+
+
+def test_greedy_method_default():
+    """Test GreedyMethod default values."""
+    opt = GreedyMethod()
+    assert opt.alpha == 0.0
+    assert opt.temperature == 0.0
+
+
+# ============== New tests for TreeSA constructor ==============
+
+
+def test_treesa_constructor():
+    """Test TreeSA constructor with all parameters."""
+    score = ScoreFunction(sc_target=15.0)
+    betas = [0.1, 0.5, 1.0, 2.0]
+    opt = TreeSA(ntrials=5, niters=20, betas=betas, score=score)
+
+    assert opt.ntrials == 5
+    assert opt.niters == 20
+    assert opt.betas == betas
+    assert opt.score.sc_target == 15.0
+
+
+def test_treesa_fast_with_score():
+    """Test TreeSA.fast() with custom score."""
+    score = ScoreFunction(sc_target=10.0)
+    opt = TreeSA.fast(score=score)
+
+    assert opt.score.sc_target == 10.0
+
+
+def test_treesa_getters():
+    """Test TreeSA getter properties."""
+    opt = TreeSA(ntrials=3, niters=15)
+    assert opt.ntrials == 3
+    assert opt.niters == 15
+    assert len(opt.betas) > 0
+
+
+# ============== New tests for TreeSASlicer constructor ==============
+
+
+def test_treesaslicer_constructor():
+    """Test TreeSASlicer constructor with all parameters."""
+    score = ScoreFunction(sc_target=20.0)
+    betas = [14.0, 14.5, 15.0]
+    slicer = TreeSASlicer(
+        ntrials=5,
+        niters=8,
+        betas=betas,
+        fixed_slices=[1, 2],
+        optimization_ratio=3.0,
+        score=score,
+    )
+
+    assert slicer.ntrials == 5
+    assert slicer.niters == 8
+    assert slicer.betas == betas
+    assert slicer.fixed_slices == [1, 2]
+    assert slicer.optimization_ratio == 3.0
+    assert slicer.score.sc_target == 20.0
+
+
+def test_treesaslicer_getters():
+    """Test TreeSASlicer getter properties."""
+    slicer = TreeSASlicer(ntrials=3, niters=6, optimization_ratio=2.5)
+    assert slicer.ntrials == 3
+    assert slicer.niters == 6
+    assert slicer.optimization_ratio == 2.5
+    assert len(slicer.betas) > 0
+    assert slicer.fixed_slices == []
+
+
+# ============== New tests for fixed_slices ==============
+
+
+def test_fixed_slices_basic():
+    """Test TreeSASlicer with fixed_slices."""
+    ixs = [[0, 1], [1, 2], [2, 3]]
+    out = [0, 3]
+    sizes = uniform_size_dict(ixs, out, 16)
+
+    tree = optimize_code(ixs, out, sizes, GreedyMethod())
+
+    # Specify that index 1 must be sliced
+    slicer = TreeSASlicer.fast(fixed_slices=[1])
+    sliced = slice_code(tree, ixs, sizes, slicer)
+
+    assert sliced is not None
+    # Index 1 should be in the slicing
+    assert 1 in sliced.slicing()
+
+
+def test_fixed_slices_multiple():
+    """Test TreeSASlicer with multiple fixed_slices."""
+    ixs = [[0, 1], [1, 2], [2, 3], [3, 4]]
+    out = [0, 4]
+    sizes = uniform_size_dict(ixs, out, 16)
+
+    tree = optimize_code(ixs, out, sizes, GreedyMethod())
+
+    # Specify that indices 1 and 2 must be sliced
+    slicer = TreeSASlicer.fast(fixed_slices=[1, 2])
+    sliced = slice_code(tree, ixs, sizes, slicer)
+
+    assert sliced is not None
+    slicing = sliced.slicing()
+    assert 1 in slicing
+    assert 2 in slicing
+
+
+def test_fixed_slices_with_score():
+    """Test fixed_slices combined with ScoreFunction."""
+    ixs = [[0, 1], [1, 2], [2, 3]]
+    out = [0, 3]
+    sizes = uniform_size_dict(ixs, out, 32)
+
+    tree = optimize_code(ixs, out, sizes, GreedyMethod())
+
+    score = ScoreFunction(sc_target=8.0)
+    slicer = TreeSASlicer(
+        ntrials=2,
+        niters=5,
+        fixed_slices=[1],
+        score=score,
+    )
+    sliced = slice_code(tree, ixs, sizes, slicer)
+
+    assert sliced is not None
+    assert 1 in sliced.slicing()
