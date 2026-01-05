@@ -105,9 +105,10 @@ impl Ord for Cost {
 /// Loss = size(output) - α * (size(input1) + size(input2))
 /// where sizes are in linear scale (2^log2_size).
 fn greedy_loss(dims: &ContractionDims<impl Clone + Eq + std::hash::Hash>, alpha: f64) -> f64 {
-    let output_size = 2_f64.powf(dims.d01 + dims.d02 + dims.d012);
-    let input1_size = 2_f64.powf(dims.d01 + dims.d12 + dims.d012);
-    let input2_size = 2_f64.powf(dims.d02 + dims.d12 + dims.d012);
+    // Use exp2 instead of powf for better performance (optimized for base-2)
+    let output_size = f64::exp2(dims.d01 + dims.d02 + dims.d012);
+    let input1_size = f64::exp2(dims.d01 + dims.d12 + dims.d012);
+    let input2_size = f64::exp2(dims.d02 + dims.d12 + dims.d012);
     output_size - alpha * (input1_size + input2_size)
 }
 

@@ -86,7 +86,7 @@ python-build:
 	cd omeco-python && maturin build --release
 
 python-test: python-dev
-	cd omeco-python && $(PYTHON) -m pytest -v
+	cd omeco-python && pip install -e ".[test]" && $(PYTHON) -m pytest -v
 
 # Benchmarks
 benchmark: python-dev

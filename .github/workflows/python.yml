@@ -52,13 +52,14 @@ jobs:
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install maturin pytest
+          pip install maturin
 
-      - name: Build and install
+      - name: Build and install with test dependencies
         run: |
           source .venv/bin/activate
           cd omeco-python
           maturin develop
+          pip install -e ".[test]"
 
       - name: Run tests
         run: |

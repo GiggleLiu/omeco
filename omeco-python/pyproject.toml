@@ -24,6 +24,9 @@ classifiers = [
 ]
 keywords = ["tensor", "einsum", "optimization", "contraction", "quantum"]
 
+[project.optional-dependencies]
+test = ["pytest>=7.0", "networkx>=2.6"]
+
 [project.urls]
 Homepage = "https://github.com/GiggleLiu/omeco"
 Repository = "https://github.com/GiggleLiu/omeco"
