@@ -353,7 +353,6 @@ fn treesa_slice_trial<R: Rng>(
     config: &TreeSASlicer,
     rng: &mut R,
 ) -> (ExprTree, Slicer) {
-
     let mut slicer = Slicer::new(log2_sizes.to_vec(), config.fixed_slices.clone());
 
     // Initial complexity
@@ -432,7 +431,6 @@ fn optimize_tree_with_slicing<R: Rng>(
     decomp: DecompositionType,
     rng: &mut R,
 ) -> ExprTree {
-
     let (_, mut global_sc, _) = tree_complexity(&tree, log2_sizes);
 
     for &beta in betas {
@@ -455,12 +453,13 @@ fn sweep_mutate_slicing<R: Rng>(
     global_sc: f64,
     rng: &mut R,
 ) -> ExprTree {
-
     match tree {
         ExprTree::Leaf(_) => tree,
         ExprTree::Node { left, right, info } => {
-            let new_left = sweep_mutate_slicing(*left, beta, log2_sizes, score, decomp, global_sc, rng);
-            let new_right = sweep_mutate_slicing(*right, beta, log2_sizes, score, decomp, global_sc, rng);
+            let new_left =
+                sweep_mutate_slicing(*left, beta, log2_sizes, score, decomp, global_sc, rng);
+            let new_right =
+                sweep_mutate_slicing(*right, beta, log2_sizes, score, decomp, global_sc, rng);
 
             let tree = ExprTree::Node {
                 left: Box::new(new_left),
@@ -483,7 +482,6 @@ fn try_mutate_node_slicing<R: Rng>(
     global_sc: f64,
     rng: &mut R,
 ) -> ExprTree {
-
     let rules = Rule::applicable_rules(&tree, decomp);
     if rules.is_empty() {
         return tree;

@@ -276,12 +276,15 @@ impl PyTreeSASlicer {
     #[pyo3(signature = (sc_target=30.0, ntrials=10, niters=10, optimization_ratio=2.0))]
     fn new(sc_target: f64, ntrials: usize, niters: usize, optimization_ratio: f64) -> Self {
         let score = ScoreFunction::default().with_sc_target(sc_target);
-        let mut slicer = TreeSASlicer::default();
-        slicer.score = score;
-        slicer.ntrials = ntrials;
-        slicer.niters = niters;
-        slicer.optimization_ratio = optimization_ratio;
-        Self { inner: slicer }
+        Self {
+            inner: TreeSASlicer {
+                score,
+                ntrials,
+                niters,
+                optimization_ratio,
+                ..Default::default()
+            },
+        }
     }
 
     /// Create a fast TreeSASlicer configuration (fewer iterations).
