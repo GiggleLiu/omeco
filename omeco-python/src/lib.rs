@@ -48,7 +48,7 @@ impl PyNestedEinsum {
     /// Returns a dict with structure:
     /// - For leaf: {"tensor_index": int}
     /// - For node: {"args": [child_dicts], "eins": {"ixs": [[int]], "iy": [int]}}
-    fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
+    fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         nested_to_dict(py, &self.inner)
     }
 
@@ -61,7 +61,7 @@ impl PyNestedEinsum {
     }
 }
 
-fn nested_to_dict(py: Python<'_>, nested: &NestedEinsum<i64>) -> PyResult<PyObject> {
+fn nested_to_dict(py: Python<'_>, nested: &NestedEinsum<i64>) -> PyResult<Py<PyAny>> {
     use pyo3::types::PyDict;
 
     let dict = PyDict::new(py);
@@ -70,7 +70,7 @@ fn nested_to_dict(py: Python<'_>, nested: &NestedEinsum<i64>) -> PyResult<PyObje
             dict.set_item("tensor_index", *tensor_index)?;
         }
         NestedEinsum::Node { args, eins } => {
-            let args_list: Vec<PyObject> = args
+            let args_list: Vec<Py<PyAny>> = args
                 .iter()
                 .map(|arg| nested_to_dict(py, arg))
                 .collect::<PyResult<_>>()?;
