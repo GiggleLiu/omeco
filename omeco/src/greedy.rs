@@ -36,6 +36,27 @@ impl ContractionTree {
             right: Box::new(right),
         }
     }
+
+    fn fmt_with_indent(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
+        let prefix = "  ".repeat(indent);
+        match self {
+            ContractionTree::Leaf(idx) => writeln!(f, "{}Leaf({})", prefix, idx),
+            ContractionTree::Node { left, right } => {
+                writeln!(f, "{}Node {{", prefix)?;
+                write!(f, "{}  left: ", prefix)?;
+                left.fmt_with_indent(f, indent + 1)?;
+                write!(f, "{}  right: ", prefix)?;
+                right.fmt_with_indent(f, indent + 1)?;
+                writeln!(f, "{}}}", prefix)
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for ContractionTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_with_indent(f, 0)
+    }
 }
 
 /// Configuration for the greedy optimizer.
@@ -114,7 +135,10 @@ fn greedy_loss(dims: &ContractionDims<impl Clone + Eq + std::hash::Hash>, alpha:
 
 /// Result of the greedy optimization.
 #[derive(Debug, Clone)]
-pub struct GreedyResult<E> {
+pub struct GreedyResult<E>
+where
+    E: Clone + Eq + std::hash::Hash,
+{
     /// The contraction tree
     pub tree: ContractionTree,
     /// Log2 time complexities for each contraction step
@@ -123,6 +147,8 @@ pub struct GreedyResult<E> {
     pub log2_scs: Vec<f64>,
     /// Final output edges
     pub output_edges: Vec<E>,
+    /// Original incidence list for hypergraph structure
+    pub incidence_list: IncidenceList<usize, E>,
 }
 
 /// Run the greedy contraction algorithm.
@@ -132,6 +158,7 @@ pub fn tree_greedy<E: Label>(
     alpha: f64,
     temperature: f64,
 ) -> Option<GreedyResult<E>> {
+    let original_il = il.clone();
     let mut il = il.clone();
     let n = il.nv();
 
@@ -146,6 +173,7 @@ pub fn tree_greedy<E: Label>(
             log2_tcs: Vec::new(),
             log2_scs: Vec::new(),
             output_edges: il.edges(&v).cloned().unwrap_or_default(),
+            incidence_list: original_il,
         });
     }
 
@@ -238,6 +266,7 @@ pub fn tree_greedy<E: Label>(
         log2_tcs,
         log2_scs,
         output_edges,
+        incidence_list: original_il,
     })
 }
 
@@ -280,13 +309,14 @@ pub fn tree_to_nested_einsum<L: Label>(
     tree: &ContractionTree,
     original_ixs: &[Vec<L>],
     output_iy: &[L],
+    incidence_list: &IncidenceList<usize, L>,
 ) -> NestedEinsum<L> {
     // First, collect all leaf indices to build the mapping
     let mut leaf_labels: HashMap<usize, Vec<L>> = HashMap::new();
     collect_leaf_labels(tree, original_ixs, &mut leaf_labels);
 
     // Then recursively build the nested einsum
-    build_nested(tree, &leaf_labels, output_iy)
+    build_nested(tree, &leaf_labels, output_iy, incidence_list)
 }
 
 fn collect_leaf_labels<L: Label>(
@@ -311,21 +341,32 @@ fn build_nested<L: Label>(
     tree: &ContractionTree,
     leaf_labels: &HashMap<usize, Vec<L>>,
     final_output: &[L],
+    incidence_list: &IncidenceList<usize, L>,
 ) -> NestedEinsum<L> {
     match tree {
         ContractionTree::Leaf(idx) => NestedEinsum::leaf(*idx),
         ContractionTree::Node { left, right } => {
             // Get labels from children
-            let left_labels = get_subtree_labels(left, leaf_labels);
-            let right_labels = get_subtree_labels(right, leaf_labels);
+            let left_labels = get_subtree_labels(left, leaf_labels, incidence_list);
+            let right_labels = get_subtree_labels(right, leaf_labels, incidence_list);
 
-            // Compute output labels for this contraction
-            let output_labels =
-                compute_contraction_output(&left_labels, &right_labels, final_output);
+            // Extract vertex IDs for hypergraph lookup
+            let left_vertices = get_subtree_vertices(left);
+            let right_vertices = get_subtree_vertices(right);
+
+            // Use hypergraph-aware output computation
+            let output_labels = compute_contraction_output_with_hypergraph(
+                &left_labels,
+                &right_labels,
+                final_output,
+                incidence_list,
+                &left_vertices,
+                &right_vertices,
+            );
 
             // Build children
-            let left_nested = build_nested(left, leaf_labels, final_output);
-            let right_nested = build_nested(right, leaf_labels, final_output);
+            let left_nested = build_nested(left, leaf_labels, final_output, incidence_list);
+            let right_nested = build_nested(right, leaf_labels, final_output, incidence_list);
 
             // Create the einsum code for this contraction
             let eins = EinCode::new(vec![left_labels, right_labels], output_labels);
@@ -338,13 +379,35 @@ fn build_nested<L: Label>(
 fn get_subtree_labels<L: Label>(
     tree: &ContractionTree,
     leaf_labels: &HashMap<usize, Vec<L>>,
+    incidence_list: &IncidenceList<usize, L>,
 ) -> Vec<L> {
     match tree {
         ContractionTree::Leaf(idx) => leaf_labels.get(idx).cloned().unwrap_or_default(),
         ContractionTree::Node { left, right } => {
-            let left_labels = get_subtree_labels(left, leaf_labels);
-            let right_labels = get_subtree_labels(right, leaf_labels);
-            compute_contraction_output(&left_labels, &right_labels, &[])
+            let left_labels = get_subtree_labels(left, leaf_labels, incidence_list);
+            let right_labels = get_subtree_labels(right, leaf_labels, incidence_list);
+            let left_vertices = get_subtree_vertices(left);
+            let right_vertices = get_subtree_vertices(right);
+            compute_contraction_output_with_hypergraph(
+                &left_labels,
+                &right_labels,
+                &[],
+                incidence_list,
+                &left_vertices,
+                &right_vertices,
+            )
+        }
+    }
+}
+
+/// Get all leaf vertex IDs from a subtree.
+fn get_subtree_vertices(tree: &ContractionTree) -> Vec<usize> {
+    match tree {
+        ContractionTree::Leaf(idx) => vec![*idx],
+        ContractionTree::Node { left, right } => {
+            let mut vertices = get_subtree_vertices(left);
+            vertices.extend(get_subtree_vertices(right));
+            vertices
         }
     }
 }
@@ -374,6 +437,65 @@ fn compute_contraction_output<L: Label>(left: &[L], right: &[L], final_output: &
     output
 }
 
+/// Compute output labels using hypergraph information to preserve hyperedges.
+fn compute_contraction_output_with_hypergraph<L: Label>(
+    left: &[L],
+    right: &[L],
+    _final_output: &[L],
+    incidence_list: &IncidenceList<usize, L>,
+    left_vertices: &[usize],
+    right_vertices: &[usize],
+) -> Vec<L> {
+    use std::collections::HashSet;
+
+    let right_set: HashSet<_> = right.iter().cloned().collect();
+    let left_set: HashSet<_> = left.iter().cloned().collect();
+    let vertex_set: HashSet<_> = left_vertices
+        .iter()
+        .chain(right_vertices.iter())
+        .cloned()
+        .collect();
+
+    let mut output = Vec::new();
+
+    for l in left {
+        let should_keep = if right_set.contains(l) {
+            // In both: check if external (in output OR connects to other tensors)
+            is_index_external(l, incidence_list, &vertex_set)
+        } else {
+            true // Only in left: keep
+        };
+
+        if should_keep && !output.contains(l) {
+            output.push(l.clone());
+        }
+    }
+
+    for l in right {
+        if !left_set.contains(l) && !output.contains(l) {
+            output.push(l.clone());
+        }
+    }
+
+    output
+}
+
+/// Check if an index is external to a set of vertices.
+fn is_index_external<L: Label>(
+    index: &L,
+    incidence_list: &IncidenceList<usize, L>,
+    vertices: &std::collections::HashSet<usize>,
+) -> bool {
+    if incidence_list.is_open(index) {
+        return true;
+    }
+    if let Some(connected_vertices) = incidence_list.vertices_of_edge(index) {
+        connected_vertices.iter().any(|v| !vertices.contains(v))
+    } else {
+        false
+    }
+}
+
 /// Optimize an EinCode using the greedy method.
 pub fn optimize_greedy<L: Label>(
     code: &EinCode<L>,
@@ -384,7 +506,12 @@ pub fn optimize_greedy<L: Label>(
     let log2_sizes = log2_size_dict(size_dict);
 
     let result = tree_greedy(&il, &log2_sizes, config.alpha, config.temperature)?;
-    Some(tree_to_nested_einsum(&result.tree, &code.ixs, &code.iy))
+    Some(tree_to_nested_einsum(
+        &result.tree,
+        &code.ixs,
+        &code.iy,
+        &result.incidence_list,
+    ))
 }
 
 #[cfg(test)]
@@ -560,8 +687,9 @@ mod tests {
         let tree = ContractionTree::node(ContractionTree::leaf(0), ContractionTree::leaf(1));
         let ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
         let iy = vec!['i', 'k'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
 
-        let nested = tree_to_nested_einsum(&tree, &ixs, &iy);
+        let nested = tree_to_nested_einsum(&tree, &ixs, &iy, &il);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 2);
     }
@@ -573,8 +701,9 @@ mod tests {
         let tree = ContractionTree::node(inner, ContractionTree::leaf(2));
         let ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']];
         let iy = vec!['i', 'l'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
 
-        let nested = tree_to_nested_einsum(&tree, &ixs, &iy);
+        let nested = tree_to_nested_einsum(&tree, &ixs, &iy, &il);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 3);
     }
@@ -642,5 +771,223 @@ mod tests {
         assert!(output.contains(&'k'));
         assert!(output.contains(&'b')); // batched, kept
         assert!(!output.contains(&'j')); // contracted
+    }
+
+    #[test]
+    fn test_hyperedge_index_preservation() {
+        // Regression test for issue #6
+        // ixs = [[1, 2], [2], [2, 3]], out = [1, 3]
+        // Index 2 appears in 3 tensors (hyperedge)
+        let ixs = vec![vec![1usize, 2], vec![2usize], vec![2usize, 3]];
+        let out = vec![1usize, 3];
+        let code = EinCode::new(ixs.clone(), out.clone());
+
+        let mut sizes = HashMap::new();
+        sizes.insert(1usize, 2);
+        sizes.insert(2usize, 3);
+        sizes.insert(3usize, 2);
+
+        let config = GreedyMethod::default();
+        let nested = optimize_greedy(&code, &sizes, &config);
+
+        assert!(nested.is_some());
+        let nested = nested.unwrap();
+
+        // Should produce correct output shape [1, 3]
+        assert!(nested.is_binary());
+        assert_eq!(nested.leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_compute_hypergraph_aware_output() {
+        // Unit test for hyperedge-aware logic
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']];
+        let iy = vec!['i', 'l'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        // Contracting tensors 0 and 1: A[i,j] * B[j,k]
+        let left = vec!['i', 'j'];
+        let right = vec!['j', 'k'];
+        let left_vertices = vec![0];
+        let right_vertices = vec![1];
+
+        let output = compute_contraction_output_with_hypergraph(
+            &left,
+            &right,
+            &iy,
+            &il,
+            &left_vertices,
+            &right_vertices,
+        );
+
+        // Expected: ['i', 'k']
+        // 'j' contracts (not external)
+        // 'k' preserved (connects to tensor 2)
+        assert!(output.contains(&'i'));
+        assert!(!output.contains(&'j'));
+        assert!(output.contains(&'k'));
+    }
+}
+
+#[cfg(test)]
+mod contractor_tests {
+    use super::*;
+
+    /// Naive tensor contractor for testing
+    /// Implements basic einsum contraction by tracking tensor shapes
+    #[derive(Debug)]
+    struct NaiveContractor {
+        tensors: HashMap<usize, Vec<usize>>,
+    }
+
+    impl NaiveContractor {
+        fn new() -> Self {
+            Self {
+                tensors: HashMap::new(),
+            }
+        }
+
+        fn add_tensor(&mut self, idx: usize, shape: Vec<usize>) {
+            self.tensors.insert(idx, shape);
+        }
+
+        /// Contract two tensors according to einsum specification
+        fn contract(
+            &mut self,
+            left_idx: usize,
+            right_idx: usize,
+            left_labels: &[usize],
+            right_labels: &[usize],
+            output_labels: &[usize],
+        ) -> usize {
+            let left_shape = self.tensors.get(&left_idx).unwrap();
+            let right_shape = self.tensors.get(&right_idx).unwrap();
+
+            // Build output shape by mapping output labels to sizes
+            let mut label_to_size: HashMap<usize, usize> = HashMap::new();
+            for (i, &label) in left_labels.iter().enumerate() {
+                label_to_size.insert(label, left_shape[i]);
+            }
+            for (i, &label) in right_labels.iter().enumerate() {
+                if let Some(&existing_size) = label_to_size.get(&label) {
+                    assert_eq!(
+                        existing_size, right_shape[i],
+                        "Dimension mismatch for label {}",
+                        label
+                    );
+                } else {
+                    label_to_size.insert(label, right_shape[i]);
+                }
+            }
+
+            let output_shape: Vec<usize> = output_labels
+                .iter()
+                .map(|&label| {
+                    *label_to_size.get(&label).expect(&format!(
+                        "Label {} not found in input tensors",
+                        label
+                    ))
+                })
+                .collect();
+
+            // Create a new tensor with the result index
+            let result_idx = left_idx.min(right_idx);
+            self.tensors.insert(result_idx, output_shape);
+            self.tensors.remove(&left_idx.max(right_idx));
+
+            result_idx
+        }
+
+        fn get_shape(&self, idx: usize) -> Option<&Vec<usize>> {
+            self.tensors.get(&idx)
+        }
+    }
+
+    #[test]
+    fn test_hyperedge_with_naive_contractor() {
+        // Issue #6: A[i,j], B[j], C[j,k] → [i,k]
+        let ixs = vec![vec![1usize, 2], vec![2usize], vec![2usize, 3]];
+        let out = vec![1usize, 3];
+        let code = EinCode::new(ixs.clone(), out.clone());
+
+        let mut sizes = HashMap::new();
+        sizes.insert(1usize, 2); // i: size 2
+        sizes.insert(2usize, 3); // j: size 3
+        sizes.insert(3usize, 2); // k: size 2
+
+        let config = GreedyMethod::default();
+        let nested = optimize_greedy(&code, &sizes, &config).unwrap();
+
+        // Set up the naive contractor
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2, 3]); // A[i,j]
+        contractor.add_tensor(1, vec![3]); // B[j]
+        contractor.add_tensor(2, vec![3, 2]); // C[j,k]
+
+        // Execute the contraction plan
+        fn execute_nested(
+            nested: &NestedEinsum<usize>,
+            contractor: &mut NaiveContractor,
+        ) -> usize {
+            match nested {
+                NestedEinsum::Leaf { tensor_index } => *tensor_index,
+                NestedEinsum::Node { args, eins } => {
+                    let left_idx = execute_nested(&args[0], contractor);
+                    let right_idx = execute_nested(&args[1], contractor);
+
+                    contractor.contract(
+                        left_idx,
+                        right_idx,
+                        &eins.ixs[0],
+                        &eins.ixs[1],
+                        &eins.iy,
+                    )
+                }
+            }
+        }
+
+        let result_idx = execute_nested(&nested, &mut contractor);
+        let result_shape = contractor.get_shape(result_idx).unwrap();
+
+        // Verify the result has the correct shape
+        assert_eq!(
+            result_shape.len(),
+            2,
+            "Result should be 2D (corresponding to i and k)"
+        );
+        assert_eq!(result_shape[0], 2, "First dimension should be size 2 (i)");
+        assert_eq!(
+            result_shape[1], 2,
+            "Second dimension should be size 2 (k)"
+        );
+    }
+
+    #[test]
+    fn test_hyperedge_with_dummy_contractor() {
+        // Issue #6: A[i,j], B[j], C[j,k] → [i,k]
+        let ixs = vec![vec![1usize, 2], vec![2usize], vec![2usize, 3]];
+        let out = vec![1usize, 3];
+        let code = EinCode::new(ixs.clone(), out.clone());
+
+        let mut sizes = HashMap::new();
+        sizes.insert(1usize, 2); // i
+        sizes.insert(2usize, 3); // j
+        sizes.insert(3usize, 2); // k
+
+        let config = GreedyMethod::default();
+        let nested = optimize_greedy(&code, &sizes, &config).unwrap();
+
+        // Verify the nested einsum structure is correct
+        // by checking that contraction preserves necessary indices
+        assert!(nested.is_binary());
+
+        // The final output should have shape corresponding to [i, k]
+        // which means indices [1, 3] (order may vary)
+        if let NestedEinsum::Node { eins, .. } = &nested {
+            assert_eq!(eins.iy.len(), 2, "Should have 2 output indices");
+            assert!(eins.iy.contains(&1), "Should contain index 1 (i)");
+            assert!(eins.iy.contains(&3), "Should contain index 3 (k)");
+            assert!(!eins.iy.contains(&2), "Should NOT contain index 2 (j) - it's contracted");
+        }
     }
 }
