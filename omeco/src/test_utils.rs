@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 ///
 /// Performs actual tensor contractions using ndarray to validate
 /// that optimized contraction orders produce correct results.
+#[derive(Default, Clone)]
 pub struct NaiveContractor {
     tensors: HashMap<usize, ArrayD<f64>>,
 }
@@ -18,9 +19,7 @@ pub struct NaiveContractor {
 impl NaiveContractor {
     /// Create a new contractor
     pub fn new() -> Self {
-        Self {
-            tensors: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Add a tensor with random data
@@ -29,9 +28,9 @@ impl NaiveContractor {
     /// * `idx` - Tensor identifier
     /// * `shape` - Shape of the tensor
     pub fn add_tensor(&mut self, idx: usize, shape: Vec<usize>) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let size: usize = shape.iter().product();
-        let data: Vec<f64> = (0..size).map(|_| rng.gen()).collect();
+        let data: Vec<f64> = (0..size).map(|_| rng.random()).collect();
         let tensor = ArrayD::from_shape_vec(IxDyn(&shape), data).unwrap();
         self.tensors.insert(idx, tensor);
     }
@@ -210,25 +209,25 @@ pub fn generate_random_eincode(
     allow_duplicates: bool,
     allow_output_only_indices: bool,
 ) -> (Vec<Vec<usize>>, Vec<usize>) {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     // Generate random input indices for each tensor
     let mut ixs = Vec::new();
     let mut all_indices = HashSet::new();
 
     for _ in 0..num_tensors {
-        let tensor_rank = rng.gen_range(1..=4);
+        let tensor_rank = rng.random_range(1..=4);
         let mut tensor_indices = Vec::new();
 
         for _ in 0..tensor_rank {
-            let idx = rng.gen_range(1..=num_indices);
+            let idx = rng.random_range(1..=num_indices);
             tensor_indices.push(idx);
             all_indices.insert(idx);
         }
 
         // Optionally add duplicates (for trace/diagonal operations)
-        if allow_duplicates && rng.gen_bool(0.3) && !tensor_indices.is_empty() {
-            let dup_idx = tensor_indices[rng.gen_range(0..tensor_indices.len())];
+        if allow_duplicates && rng.random_bool(0.3) && !tensor_indices.is_empty() {
+            let dup_idx = tensor_indices[rng.random_range(0..tensor_indices.len())];
             tensor_indices.push(dup_idx);
         }
 
@@ -238,10 +237,14 @@ pub fn generate_random_eincode(
     // Generate output indices (without duplicates for simplicity)
     let mut output = Vec::new();
     let mut used_output_indices = HashSet::new();
-    let num_output = if all_indices.is_empty() { 0 } else { rng.gen_range(0..=3) };
+    let num_output = if all_indices.is_empty() {
+        0
+    } else {
+        rng.random_range(0..=3)
+    };
 
     for _ in 0..num_output {
-        let idx = if allow_output_only_indices && rng.gen_bool(0.2) {
+        let idx = if allow_output_only_indices && rng.random_bool(0.2) {
             // Add index not in any input (outer product/broadcast)
             num_indices + 1 + output.len()
         } else if !all_indices.is_empty() {
@@ -253,7 +256,7 @@ pub fn generate_random_eincode(
             if available.is_empty() {
                 continue;
             }
-            available[rng.gen_range(0..available.len())]
+            available[rng.random_range(0..available.len())]
         } else {
             continue;
         };
@@ -394,4 +397,246 @@ pub fn generate_ring_edges(n: usize) -> Vec<(usize, usize)> {
         edges.push((i + 1, ((i + 1) % n) + 1));
     }
     edges
+}
+
+/// Execute a NestedEinsum contraction tree using NaiveContractor
+///
+/// This recursively executes the contraction tree and returns the final result tensor.
+/// The function tracks what labels each intermediate result has.
+///
+/// # Arguments
+/// * `nested` - The NestedEinsum tree to execute
+/// * `contractor` - The NaiveContractor managing the tensors
+/// * `label_map` - Mapping from labels to internal indices (usize)
+///
+/// # Returns
+/// Tuple of (tensor_index, labels) where labels are the output labels of this computation
+pub fn execute_nested<L: crate::Label>(
+    nested: &crate::NestedEinsum<L>,
+    contractor: &mut NaiveContractor,
+    label_map: &HashMap<L, usize>,
+) -> usize {
+    execute_nested_impl(nested, contractor, label_map).0
+}
+
+/// Internal implementation that returns (tensor_idx, labels)
+fn execute_nested_impl<L: crate::Label>(
+    nested: &crate::NestedEinsum<L>,
+    contractor: &mut NaiveContractor,
+    label_map: &HashMap<L, usize>,
+) -> (usize, Vec<usize>) {
+    use crate::NestedEinsum;
+
+    match nested {
+        NestedEinsum::Leaf { tensor_index } => {
+            // For leaf, we need to figure out its labels from the original input
+            // This is tricky - we don't have direct access to the original labels here
+            // So we'll return empty labels and rely on the parent node's eins.ixs
+            (*tensor_index, vec![])
+        }
+        NestedEinsum::Node { args, eins } => {
+            // Recursively execute children
+            let child_results: Vec<(usize, Vec<usize>)> = args
+                .iter()
+                .map(|child| execute_nested_impl(child, contractor, label_map))
+                .collect();
+
+            // For binary contraction (2 args), contract directly
+            if child_results.len() == 2 {
+                let (left_idx, _) = child_results[0];
+                let (right_idx, _) = child_results[1];
+
+                // Map labels from eins.ixs to usize using label_map
+                let left_labels: Vec<usize> = eins.ixs[0]
+                    .iter()
+                    .map(|l| *label_map.get(l).expect("Label should be in map"))
+                    .collect();
+                let right_labels: Vec<usize> = eins.ixs[1]
+                    .iter()
+                    .map(|l| *label_map.get(l).expect("Label should be in map"))
+                    .collect();
+                let output_labels: Vec<usize> = eins
+                    .iy
+                    .iter()
+                    .map(|l| *label_map.get(l).expect("Label should be in map"))
+                    .collect();
+
+                let result_idx = contractor.contract(
+                    left_idx,
+                    right_idx,
+                    &left_labels,
+                    &right_labels,
+                    &output_labels,
+                );
+
+                (result_idx, output_labels)
+            } else {
+                // For >2 args, contract sequentially
+                panic!("execute_nested only supports binary trees, got {} args", child_results.len());
+            }
+        }
+    }
+}
+
+/// Compare two tensors for approximate equality
+///
+/// # Arguments
+/// * `a` - First tensor
+/// * `b` - Second tensor
+/// * `rtol` - Relative tolerance (default: 1e-5)
+/// * `atol` - Absolute tolerance (default: 1e-8)
+///
+/// # Returns
+/// true if tensors are approximately equal
+pub fn tensors_approx_equal(a: &ArrayD<f64>, b: &ArrayD<f64>, rtol: f64, atol: f64) -> bool {
+    if a.shape() != b.shape() {
+        return false;
+    }
+
+    a.iter()
+        .zip(b.iter())
+        .all(|(x, y)| (x - y).abs() <= atol + rtol * y.abs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_naive_contractor_basic() {
+        // Test basic tensor contraction: A[i,j] * B[j,k] -> C[i,k]
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2, 3]); // A: 2x3
+        contractor.add_tensor(1, vec![3, 2]); // B: 3x2
+
+        let result_idx = contractor.contract(
+            0,
+            1,
+            &[1, 2], // A has indices i=1, j=2
+            &[2, 3], // B has indices j=2, k=3
+            &[1, 3], // output: i=1, k=3
+        );
+
+        let result_shape = contractor.get_shape(result_idx).unwrap();
+        assert_eq!(result_shape, vec![2, 2], "Result should be 2x2");
+    }
+
+    #[test]
+    fn test_naive_contractor_scalar() {
+        // Test scalar contraction: A[i,j] * B[i,j] -> scalar
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2, 2]);
+        contractor.add_tensor(1, vec![2, 2]);
+
+        let result_idx = contractor.contract(0, 1, &[1, 2], &[1, 2], &[]);
+
+        let result_tensor = contractor.get_tensor(result_idx).unwrap();
+        assert_eq!(result_tensor.ndim(), 0, "Result should be scalar");
+    }
+
+    #[test]
+    fn test_naive_contractor_outer_product() {
+        // Test outer product: A[i] * B[j] -> C[i,j]
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2]);
+        contractor.add_tensor(1, vec![3]);
+
+        let result_idx = contractor.contract(0, 1, &[1], &[2], &[1, 2]);
+
+        let result_shape = contractor.get_shape(result_idx).unwrap();
+        assert_eq!(result_shape, vec![2, 3], "Result should be 2x3");
+    }
+
+    #[test]
+    fn test_generate_random_eincode_basic() {
+        // Test basic random generation
+        let (ixs, output) = generate_random_eincode(3, 5, false, false);
+        assert_eq!(ixs.len(), 3, "Should generate 3 tensors");
+
+        // All indices should be within range
+        for tensor_indices in &ixs {
+            for &idx in tensor_indices {
+                assert!(idx >= 1 && idx <= 5, "Index should be in range 1-5");
+            }
+        }
+
+        // Output indices should not have duplicates
+        let mut seen = HashSet::new();
+        for &idx in &output {
+            assert!(!seen.contains(&idx), "Output should not have duplicates");
+            seen.insert(idx);
+        }
+    }
+
+    #[test]
+    fn test_generate_random_eincode_with_duplicates() {
+        // Test with duplicates allowed
+        let (ixs, _output) = generate_random_eincode(5, 8, true, false);
+        assert_eq!(ixs.len(), 5, "Should generate 5 tensors");
+
+        // Some tensors may have duplicate indices (trace operations)
+        // We can't deterministically test for this, but function shouldn't panic
+    }
+
+    #[test]
+    fn test_generate_random_eincode_with_broadcast() {
+        // Test with output-only indices allowed
+        let (_ixs, output) = generate_random_eincode(3, 8, false, true);
+
+        // Output may contain indices not in any input (broadcast)
+        // Function should not panic
+        assert!(output.len() <= 3, "Output should have at most 3 indices");
+    }
+
+    #[test]
+    fn test_generate_ring_edges() {
+        let edges = generate_ring_edges(5);
+        assert_eq!(edges.len(), 5, "Ring with 5 vertices should have 5 edges");
+
+        // Check that it forms a cycle
+        assert_eq!(edges[0], (1, 2));
+        assert_eq!(edges[1], (2, 3));
+        assert_eq!(edges[2], (3, 4));
+        assert_eq!(edges[3], (4, 5));
+        assert_eq!(edges[4], (5, 1)); // Closes the ring
+    }
+
+    #[test]
+    fn test_generate_fullerene_edges() {
+        let edges = generate_fullerene_edges();
+        assert!(
+            !edges.is_empty(),
+            "Fullerene graph should have edges"
+        );
+
+        // Check all edges are 1-indexed
+        for &(a, b) in &edges {
+            assert!(a >= 1, "Vertices should be 1-indexed");
+            assert!(b >= 1, "Vertices should be 1-indexed");
+            assert_ne!(a, b, "No self-loops");
+        }
+    }
+
+    #[test]
+    fn test_generate_tutte_edges() {
+        let edges = generate_tutte_edges();
+        assert!(
+            !edges.is_empty(),
+            "Tutte graph should have edges"
+        );
+
+        // Check all edges are 1-indexed
+        for &(a, b) in &edges {
+            assert!(a >= 1, "Vertices should be 1-indexed");
+            assert!(b >= 1, "Vertices should be 1-indexed");
+            assert_ne!(a, b, "No self-loops");
+        }
+    }
+
+    #[test]
+    fn test_naive_contractor_default() {
+        // Test Default trait implementation
+        let contractor = NaiveContractor::default();
+        assert_eq!(contractor.tensors.len(), 0, "Default should be empty");
+    }
 }
