@@ -136,6 +136,9 @@ pub mod slicer;
 pub mod treesa;
 pub mod utils;
 
+#[cfg(test)]
+pub mod test_utils;
+
 // Re-export main types
 pub use complexity::{
     eincode_complexity, flop, nested_complexity, nested_flop, peak_memory, sliced_complexity,
