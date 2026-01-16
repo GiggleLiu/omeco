@@ -628,5 +628,79 @@ def test_3regular_graph_larger():
     # For 100-node 3-regular graph, sc should be achievable around 15-25
     assert greedy_cc.sc <= 30, f"Greedy sc={greedy_cc.sc} too high for 100-node graph"
     assert treesa_cc.sc <= 30, f"TreeSA sc={treesa_cc.sc} too high for 100-node graph"
-    
+
     print(f"3-regular graph (n={n}): Greedy sc={greedy_cc.sc:.2f}, TreeSA sc={treesa_cc.sc:.2f}")
+
+
+# ============== Test for Issue #6: Hyperedge Index Preservation ==============
+
+
+def test_issue_6_hyperedge_with_trace_and_broadcast():
+    """Test the specific case from issue #6: hyperedge index preservation.
+
+    This tests the case "ii, ik, ikl, kk -> kiim" which has:
+    - Hyperedges: index 'i' appears in 3 tensors, index 'k' appears in 3 tensors
+    - Trace operations: 'ii' and 'kk' (duplicate indices in same tensor)
+    - Broadcast dimension: 'm' appears in output but not in any input
+
+    This was a regression case where the greedy optimizer incorrectly handled
+    hyperedge index preservation when computing contraction outputs.
+    """
+    # Encode using integers: i=0, k=1, l=2, m=3
+    ixs = [
+        [0, 0],     # ii (trace)
+        [0, 1],     # ik
+        [0, 1, 2],  # ikl
+        [1, 1],     # kk (trace)
+    ]
+    out = [1, 0, 0, 3]  # kiim - note 'm' (3) not in any input!
+
+    sizes = {0: 2, 1: 2, 2: 2, 3: 2}  # All dimensions = 2
+
+    # Test with GreedyMethod
+    greedy_tree = optimize_code(ixs, out, sizes, GreedyMethod())
+    assert greedy_tree is not None
+    assert greedy_tree.is_binary()
+
+    greedy_cc = contraction_complexity(greedy_tree, ixs, sizes)
+    assert greedy_cc.tc > 0, "Time complexity should be positive"
+    assert greedy_cc.sc > 0, "Space complexity should be positive"
+
+    # Test with TreeSA
+    treesa_tree = optimize_code(ixs, out, sizes, TreeSA.fast())
+    assert treesa_tree is not None
+    assert treesa_tree.is_binary()
+
+    treesa_cc = contraction_complexity(treesa_tree, ixs, sizes)
+    assert treesa_cc.tc > 0
+    assert treesa_cc.sc > 0
+
+    print(f"Issue #6 case: Greedy sc={greedy_cc.sc:.2f}, TreeSA sc={treesa_cc.sc:.2f}")
+
+
+def test_hyperedge_multiple_occurrences():
+    """Test case with an index appearing in 4+ tensors (strong hyperedge).
+
+    This ensures the hyperedge fix works for indices in many tensors.
+    """
+    # Index 0 appears in all 4 tensors (strong hyperedge)
+    ixs = [
+        [0, 1],
+        [0, 2],
+        [0, 3],
+        [0, 4],
+    ]
+    out = [1, 2, 3, 4]  # Contract out the shared index 0
+
+    sizes = {0: 3, 1: 2, 2: 2, 3: 2, 4: 2}
+
+    # Should not crash and should produce valid tree
+    greedy_tree = optimize_code(ixs, out, sizes, GreedyMethod())
+    assert greedy_tree is not None
+    assert greedy_tree.is_binary()
+
+    cc = contraction_complexity(greedy_tree, ixs, sizes)
+    assert cc.tc > 0
+    assert cc.sc > 0
+
+    print(f"Strong hyperedge: sc={cc.sc:.2f}, tc={cc.tc:.2f}")
