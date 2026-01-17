@@ -1255,11 +1255,11 @@ mod extensive_tests {
     #[test]
     fn test_random_instances_with_duplicates() {
         // Test instances with duplicate indices (e.g., ii,jj->ij for trace operations)
-        for seed in 0..10 {
+        for iteration in 0..10 {
             let (ixs, output) = generate_random_eincode(
-                2 + seed % 3, // 2-4 tensors
-                8,            // Up to 8 different indices
-                true,         // Allow duplicates
+                2 + iteration % 3, // 2-4 tensors
+                8,                 // Up to 8 different indices
+                true,              // Allow duplicates
                 false,
             );
 
@@ -1295,9 +1295,9 @@ mod extensive_tests {
     #[test]
     fn test_random_instances_with_output_only_indices() {
         // Test instances with indices in output not in any input (outer product)
-        for seed in 0..10 {
+        for iteration in 0..10 {
             let (ixs, output) = generate_random_eincode(
-                2 + seed % 3, // 2-4 tensors
+                2 + iteration % 3, // 2-4 tensors
                 8,
                 false,
                 true, // Allow output-only indices (outer product/broadcast)
@@ -1327,9 +1327,9 @@ mod extensive_tests {
     #[test]
     fn test_random_instances_all_edge_cases() {
         // Test with all edge cases enabled
-        for seed in 0..20 {
+        for iteration in 0..20 {
             let (ixs, output) = generate_random_eincode(
-                2 + seed % 5, // 2-6 tensors
+                2 + iteration % 5, // 2-6 tensors
                 12,
                 true, // Allow duplicates
                 true, // Allow output-only indices
