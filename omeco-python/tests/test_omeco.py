@@ -704,3 +704,75 @@ def test_hyperedge_multiple_occurrences():
     assert cc.sc > 0
 
     print(f"Strong hyperedge: sc={cc.sc:.2f}, tc={cc.tc:.2f}")
+
+
+# ============== Test for Pretty Printing ==============
+
+
+def test_nested_einsum_pretty_print_simple():
+    """Test pretty printing for a simple binary contraction."""
+    # Matrix multiplication: A[ab] × B[bc] -> C[ac]
+    nested = optimize_greedy([[1, 2], [2, 3]], [1, 3], {1: 2, 2: 3, 3: 2})
+    output = str(nested)
+
+    # Verify output contains einsum notation
+    assert "->" in output
+    assert "ab" in output or "bc" in output or "ac" in output
+
+    # Verify output contains box-drawing characters
+    assert any(c in output for c in ["├", "└", "│"])
+
+    # Verify output contains tensor references
+    assert "tensor_0" in output
+    assert "tensor_1" in output
+
+    print("\nSimple pretty print output:")
+    print(output)
+
+
+def test_nested_einsum_pretty_print_chain():
+    """Test pretty printing for a chain of contractions (deeper tree)."""
+    # Chain: A×B×C×D
+    nested = optimize_greedy(
+        [[1, 2], [2, 3], [3, 4], [4, 5]],
+        [1, 5],
+        {1: 2, 2: 3, 3: 4, 4: 3, 5: 2}
+    )
+    output = str(nested)
+
+    # Should have einsum operations
+    assert "->" in output
+
+    # Should have tree structure with multiple levels
+    assert output.count("├") + output.count("└") >= 3  # At least 3 children
+
+    # Should have all tensors
+    for i in range(4):
+        assert f"tensor_{i}" in output
+
+    print("\nChain pretty print output:")
+    print(output)
+
+
+def test_nested_einsum_pretty_print_vs_repr():
+    """Test that __str__ and __repr__ produce different outputs."""
+    nested = optimize_greedy([[1, 2], [2, 3]], [1, 3], {1: 2, 2: 3, 3: 2})
+
+    str_output = str(nested)
+    repr_output = repr(nested)
+
+    # __repr__ should be compact
+    assert "NestedEinsum" in repr_output
+    assert "leaves" in repr_output
+    assert "depth" in repr_output
+
+    # __str__ should be the tree visualization
+    assert "->" in str_output
+    assert any(c in str_output for c in ["├", "└"])
+
+    # They should be different
+    assert str_output != repr_output
+
+    print("\n__repr__ output:", repr_output)
+    print("\n__str__ output:")
+    print(str_output)
