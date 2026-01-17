@@ -324,12 +324,17 @@ pub fn generate_fullerene_edges() -> Vec<(usize, usize)> {
         edges.push((35 + 2 * i + 1, 45 + i));
     }
 
-    // Bottom pentagon (vertices 45-49 renamed to 50-54 for 60 total)
-    // Actually we have 50 vertices so far, add 10 more
+    // Bottom pentagon (vertices 45-49)
+    for i in 0..5 {
+        edges.push((45 + i, 45 + (i + 1) % 5));
+    }
+
+    // Connect third belt to bottom belt (vertices 50-59, forming 10-vertex ring)
     for i in 0..10 {
         edges.push((35 + i, 50 + i));
     }
 
+    // Bottom belt ring (vertices 50-59)
     for i in 0..10 {
         edges.push((50 + i, 50 + (i + 1) % 10));
     }

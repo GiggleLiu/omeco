@@ -305,10 +305,12 @@ fn select_pair<R: Rng>(
 }
 
 /// Convert a contraction tree to a NestedEinsum.
+///
+/// Uses the hypergraph information in `incidence_list` to determine which
+/// indices are external (in final output or connecting to other tensors).
 pub fn tree_to_nested_einsum<L: Label>(
     tree: &ContractionTree,
     original_ixs: &[Vec<L>],
-    output_iy: &[L],
     incidence_list: &IncidenceList<usize, L>,
 ) -> NestedEinsum<L> {
     // First, collect all leaf indices to build the mapping
@@ -316,7 +318,7 @@ pub fn tree_to_nested_einsum<L: Label>(
     collect_leaf_labels(tree, original_ixs, &mut leaf_labels);
 
     // Then recursively build the nested einsum
-    build_nested(tree, &leaf_labels, output_iy, incidence_list)
+    build_nested(tree, &leaf_labels, incidence_list)
 }
 
 fn collect_leaf_labels<L: Label>(
@@ -340,7 +342,6 @@ fn collect_leaf_labels<L: Label>(
 fn build_nested<L: Label>(
     tree: &ContractionTree,
     leaf_labels: &HashMap<usize, Vec<L>>,
-    final_output: &[L],
     incidence_list: &IncidenceList<usize, L>,
 ) -> NestedEinsum<L> {
     match tree {
@@ -358,15 +359,14 @@ fn build_nested<L: Label>(
             let output_labels = compute_contraction_output_with_hypergraph(
                 &left_labels,
                 &right_labels,
-                final_output,
                 incidence_list,
                 &left_vertices,
                 &right_vertices,
             );
 
             // Build children
-            let left_nested = build_nested(left, leaf_labels, final_output, incidence_list);
-            let right_nested = build_nested(right, leaf_labels, final_output, incidence_list);
+            let left_nested = build_nested(left, leaf_labels, incidence_list);
+            let right_nested = build_nested(right, leaf_labels, incidence_list);
 
             // Create the einsum code for this contraction
             let eins = EinCode::new(vec![left_labels, right_labels], output_labels);
@@ -391,7 +391,6 @@ fn get_subtree_labels<L: Label>(
             compute_contraction_output_with_hypergraph(
                 &left_labels,
                 &right_labels,
-                &[],
                 incidence_list,
                 &left_vertices,
                 &right_vertices,
@@ -413,10 +412,14 @@ fn get_subtree_vertices(tree: &ContractionTree) -> Vec<usize> {
 }
 
 /// Compute output labels using hypergraph information to preserve hyperedges.
+///
+/// An index is kept in the output if it either:
+/// - Only appears in the left tensor
+/// - Only appears in the right tensor
+/// - Appears in both AND is external (i.e., in final output via is_open() OR connects to other tensors)
 fn compute_contraction_output_with_hypergraph<L: Label>(
     left: &[L],
     right: &[L],
-    _final_output: &[L],
     incidence_list: &IncidenceList<usize, L>,
     left_vertices: &[usize],
     right_vertices: &[usize],
@@ -435,7 +438,7 @@ fn compute_contraction_output_with_hypergraph<L: Label>(
 
     for l in left {
         let should_keep = if right_set.contains(l) {
-            // In both: check if external (in output OR connects to other tensors)
+            // In both: check if external (is_open checks final output, vertices check other tensors)
             is_index_external(l, incidence_list, &vertex_set)
         } else {
             true // Only in left: keep
@@ -484,7 +487,6 @@ pub fn optimize_greedy<L: Label>(
     Some(tree_to_nested_einsum(
         &result.tree,
         &code.ixs,
-        &code.iy,
         &result.incidence_list,
     ))
 }
@@ -742,7 +744,7 @@ mod tests {
         let iy = vec!['i', 'k'];
         let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
 
-        let nested = tree_to_nested_einsum(&tree, &ixs, &iy, &il);
+        let nested = tree_to_nested_einsum(&tree, &ixs, &il);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 2);
     }
@@ -756,7 +758,7 @@ mod tests {
         let iy = vec!['i', 'l'];
         let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
 
-        let nested = tree_to_nested_einsum(&tree, &ixs, &iy, &il);
+        let nested = tree_to_nested_einsum(&tree, &ixs, &il);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 3);
     }
@@ -847,7 +849,6 @@ mod tests {
         let output = compute_contraction_output_with_hypergraph(
             &left,
             &right,
-            &iy,
             &il,
             &left_vertices,
             &right_vertices,
@@ -876,7 +877,6 @@ mod tests {
         let output = compute_contraction_output_with_hypergraph(
             &left,
             &right,
-            &iy,
             &il,
             &left_vertices,
             &right_vertices,
@@ -906,7 +906,6 @@ mod tests {
         let output = compute_contraction_output_with_hypergraph(
             &left,
             &right,
-            &iy,
             &il,
             &left_vertices,
             &right_vertices,
@@ -937,7 +936,6 @@ mod tests {
         let output = compute_contraction_output_with_hypergraph(
             &left,
             &right,
-            &iy,
             &il,
             &left_vertices,
             &right_vertices,
@@ -967,7 +965,6 @@ mod tests {
         let output = compute_contraction_output_with_hypergraph(
             &left,
             &right,
-            &iy,
             &il,
             &left_vertices,
             &right_vertices,
@@ -995,7 +992,6 @@ mod tests {
         let output = compute_contraction_output_with_hypergraph(
             &left,
             &right,
-            &iy,
             &il,
             &left_vertices,
             &right_vertices,
@@ -1030,7 +1026,6 @@ mod tests {
         let output = compute_contraction_output_with_hypergraph(
             &left,
             &right,
-            &iy,
             &il,
             &left_vertices,
             &right_vertices,
@@ -1063,7 +1058,6 @@ mod tests {
         let output = compute_contraction_output_with_hypergraph(
             &left,
             &right,
-            &iy,
             &il,
             &left_vertices,
             &right_vertices,
@@ -1209,12 +1203,12 @@ mod extensive_tests {
     #[test]
     fn test_random_instances_basic() {
         // Test 10 random instances with basic constraints (reduced for speed)
-        for seed in 0..10 {
+        for iteration in 0..10 {
             let (ixs, output) = generate_random_eincode(
-                3 + seed % 3, // 3-5 tensors
-                8,            // Up to 8 different indices
-                false,        // No duplicates
-                false,        // No output-only indices
+                3 + iteration % 3, // 3-5 tensors
+                8,                 // Up to 8 different indices
+                false,             // No duplicates
+                false,             // No output-only indices
             );
 
             if ixs.is_empty() {
@@ -1511,9 +1505,12 @@ mod extensive_tests {
     }
 
     #[test]
-    #[ignore] // TODO: Fix execute_nested to properly handle complex graphs
+    #[ignore = "execute_nested currently only supports simple contraction graphs; this test documents a known limitation for complex graphs and is not a blocker for hyperedge preservation"]
     fn test_cross_optimizer_3_regular_graph_small() {
-        // Test on a small 3-regular graph
+        // Test on a small 3-regular graph with vertex tensors
+        // This test is ignored because execute_nested needs extension to handle
+        // more complex contraction patterns. The hyperedge fix in this PR is
+        // validated through simpler test cases.
         use crate::test_utils::{execute_nested, generate_ring_edges, tensors_approx_equal, NaiveContractor};
         use crate::treesa::TreeSA;
         use crate::CodeOptimizer;
