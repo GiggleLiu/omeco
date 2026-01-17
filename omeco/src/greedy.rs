@@ -148,7 +148,17 @@ where
     /// Final output edges
     pub output_edges: Vec<E>,
     /// Original incidence list for hypergraph structure
-    pub incidence_list: IncidenceList<usize, E>,
+    incidence_list: IncidenceList<usize, E>,
+}
+
+impl<E> GreedyResult<E>
+where
+    E: Clone + Eq + std::hash::Hash,
+{
+    /// Returns a reference to the original incidence list for the hypergraph structure.
+    pub fn incidence_list(&self) -> &IncidenceList<usize, E> {
+        &self.incidence_list
+    }
 }
 
 /// Run the greedy contraction algorithm.
@@ -434,6 +444,7 @@ fn compute_contraction_output_with_hypergraph<L: Label>(
         .collect();
 
     let mut output = Vec::new();
+    let mut output_set = HashSet::new();
 
     for l in left {
         let should_keep = if right_set.contains(l) {
@@ -443,13 +454,13 @@ fn compute_contraction_output_with_hypergraph<L: Label>(
             true // Only in left: keep
         };
 
-        if should_keep && !output.contains(l) {
+        if should_keep && output_set.insert(l.clone()) {
             output.push(l.clone());
         }
     }
 
     for l in right {
-        if !left_set.contains(l) && !output.contains(l) {
+        if !left_set.contains(l) && output_set.insert(l.clone()) {
             output.push(l.clone());
         }
     }
@@ -483,7 +494,7 @@ pub fn optimize_greedy<L: Label>(
     let log2_sizes = log2_size_dict(size_dict);
 
     let result = tree_greedy(&il, &log2_sizes, config.alpha, config.temperature)?;
-    Some(tree_to_nested_einsum(&result.tree, &result.incidence_list))
+    Some(tree_to_nested_einsum(&result.tree, result.incidence_list()))
 }
 
 #[cfg(test)]
