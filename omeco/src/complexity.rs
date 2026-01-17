@@ -803,4 +803,129 @@ mod tests {
         assert!(peak > 0);
         assert!(peak >= 64); // At least the output size
     }
+
+    #[test]
+    fn test_nested_complexity_missing_size() {
+        // Test behavior when some labels are missing from size_dict
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        // Missing 'j' and 'k' - should default to 1
+
+        let complexity = nested_complexity(&nested, &size_dict, &original_ixs);
+
+        // Should not panic, uses default size of 1 for missing labels
+        assert!(complexity.tc >= 0.0);
+        assert!(complexity.sc >= 0.0);
+    }
+
+    #[test]
+    fn test_eincode_complexity_missing_size() {
+        // Test eincode_complexity with missing labels
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        // Missing 'j' and 'k'
+
+        let complexity = eincode_complexity(&code, &size_dict);
+
+        // Should handle missing labels gracefully
+        assert!(complexity.tc >= 0.0);
+        assert!(complexity.sc >= 0.0);
+    }
+
+    #[test]
+    fn test_flop_missing_size() {
+        // Test flop computation with missing labels
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        // Missing 'j' and 'k' - should default to 1
+
+        let flops = flop(&code, &size_dict);
+
+        // FLOP = 4 * 1 * 1 = 4
+        assert_eq!(flops, 4);
+    }
+
+    #[test]
+    fn test_nested_flop_missing_size() {
+        // Test nested_flop with missing labels in size_dict
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        // Missing 'j' and 'k'
+
+        let flops = nested_flop(&nested, &size_dict);
+
+        // Should handle missing labels (default to 1)
+        assert!(flops > 0);
+    }
+
+    #[test]
+    fn test_peak_memory_missing_size() {
+        // Test peak_memory with missing labels
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        // Missing 'j' and 'k'
+
+        let peak = peak_memory(&nested, &size_dict, &original_ixs);
+
+        // Should handle missing labels gracefully
+        assert!(peak > 0);
+    }
+
+    #[test]
+    fn test_get_loop_indices_with_duplicates() {
+        // Test get_loop_indices with duplicate indices in same tensor
+        let code = EinCode::new(vec![vec!['i', 'i'], vec!['j', 'j']], vec![]);
+
+        let loops = get_loop_indices(&code);
+
+        // Both 'i' and 'j' appear twice in same tensor, so they're loop indices
+        assert_eq!(loops.len(), 2);
+        assert!(loops.contains(&'i'));
+        assert!(loops.contains(&'j'));
+    }
+
+    #[test]
+    fn test_sliced_complexity_with_empty_slicing() {
+        // Test sliced_complexity with no slicing
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let sliced = SlicedEinsum {
+            eins: nested,
+            slicing: vec![], // No slicing
+        };
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+
+        let complexity = sliced_complexity(&sliced, &size_dict, &original_ixs);
+
+        // Should be same as non-sliced
+        assert!(complexity.tc > 0.0);
+        assert!(complexity.sc > 0.0);
+    }
 }

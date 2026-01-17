@@ -228,4 +228,46 @@ mod tests {
         assert!((score.rw_weight - decoded.rw_weight).abs() < 1e-10);
         assert!((score.sc_target - decoded.sc_target).abs() < 1e-10);
     }
+
+    #[test]
+    fn test_with_sc_target_builder() {
+        let score = ScoreFunction::default().with_sc_target(25.0);
+        assert_eq!(score.sc_target, 25.0);
+        assert_eq!(score.tc_weight, 1.0); // Other values unchanged
+    }
+
+    #[test]
+    fn test_with_tc_weight_builder() {
+        let score = ScoreFunction::default().with_tc_weight(2.5);
+        assert_eq!(score.tc_weight, 2.5);
+        assert_eq!(score.sc_weight, 1.0); // Other values unchanged
+    }
+
+    #[test]
+    fn test_with_sc_weight_builder() {
+        let score = ScoreFunction::default().with_sc_weight(3.0);
+        assert_eq!(score.sc_weight, 3.0);
+        assert_eq!(score.tc_weight, 1.0); // Other values unchanged
+    }
+
+    #[test]
+    fn test_with_rw_weight_builder() {
+        let score = ScoreFunction::default().with_rw_weight(0.5);
+        assert_eq!(score.rw_weight, 0.5);
+        assert_eq!(score.tc_weight, 1.0); // Other values unchanged
+    }
+
+    #[test]
+    fn test_builder_chaining() {
+        let score = ScoreFunction::default()
+            .with_tc_weight(2.0)
+            .with_sc_weight(3.0)
+            .with_rw_weight(0.5)
+            .with_sc_target(15.0);
+
+        assert_eq!(score.tc_weight, 2.0);
+        assert_eq!(score.sc_weight, 3.0);
+        assert_eq!(score.rw_weight, 0.5);
+        assert_eq!(score.sc_target, 15.0);
+    }
 }

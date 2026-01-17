@@ -307,4 +307,88 @@ mod tests {
         let result = optimize_code(&code, &sizes, &GreedyMethod::default());
         assert!(result.is_some());
     }
+
+    #[test]
+    fn test_empty_code() {
+        let code: EinCode<char> = EinCode::new(vec![], vec![]);
+        let sizes: HashMap<char, usize> = HashMap::new();
+
+        let result = optimize_code(&code, &sizes, &GreedyMethod::default());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_optimize_code_with_slicing() {
+        use crate::slicer::{slice_code, TreeSASlicer};
+
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+
+        let mut sizes = HashMap::new();
+        sizes.insert('i', 4);
+        sizes.insert('j', 8);
+        sizes.insert('k', 8);
+        sizes.insert('l', 4);
+
+        // First optimize
+        let nested = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+
+        // Then slice
+        let slicer = TreeSASlicer::fast();
+        let sliced = slice_code(&nested, &sizes, &slicer, &code.ixs);
+
+        // Verify sliced result exists (may or may not slice depending on sizes)
+        assert!(sliced.is_some());
+    }
+
+    #[test]
+    fn test_contraction_complexity_deep_tree() {
+        let code = EinCode::new(
+            vec![
+                vec!['a', 'b'],
+                vec!['b', 'c'],
+                vec!['c', 'd'],
+                vec!['d', 'e'],
+            ],
+            vec!['a', 'e'],
+        );
+
+        let mut sizes = HashMap::new();
+        sizes.insert('a', 2);
+        sizes.insert('b', 2);
+        sizes.insert('c', 2);
+        sizes.insert('d', 2);
+        sizes.insert('e', 2);
+
+        let nested = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let complexity = contraction_complexity(&nested, &sizes, &code.ixs);
+
+        // Deep tree should have multiple contractions
+        assert!(complexity.tc > 0.0);
+        assert!(complexity.sc > 0.0);
+        assert!(complexity.rwc > 0.0);
+    }
+
+    #[test]
+    fn test_optimize_code_treesa_with_path_decomp() {
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+
+        let mut sizes = HashMap::new();
+        sizes.insert('i', 4);
+        sizes.insert('j', 8);
+        sizes.insert('k', 8);
+        sizes.insert('l', 4);
+
+        let result = optimize_code(&code, &sizes, &TreeSA::path());
+        assert!(result.is_some());
+
+        let nested = result.unwrap();
+        // Path decomposition should produce a valid tree
+        assert!(nested.is_binary() || nested.is_leaf());
+    }
 }
