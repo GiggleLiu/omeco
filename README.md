@@ -8,6 +8,17 @@ Tensor network contraction order optimization in Rust.
 
 Ported from [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).
 
+## Documentation
+
+📖 **[Read the full documentation](https://gigglueliu.github.io/omeco/)** (mdBook)
+
+- [Getting Started Guide](https://gigglueliu.github.io/omeco/getting-started.html)
+- [Algorithm Comparison](https://gigglueliu.github.io/omeco/algorithms/comparison.html)
+- [GPU Optimization](https://gigglueliu.github.io/omeco/guides/gpu-optimization.html)
+- [PyTorch Integration](https://gigglueliu.github.io/omeco/guides/pytorch-integration.html)
+- [API Reference](https://gigglueliu.github.io/omeco/api-reference.html)
+- [Rust API Docs](https://docs.rs/omeco)
+
 ## Overview
 
 When contracting multiple tensors together, the order of contractions significantly affects computational cost. Finding the optimal contraction order is NP-complete, but good heuristics can find near-optimal solutions quickly.
@@ -103,9 +114,11 @@ let sliced_comp = sliced_complexity(&sliced, &sizes, &code.ixs);
 println!("Sliced space complexity: 2^{:.2}", sliced_comp.sc);
 ```
 
-## Documentation
+## Additional Resources
 
-API documentation is available via `cargo doc --open` or at [docs.rs/omeco](https://docs.rs/omeco).
+- **Examples**: See [`examples/`](examples/) for complete working examples
+- **Troubleshooting**: See the [troubleshooting guide](https://gigglueliu.github.io/omeco/troubleshooting.html)
+- **API Reference**: [Python & Rust API docs](https://gigglueliu.github.io/omeco/api-reference.html)
 
 ## Algorithms
 
