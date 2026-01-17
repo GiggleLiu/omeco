@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-build python-test benchmark version bump-patch bump-minor bump-major release publish
+.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-build python-test benchmark version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release
 
 CARGO ?= cargo
 PYTHON ?= python3
@@ -33,12 +33,15 @@ help:
 	@printf "\nBenchmarks:\n"
 	@printf "  benchmark     Run Python vs Julia benchmark\n"
 	@printf "\nRelease targets:\n"
-	@printf "  version       Show current version\n"
-	@printf "  bump-patch    Bump patch version ($(VERSION) -> $(MAJOR).$(MINOR).$$(($(PATCH)+1)))\n"
-	@printf "  bump-minor    Bump minor version ($(VERSION) -> $(MAJOR).$$(($(MINOR)+1)).0)\n"
-	@printf "  bump-major    Bump major version ($(VERSION) -> $$(($(MAJOR)+1)).0.0)\n"
-	@printf "  release       Create git tag and push (use after bump-*)\n"
-	@printf "  publish       Publish Python package to PyPI\n"
+	@printf "  version         Show current version\n"
+	@printf "  bump-patch      Bump patch version ($(VERSION) -> $(MAJOR).$(MINOR).$$(($(PATCH)+1)))\n"
+	@printf "  bump-minor      Bump minor version ($(VERSION) -> $(MAJOR).$$(($(MINOR)+1)).0)\n"
+	@printf "  bump-major      Bump major version ($(VERSION) -> $$(($(MAJOR)+1)).0.0)\n"
+	@printf "  release         Create git tag and push (use after bump-*)\n"
+	@printf "  publish-crates  Publish Rust crate to crates.io\n"
+	@printf "  publish         Publish Python package to PyPI\n"
+	@printf "  publish-all     Publish to both crates.io and PyPI\n"
+	@printf "  github-release  Create GitHub release (requires gh CLI)\n"
 
 build:
 	$(CARGO) build --workspace
@@ -102,8 +105,10 @@ define update_version
 	@echo "Updating version from $(VERSION) to $(1)..."
 	@sed -i 's/^version = "$(VERSION)"/version = "$(1)"/' omeco/Cargo.toml
 	@sed -i 's/^version = "$(VERSION)"/version = "$(1)"/' omeco-python/pyproject.toml
+	@echo "Updating Cargo.lock..."
+	@cd omeco && $(CARGO) update -p omeco --precise $(1) 2>/dev/null || $(CARGO) check --quiet
 	@echo "Updated version to $(1)"
-	@git add omeco/Cargo.toml omeco-python/pyproject.toml
+	@git add omeco/Cargo.toml omeco-python/pyproject.toml Cargo.lock
 	@git commit -m "Bump version to $(1)"
 	@echo "Committed version bump"
 endef
@@ -123,7 +128,36 @@ release:
 	git push origin master --tags
 	@echo "Released v$(VERSION)"
 
+publish-crates:
+	@echo "Publishing omeco v$(VERSION) to crates.io..."
+	cd omeco && $(CARGO) publish
+	@echo "✓ Published to crates.io"
+	@echo "  View at: https://crates.io/crates/omeco/$(VERSION)"
+
 publish:
-	@echo "Publishing to PyPI..."
-	cd omeco-python && maturin publish
-	@echo "Published to PyPI"
+	@echo "Publishing omeco v$(VERSION) to PyPI..."
+	cd omeco-python && maturin publish --skip-existing
+	@echo "✓ Published to PyPI"
+	@echo "  View at: https://pypi.org/project/omeco/$(VERSION)/"
+
+publish-all: publish-crates publish
+	@echo ""
+	@echo "=========================================="
+	@echo "✨ Published omeco v$(VERSION) to:"
+	@echo "  - crates.io: https://crates.io/crates/omeco/$(VERSION)"
+	@echo "  - PyPI: https://pypi.org/project/omeco/$(VERSION)/"
+	@echo "=========================================="
+
+github-release:
+	@echo "Creating GitHub release for v$(VERSION)..."
+	@if ! command -v gh >/dev/null 2>&1; then \
+		echo "Error: gh CLI not found. Install from https://cli.github.com/"; \
+		exit 1; \
+	fi
+	@echo "Generating release notes..."
+	@gh release create v$(VERSION) \
+		--title "v$(VERSION)" \
+		--generate-notes \
+		--verify-tag
+	@echo "✓ GitHub release created"
+	@echo "  View at: https://github.com/GiggleLiu/omeco/releases/tag/v$(VERSION)"
