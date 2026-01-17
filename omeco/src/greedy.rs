@@ -782,6 +782,218 @@ mod tests {
         assert!(!output.contains(&'j'));
         assert!(output.contains(&'k'));
     }
+
+    #[test]
+    fn test_compute_hypergraph_aware_output_simple_contraction() {
+        // Simple case: A[i,j] * B[j,k] -> C[i,k] (no other tensors)
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let iy = vec!['i', 'k'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let left = vec!['i', 'j'];
+        let right = vec!['j', 'k'];
+        let left_vertices = vec![0];
+        let right_vertices = vec![1];
+
+        let output = compute_contraction_output_with_hypergraph(
+            &left,
+            &right,
+            &iy,
+            &il,
+            &left_vertices,
+            &right_vertices,
+        );
+
+        // Expected: ['i', 'k'] (j contracts)
+        assert_eq!(output.len(), 2);
+        assert!(output.contains(&'i'));
+        assert!(output.contains(&'k'));
+        assert!(!output.contains(&'j'));
+    }
+
+    #[test]
+    fn test_compute_hypergraph_aware_output_hyperedge() {
+        // Hyperedge case: index appears in 3 tensors
+        // A[i,j], B[i,k], C[i,l] - 'i' is a hyperedge
+        // Contract A and B: A[i,j] * B[i,k] -> ?
+        let ixs = vec![vec!['i', 'j'], vec!['i', 'k'], vec!['i', 'l']];
+        let iy = vec![];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let left = vec!['i', 'j'];
+        let right = vec!['i', 'k'];
+        let left_vertices = vec![0];
+        let right_vertices = vec![1];
+
+        let output = compute_contraction_output_with_hypergraph(
+            &left,
+            &right,
+            &iy,
+            &il,
+            &left_vertices,
+            &right_vertices,
+        );
+
+        // Expected: ['i', 'j', 'k']
+        // 'i' preserved because it connects to tensor 2 (hyperedge)
+        // 'j' preserved (only in left)
+        // 'k' preserved (only in right)
+        assert_eq!(output.len(), 3);
+        assert!(output.contains(&'i'), "Hyperedge 'i' should be preserved");
+        assert!(output.contains(&'j'));
+        assert!(output.contains(&'k'));
+    }
+
+    #[test]
+    fn test_compute_hypergraph_aware_output_trace() {
+        // Trace case: A[i,i] * B[i,j] -> ?
+        let ixs = vec![vec!['i', 'i'], vec!['i', 'j']];
+        let iy = vec!['j'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let left = vec!['i', 'i']; // duplicate indices
+        let right = vec!['i', 'j'];
+        let left_vertices = vec![0];
+        let right_vertices = vec![1];
+
+        let output = compute_contraction_output_with_hypergraph(
+            &left,
+            &right,
+            &iy,
+            &il,
+            &left_vertices,
+            &right_vertices,
+        );
+
+        // Expected: ['j']
+        // 'i' contracts (appears in both, not external)
+        // 'j' preserved
+        assert!(output.contains(&'j'));
+        // 'i' should not be in output (fully contracted)
+        assert!(!output.contains(&'i') || output.iter().filter(|&&x| x == 'i').count() == 0);
+    }
+
+    #[test]
+    fn test_compute_hypergraph_aware_output_open_edge() {
+        // Case with open edge (in output)
+        // A[i,j] * B[j,k] -> C[i,k] where k is in final output
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let iy = vec!['i', 'k']; // k is open (in output)
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let left = vec!['i', 'j'];
+        let right = vec!['j', 'k'];
+        let left_vertices = vec![0];
+        let right_vertices = vec![1];
+
+        let output = compute_contraction_output_with_hypergraph(
+            &left,
+            &right,
+            &iy,
+            &il,
+            &left_vertices,
+            &right_vertices,
+        );
+
+        // Expected: ['i', 'k']
+        assert_eq!(output.len(), 2);
+        assert!(output.contains(&'i'));
+        assert!(output.contains(&'k'));
+        assert!(!output.contains(&'j'));
+    }
+
+    #[test]
+    fn test_compute_hypergraph_aware_output_no_common_indices() {
+        // Outer product case: A[i,j] * B[k,l] -> C[i,j,k,l]
+        let ixs = vec![vec!['i', 'j'], vec!['k', 'l']];
+        let iy = vec!['i', 'j', 'k', 'l'];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let left = vec!['i', 'j'];
+        let right = vec!['k', 'l'];
+        let left_vertices = vec![0];
+        let right_vertices = vec![1];
+
+        let output = compute_contraction_output_with_hypergraph(
+            &left,
+            &right,
+            &iy,
+            &il,
+            &left_vertices,
+            &right_vertices,
+        );
+
+        // Expected: all indices preserved (no contraction)
+        assert_eq!(output.len(), 4);
+        assert!(output.contains(&'i'));
+        assert!(output.contains(&'j'));
+        assert!(output.contains(&'k'));
+        assert!(output.contains(&'l'));
+    }
+
+    #[test]
+    fn test_compute_hypergraph_aware_output_complex_hyperedge() {
+        // Complex case: A[i,j,k], B[i,k,l], C[k,m], D[k,n]
+        // Contract A and B where k appears in 4 tensors (strong hyperedge)
+        let ixs = vec![
+            vec!['i', 'j', 'k'],
+            vec!['i', 'k', 'l'],
+            vec!['k', 'm'],
+            vec!['k', 'n'],
+        ];
+        let iy = vec![];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let left = vec!['i', 'j', 'k'];
+        let right = vec!['i', 'k', 'l'];
+        let left_vertices = vec![0];
+        let right_vertices = vec![1];
+
+        let output = compute_contraction_output_with_hypergraph(
+            &left,
+            &right,
+            &iy,
+            &il,
+            &left_vertices,
+            &right_vertices,
+        );
+
+        // Expected: ['i', 'j', 'k', 'l']
+        // 'i' preserved (in both but connects to other tensors? No, only in A and B)
+        // Actually, 'i' appears in both A and B, but not in C or D
+        // So 'i' should contract (not external to {A, B})
+        // 'k' preserved (hyperedge - connects to C and D)
+        // 'j' preserved (only in left)
+        // 'l' preserved (only in right)
+        assert!(output.contains(&'k'), "Hyperedge 'k' should be preserved");
+        assert!(output.contains(&'j'));
+        assert!(output.contains(&'l'));
+    }
+
+    #[test]
+    fn test_compute_hypergraph_aware_output_all_contract() {
+        // Case where all indices contract: A[i,j] * B[i,j] -> scalar
+        let ixs = vec![vec!['i', 'j'], vec!['i', 'j']];
+        let iy = vec![];
+        let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
+
+        let left = vec!['i', 'j'];
+        let right = vec!['i', 'j'];
+        let left_vertices = vec![0];
+        let right_vertices = vec![1];
+
+        let output = compute_contraction_output_with_hypergraph(
+            &left,
+            &right,
+            &iy,
+            &il,
+            &left_vertices,
+            &right_vertices,
+        );
+
+        // Expected: [] (all indices contract to scalar)
+        assert_eq!(output.len(), 0, "All indices should contract to produce scalar");
+    }
 }
 
 #[cfg(test)]

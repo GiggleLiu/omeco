@@ -298,6 +298,55 @@ impl<L: Label> NestedEinsum<L> {
 
         EinCode::new(ixs, iy)
     }
+
+    /// Check if this tree forms a valid path decomposition.
+    ///
+    /// A path decomposition is a binary tree where each internal node has at most
+    /// one internal child (the other must be a leaf). This forms a linear "path"
+    /// structure that guarantees bounded treewidth.
+    ///
+    /// # Returns
+    /// `true` if the tree is a valid path decomposition, `false` otherwise.
+    ///
+    /// # Example
+    /// ```rust
+    /// use omeco::{EinCode, NestedEinsum};
+    ///
+    /// // Valid path decomposition: ((leaf0, leaf1), leaf2)
+    /// let leaf0 = NestedEinsum::<char>::leaf(0);
+    /// let leaf1 = NestedEinsum::<char>::leaf(1);
+    /// let leaf2 = NestedEinsum::<char>::leaf(2);
+    ///
+    /// let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+    /// let node1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+    ///
+    /// let eins2 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'l']], vec!['i', 'l']);
+    /// let path_tree = NestedEinsum::node(vec![node1, leaf2], eins2);
+    ///
+    /// assert!(path_tree.is_path_decomposition());
+    /// ```
+    pub fn is_path_decomposition(&self) -> bool {
+        match self {
+            Self::Leaf { .. } => true,
+            Self::Node { args, .. } => {
+                if args.len() != 2 {
+                    // Path decomposition requires binary nodes
+                    return false;
+                }
+
+                // Count internal children (non-leaf nodes)
+                let internal_children = args.iter().filter(|arg| !arg.is_leaf()).count();
+
+                if internal_children > 1 {
+                    // At most one internal child allowed
+                    return false;
+                }
+
+                // Recursively check all children
+                args.iter().all(|arg| arg.is_path_decomposition())
+            }
+        }
+    }
 }
 
 /// An einsum with sliced indices for reduced space complexity.
@@ -768,5 +817,137 @@ mod tests {
         for original_ix in &original_ixs {
             assert!(flat.ixs.contains(original_ix), "Missing tensor {:?}", original_ix);
         }
+    }
+
+    #[test]
+    fn test_is_path_decomposition_leaf() {
+        // A single leaf is a valid path decomposition
+        let leaf = NestedEinsum::<char>::leaf(0);
+        assert!(leaf.is_path_decomposition());
+    }
+
+    #[test]
+    fn test_is_path_decomposition_two_leaves() {
+        // Two leaves contracted is a valid path decomposition
+        let leaf0 = NestedEinsum::<char>::leaf(0);
+        let leaf1 = NestedEinsum::<char>::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        assert!(tree.is_path_decomposition());
+    }
+
+    #[test]
+    fn test_is_path_decomposition_valid_path() {
+        // Valid path: ((leaf0, leaf1), leaf2) - one internal child, one leaf
+        let leaf0 = NestedEinsum::<char>::leaf(0);
+        let leaf1 = NestedEinsum::<char>::leaf(1);
+        let leaf2 = NestedEinsum::<char>::leaf(2);
+
+        let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let node1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+
+        let eins2 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'l']], vec!['i', 'l']);
+        let path_tree = NestedEinsum::node(vec![node1, leaf2], eins2);
+
+        assert!(path_tree.is_path_decomposition());
+    }
+
+    #[test]
+    fn test_is_path_decomposition_long_path() {
+        // Longer path: (((leaf0, leaf1), leaf2), leaf3)
+        let leaf0 = NestedEinsum::<char>::leaf(0);
+        let leaf1 = NestedEinsum::<char>::leaf(1);
+        let leaf2 = NestedEinsum::<char>::leaf(2);
+        let leaf3 = NestedEinsum::<char>::leaf(3);
+
+        let eins1 = EinCode::new(vec![vec!['a', 'b'], vec!['b', 'c']], vec!['a', 'c']);
+        let node1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+
+        let eins2 = EinCode::new(vec![vec!['a', 'c'], vec!['c', 'd']], vec!['a', 'd']);
+        let node2 = NestedEinsum::node(vec![node1, leaf2], eins2);
+
+        let eins3 = EinCode::new(vec![vec!['a', 'd'], vec!['d', 'e']], vec!['a', 'e']);
+        let path_tree = NestedEinsum::node(vec![node2, leaf3], eins3);
+
+        assert!(path_tree.is_path_decomposition());
+    }
+
+    #[test]
+    fn test_is_path_decomposition_invalid_two_internal_children() {
+        // Invalid: ((leaf0, leaf1), (leaf2, leaf3)) - both children are internal
+        let leaf0 = NestedEinsum::<char>::leaf(0);
+        let leaf1 = NestedEinsum::<char>::leaf(1);
+        let leaf2 = NestedEinsum::<char>::leaf(2);
+        let leaf3 = NestedEinsum::<char>::leaf(3);
+
+        let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let node1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+
+        let eins2 = EinCode::new(vec![vec!['k', 'l'], vec!['l', 'm']], vec!['k', 'm']);
+        let node2 = NestedEinsum::node(vec![leaf2, leaf3], eins2);
+
+        let eins3 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'm']], vec!['i', 'm']);
+        let invalid_tree = NestedEinsum::node(vec![node1, node2], eins3);
+
+        assert!(!invalid_tree.is_path_decomposition());
+    }
+
+    #[test]
+    fn test_is_path_decomposition_greedy_vs_treesa_path() {
+        // Test that greedy doesn't guarantee path decomposition, but TreeSA with PathDecomp does
+        use crate::greedy::{optimize_greedy, GreedyMethod};
+        use crate::treesa::{optimize_treesa, TreeSA, Initializer};
+        use crate::expr_tree::DecompositionType;
+        use crate::uniform_size_dict;
+
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+        let sizes = uniform_size_dict(&code, 4);
+
+        // Greedy doesn't guarantee path decomposition
+        let _greedy_result = optimize_greedy(&code, &sizes, &GreedyMethod::default()).unwrap();
+        // May or may not be path decomposition depending on greedy choices
+
+        // TreeSA with Path decomposition should produce a valid path
+        let treesa_config = TreeSA {
+            ntrials: 1,
+            niters: 10,
+            betas: vec![1.0, 2.0],
+            initializer: Initializer::Greedy,
+            decomposition_type: DecompositionType::Path,
+            score: Default::default(),
+        };
+        let treesa_result = optimize_treesa(&code, &sizes, &treesa_config).unwrap();
+
+        // TreeSA with PathDecomp should always produce a path decomposition
+        assert!(
+            treesa_result.is_path_decomposition(),
+            "TreeSA with PathDecomp should produce a valid path decomposition"
+        );
+    }
+
+    #[test]
+    fn test_is_path_decomposition_sliced_einsum() {
+        // Test that SlicedEinsum preserves path decomposition property
+        use crate::SlicedEinsum;
+
+        let leaf0 = NestedEinsum::<char>::leaf(0);
+        let leaf1 = NestedEinsum::<char>::leaf(1);
+        let leaf2 = NestedEinsum::<char>::leaf(2);
+
+        let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let node1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+
+        let eins2 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'l']], vec!['i', 'l']);
+        let path_tree = NestedEinsum::node(vec![node1, leaf2], eins2);
+
+        // Create a sliced einsum
+        let sliced = SlicedEinsum::new(vec!['i'], path_tree.clone());
+
+        // The underlying einsum should still be a path decomposition
+        assert!(sliced.eins.is_path_decomposition());
     }
 }
