@@ -310,12 +310,11 @@ fn select_pair<R: Rng>(
 /// indices are external (in final output or connecting to other tensors).
 pub fn tree_to_nested_einsum<L: Label>(
     tree: &ContractionTree,
-    original_ixs: &[Vec<L>],
     incidence_list: &IncidenceList<usize, L>,
 ) -> NestedEinsum<L> {
-    // First, collect all leaf indices to build the mapping
+    // First, collect all leaf indices to build the mapping from the incidence list
     let mut leaf_labels: HashMap<usize, Vec<L>> = HashMap::new();
-    collect_leaf_labels(tree, original_ixs, &mut leaf_labels);
+    collect_leaf_labels(tree, incidence_list, &mut leaf_labels);
 
     // Then recursively build the nested einsum
     build_nested(tree, &leaf_labels, incidence_list)
@@ -323,18 +322,18 @@ pub fn tree_to_nested_einsum<L: Label>(
 
 fn collect_leaf_labels<L: Label>(
     tree: &ContractionTree,
-    original_ixs: &[Vec<L>],
+    incidence_list: &IncidenceList<usize, L>,
     labels: &mut HashMap<usize, Vec<L>>,
 ) {
     match tree {
         ContractionTree::Leaf(idx) => {
-            if let Some(ix) = original_ixs.get(*idx) {
-                labels.insert(*idx, ix.clone());
+            if let Some(edges) = incidence_list.edges(idx) {
+                labels.insert(*idx, edges.clone());
             }
         }
         ContractionTree::Node { left, right } => {
-            collect_leaf_labels(left, original_ixs, labels);
-            collect_leaf_labels(right, original_ixs, labels);
+            collect_leaf_labels(left, incidence_list, labels);
+            collect_leaf_labels(right, incidence_list, labels);
         }
     }
 }
@@ -484,11 +483,7 @@ pub fn optimize_greedy<L: Label>(
     let log2_sizes = log2_size_dict(size_dict);
 
     let result = tree_greedy(&il, &log2_sizes, config.alpha, config.temperature)?;
-    Some(tree_to_nested_einsum(
-        &result.tree,
-        &code.ixs,
-        &result.incidence_list,
-    ))
+    Some(tree_to_nested_einsum(&result.tree, &result.incidence_list))
 }
 
 #[cfg(test)]
@@ -744,7 +739,7 @@ mod tests {
         let iy = vec!['i', 'k'];
         let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
 
-        let nested = tree_to_nested_einsum(&tree, &ixs, &il);
+        let nested = tree_to_nested_einsum(&tree, &il);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 2);
     }
@@ -758,7 +753,7 @@ mod tests {
         let iy = vec!['i', 'l'];
         let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
 
-        let nested = tree_to_nested_einsum(&tree, &ixs, &il);
+        let nested = tree_to_nested_einsum(&tree, &il);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 3);
     }
