@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-build python-test benchmark version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release
+.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-build python-test benchmark version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
 
 CARGO ?= cargo
 PYTHON ?= python3
@@ -30,6 +30,11 @@ help:
 	@printf "  python-dev    Build and install Python package locally\n"
 	@printf "  python-build  Build Python wheel\n"
 	@printf "  python-test   Run Python tests\n"
+	@printf "\nDocumentation:\n"
+	@printf "  install-mdbook Install mdBook (if not present)\n"
+	@printf "  build-book     Build mdBook documentation\n"
+	@printf "  serve-book     Serve mdBook at http://127.0.0.1:3000\n"
+	@printf "  clean-book     Remove generated mdBook files\n"
 	@printf "\nBenchmarks:\n"
 	@printf "  benchmark     Run Python vs Julia benchmark\n"
 	@printf "\nRelease targets:\n"
@@ -161,3 +166,17 @@ github-release:
 		--verify-tag
 	@echo "✓ GitHub release created"
 	@echo "  View at: https://github.com/GiggleLiu/omeco/releases/tag/v$(VERSION)"
+
+# mdBook documentation targets
+install-mdbook:
+	@command -v mdbook >/dev/null 2>&1 || \
+		(echo "Installing mdbook..." && $(CARGO) install mdbook)
+
+build-book: install-mdbook
+	cd docs && mdbook build
+
+serve-book: install-mdbook
+	cd docs && mdbook serve --open --hostname 127.0.0.1 --port 3000
+
+clean-book:
+	rm -rf docs/book

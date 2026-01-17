@@ -1,0 +1,17 @@
+[book]
+title = "omeco"
+description = "Tensor network contraction order optimization"
+authors = ["GiggleLiu", "TensorBFS"]
+language = "en"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "coal"
+git-repository-url = "https://github.com/GiggleLiu/omeco"
+edit-url-template = "https://github.com/GiggleLiu/omeco/edit/master/docs/src/{path}"
+
+[output.html.search]
+enable = true
