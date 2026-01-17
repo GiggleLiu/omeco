@@ -556,7 +556,7 @@ mod tests {
         // All indices should be within range
         for tensor_indices in &ixs {
             for &idx in tensor_indices {
-                assert!(idx >= 1 && idx <= 5, "Index should be in range 1-5");
+                assert!((1..=5).contains(&idx), "Index should be in range 1-5");
             }
         }
 

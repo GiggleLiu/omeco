@@ -649,4 +649,158 @@ mod tests {
         let peak = peak_memory(&tree2, &size_dict, &original_ixs);
         assert!(peak > 0);
     }
+
+    #[test]
+    fn test_nested_flop_single_tensor_with_output() {
+        // Julia test: flop(EinCode([['i']], []), Dict('i'=>4)) == 4
+        // Single tensor with output indices should have FLOP = 0 (no contraction)
+        let leaf = NestedEinsum::leaf(0);
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+
+        let flops = nested_flop(&leaf, &size_dict);
+        assert_eq!(flops, 0); // Leaf has no contractions
+    }
+
+    #[test]
+    fn test_nested_flop_trace_operation() {
+        // Test FLOP for trace operation: tensor with duplicate indices
+        let leaf = NestedEinsum::leaf(0);
+        let eins = EinCode::new(vec![vec!['i', 'i']], vec![]); // Trace on single tensor
+        let nested = NestedEinsum::node(vec![leaf], eins);
+
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+
+        let flops = nested_flop(&nested, &size_dict);
+        assert_eq!(flops, 4); // i*i contracted = 4*4 operations but output is scalar, so 4
+    }
+
+    #[test]
+    fn test_nested_flop_vs_time_complexity() {
+        // Julia test: cc.tc ≈ log2(flop(optcode, size_dict))
+        // Verify relationship between time complexity and FLOPs
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 2);
+        size_dict.insert('j', 4);
+        size_dict.insert('k', 8);
+
+        let flops = nested_flop(&nested, &size_dict);
+        let complexity = nested_complexity(&nested, &size_dict, &original_ixs);
+
+        // Time complexity should approximate log2(flops)
+        let log2_flops = (flops as f64).log2();
+        assert!((complexity.tc - log2_flops).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_nested_flop_complex_tree() {
+        // Test FLOP computation for a deeper tree
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let leaf2 = NestedEinsum::leaf(2);
+
+        // First contraction: tensor0 (ij) x tensor1 (jk) -> ik
+        let eins1 = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let tree1 = NestedEinsum::node(vec![leaf0, leaf1], eins1);
+
+        // Second contraction: result (ik) x tensor2 (kl) -> il
+        let eins2 = EinCode::new(vec![vec!['i', 'k'], vec!['k', 'l']], vec!['i', 'l']);
+        let tree2 = NestedEinsum::node(vec![tree1, leaf2], eins2);
+
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 2);
+        size_dict.insert('j', 4);
+        size_dict.insert('k', 8);
+        size_dict.insert('l', 2);
+
+        let flops = nested_flop(&tree2, &size_dict);
+        // First: 2*4*8 = 64, Second: 2*8*2 = 32, Total = 96
+        assert_eq!(flops, 96);
+    }
+
+    #[test]
+    fn test_peak_memory_specific_value() {
+        // Test peak memory with exact expected value
+        // Simple chain: A(i,j) x B(j,k) -> C(i,k)
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 2);
+        size_dict.insert('j', 4);
+        size_dict.insert('k', 2);
+
+        let peak = peak_memory(&nested, &size_dict, &original_ixs);
+        // Tensor A: 2*4 = 8
+        // Tensor B: 4*2 = 8
+        // Output C: 2*2 = 4
+        // Peak = max(A, A+B, A+B+C) = max(8, 16, 20) = 20
+        assert_eq!(peak, 20);
+    }
+
+    #[test]
+    fn test_peak_memory_vs_space_complexity() {
+        // Julia test: 10 * 2^sc1 > pm1 > 2^sc1
+        // Verify relationship between peak memory and space complexity
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 4);
+
+        let peak = peak_memory(&nested, &size_dict, &original_ixs);
+        let complexity = nested_complexity(&nested, &size_dict, &original_ixs);
+
+        // Peak memory should be related to space complexity
+        // pm should be roughly between 2^sc and 10*2^sc
+        let lower_bound = 2_f64.powf(complexity.sc);
+        let upper_bound = 10.0 * 2_f64.powf(complexity.sc);
+
+        assert!(
+            peak as f64 > lower_bound && (peak as f64) < upper_bound,
+            "Peak memory {} should be between {} and {}",
+            peak,
+            lower_bound,
+            upper_bound
+        );
+    }
+
+    #[test]
+    fn test_peak_memory_with_broadcast() {
+        // Test peak memory with broadcasting (output has index not in inputs)
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        // This creates an outer product in dimension 'k'
+        let eins = EinCode::new(vec![vec!['i'], vec!['j']], vec!['i', 'j', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i'], vec!['j']];
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 4);
+        size_dict.insert('j', 8);
+        size_dict.insert('k', 2);
+
+        let peak = peak_memory(&nested, &size_dict, &original_ixs);
+        // Tensor A: 4
+        // Tensor B: 8
+        // Output C: 4*8*2 = 64
+        // Peak should account for broadcast
+        assert!(peak > 0);
+        assert!(peak >= 64); // At least the output size
+    }
 }
