@@ -529,6 +529,84 @@ mod tests {
     }
 
     #[test]
+    fn test_contraction_tree_display_leaf() {
+        let leaf = ContractionTree::leaf(42);
+        let output = format!("{}", leaf);
+        assert_eq!(output.trim(), "Leaf(42)");
+    }
+
+    #[test]
+    fn test_contraction_tree_display_simple_node() {
+        let left = ContractionTree::leaf(0);
+        let right = ContractionTree::leaf(1);
+        let node = ContractionTree::node(left, right);
+        let output = format!("{}", node);
+
+        // Should have proper indentation
+        assert!(output.contains("Node {"));
+        assert!(output.contains("  left:   Leaf(0)"));
+        assert!(output.contains("  right:   Leaf(1)"));
+        assert!(output.contains("}"));
+    }
+
+    #[test]
+    fn test_contraction_tree_display_nested() {
+        // Create a deeper tree: Node { Leaf(0), Node { Leaf(1), Leaf(2) } }
+        let inner_left = ContractionTree::leaf(1);
+        let inner_right = ContractionTree::leaf(2);
+        let inner_node = ContractionTree::node(inner_left, inner_right);
+
+        let outer_left = ContractionTree::leaf(0);
+        let outer_node = ContractionTree::node(outer_left, inner_node);
+
+        let output = format!("{}", outer_node);
+
+        // Check nested indentation
+        assert!(output.contains("Node {"));
+        assert!(output.contains("  left:   Leaf(0)"));
+        assert!(output.contains("  right:   Node {"));
+        assert!(output.contains("    left:     Leaf(1)"));
+        assert!(output.contains("    right:     Leaf(2)"));
+
+        // Count braces to ensure structure is correct
+        let open_braces = output.matches('{').count();
+        let close_braces = output.matches('}').count();
+        assert_eq!(open_braces, close_braces);
+        assert_eq!(open_braces, 2); // Two nodes
+    }
+
+    #[test]
+    fn test_contraction_tree_display_deep_nesting() {
+        // Create: Node { Node { Leaf(0), Leaf(1) }, Node { Leaf(2), Leaf(3) } }
+        let left_tree = ContractionTree::node(
+            ContractionTree::leaf(0),
+            ContractionTree::leaf(1),
+        );
+        let right_tree = ContractionTree::node(
+            ContractionTree::leaf(2),
+            ContractionTree::leaf(3),
+        );
+        let root = ContractionTree::node(left_tree, right_tree);
+
+        let output = format!("{}", root);
+
+        // Verify three levels of indentation exist
+        assert!(output.contains("Node {"));             // Level 0
+        assert!(output.contains("  left:   Node {"));   // Level 1
+        assert!(output.contains("    left:     Leaf(0)")); // Level 2
+        assert!(output.contains("    right:     Leaf(1)"));
+        assert!(output.contains("  right:   Node {"));  // Level 1
+        assert!(output.contains("    left:     Leaf(2)")); // Level 2
+        assert!(output.contains("    right:     Leaf(3)"));
+
+        // All nodes properly closed
+        let open_braces = output.matches('{').count();
+        let close_braces = output.matches('}').count();
+        assert_eq!(open_braces, close_braces);
+        assert_eq!(open_braces, 3); // Three nodes
+    }
+
+    #[test]
     fn test_greedy_empty() {
         let il: IncidenceList<usize, char> = IncidenceList::new(HashMap::new(), vec![]);
         let log2_sizes: HashMap<char, f64> = HashMap::new();
