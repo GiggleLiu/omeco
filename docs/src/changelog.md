@@ -96,7 +96,7 @@ omeco follows [Semantic Versioning](https://semver.org/):
 - [GitHub Releases](https://github.com/GiggleLiu/omeco/releases)
 - [Crates.io](https://crates.io/crates/omeco)
 - [PyPI](https://pypi.org/project/omeco/)
-- [Documentation](https://gigglueliu.github.io/omeco/)
+- [Documentation](https://GiggleLiu.github.io/omeco/)
 
 ## Contributing
 
