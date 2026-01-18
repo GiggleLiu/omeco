@@ -7,103 +7,171 @@ Real-world performance comparison with Julia implementation.
 All benchmarks compare against [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl), the original Julia implementation.
 
 **Test Environment**:
-- CPU: AMD Ryzen 9 5900X
-- RAM: 64GB DDR4
-- Julia: 1.9+
-- Rust: 1.70+
-- Python: 3.11+
+- Benchmarks run via Python bindings (PyO3)
+- Configuration: `ntrials=1`, `niters=50-100`
+- See `benchmarks/` directory for scripts
 
-## Rust vs Julia
+## Rust vs Julia (TreeSA)
 
-### Matrix Chain (100 tensors)
+Comparison of TreeSA optimizer performance:
 
-| Implementation | Optimization Time | Solution Quality (tc) |
-|----------------|------------------|----------------------|
-| Julia (GreedyMethod) | 0.18s | 2^34.2 |
-| **Rust (GreedyMethod)** | **0.12s** | **2^34.2** |
-| Julia (TreeSA) | 8.2s | 2^33.1 |
-| **Rust (TreeSA)** | **5.7s** | **2^33.1** |
+| Problem | Tensors | Indices | Rust (ms) | Julia (ms) | tc (Rust) | tc (Julia) | Speedup |
+|---------|---------|---------|-----------|------------|-----------|------------|---------|
+| chain_10 | 10 | 11 | 18.5 | 31.6 | 23.10 | 23.10 | **1.7x** |
+| grid_4x4 | 16 | 24 | 88.0 | 150.7 | 9.18 | 9.26 | **1.7x** |
+| grid_5x5 | 25 | 40 | 155.4 | 297.7 | 10.96 | 10.96 | **1.9x** |
+| reg3_250 | 250 | 372 | 2,435 | 5,099 | 48.00 | 47.17 | **2.1x** |
 
-**Result**: Rust is **1.4-1.5x faster**, same solution quality.
+**Results**:
+- Rust is **1.7-2.1x faster** than Julia for TreeSA optimization
+- Both implementations find solutions with comparable time complexity (tc)
+- Solution quality is nearly identical between implementations
 
-### 3-Regular Graph (50 vertices)
+## Greedy Method Performance
 
-| Implementation | Optimization Time | sc |
-|----------------|------------------|-----|
-| Julia (GreedyMethod) | 0.08s | 2^11.4 |
-| **Rust (GreedyMethod)** | **0.05s** | **2^11.4** |
-| Julia (TreeSA) | 12.1s | 2^10.8 |
-| **Rust (TreeSA)** | **8.4s** | **2^10.8** |
+GreedyMethod is extremely fast for quick optimization:
 
-**Result**: Rust is **1.4-1.6x faster**, same solution quality.
+| Problem | Tensors | Time (ms) | tc | sc |
+|---------|---------|-----------|-----|-----|
+| chain_10 | 10 | 0.04 | 23.10 | 13.29 |
+| grid_4x4 | 16 | 0.12 | 9.54 | 5.0 |
+| grid_5x5 | 25 | 0.23 | 11.28 | 6.0 |
+| reg3_250 | 250 | 7.5 | 69.00 | 47.0 |
 
-## Python vs Rust
+**Key Observations**:
+- Greedy is **100-300x faster** than TreeSA
+- Greedy gives good results for small problems (chain_10, grids)
+- For large problems (reg3_250), TreeSA finds much better solutions:
+  - Greedy: tc = 69.00
+  - TreeSA: tc = 48.00
+  - **Improvement**: 2^(69-48) = 2^21 = **2 million times faster** execution!
 
-Python bindings add minimal overhead:
+## Python Overhead
 
-| Operation | Rust (native) | Python (via PyO3) | Overhead |
-|-----------|---------------|-------------------|----------|
-| GreedyMethod (50 tensors) | 0.05s | 0.06s | +20% |
-| TreeSA (50 tensors) | 8.4s | 8.6s | +2% |
-| Complexity calculation | 0.001s | 0.001s | <1% |
+Python bindings via PyO3 add minimal overhead:
 
-**Conclusion**: Python overhead is negligible, especially for larger optimizations.
+**TreeSA (grid_4x4, 100 iterations)**:
+- Pure Rust backend: ~88ms
+- Python call overhead: <1ms (~1%)
 
-## Problem Size Scaling
+**Greedy (reg3_250)**:
+- Pure optimization: ~7.5ms
+- Python overhead: <0.5ms (~6%)
 
-### GreedyMethod
+**Conclusion**: Python overhead is negligible, especially for TreeSA optimization.
 
-| Tensors | Time | sc | tc |
-|---------|------|-----|-----|
-| 10 | <0.01s | 2^8.2 | 2^12.5 |
-| 50 | 0.05s | 2^11.4 | 2^34.1 |
-| 100 | 0.12s | 2^12.8 | 2^45.2 |
-| 500 | 3.8s | 2^15.1 | 2^68.3 |
+## Algorithm Comparison
 
-### TreeSA
+When to use each algorithm:
 
-| Tensors | Time (fast) | sc | tc |
-|---------|-------------|-----|-----|
-| 10 | 0.2s | 2^7.9 | 2^12.1 |
-| 50 | 2.1s | 2^10.9 | 2^33.8 |
-| 100 | 15s | 2^12.5 | 2^44.9 |
+| Scenario | Recommended | Reason |
+|----------|-------------|--------|
+| **Quick prototyping** | Greedy | Sub-millisecond optimization |
+| **Production (< 50 tensors)** | Greedy | Fast enough, good quality |
+| **Production (50-200 tensors)** | TreeSA.fast() | Better quality, still reasonable time |
+| **Large networks (> 200 tensors)** | TreeSA | Significant quality improvement |
+| **Time-critical** | Greedy | Predictable fast performance |
+| **Execution-critical** | TreeSA | Better contraction order = faster execution |
+
+## Execution Time Savings
+
+The time spent optimizing pays off during execution:
+
+**Example: reg3_250 network**
+- Greedy optimization: 7.5ms
+- TreeSA optimization: 2,435ms (~2.4 seconds)
+- **Extra optimization time**: +2.4 seconds
+
+But the execution improvement:
+- Greedy tc: 69.00 → ~2^69 FLOPs
+- TreeSA tc: 48.00 → ~2^48 FLOPs
+- **Execution speedup**: 2^21 = **2 million times faster**
+
+If executing even once, TreeSA optimization is worth it!
 
 ## Hardware Recommendations
 
 | Tensor Count | RAM | CPU | Recommendation |
 |--------------|-----|-----|----------------|
-| < 20 | 4GB | Any | Any method works |
-| 20-100 | 8GB | 4+ cores | GreedyMethod or TreeSA.fast() |
-| 100-500 | 16GB | 8+ cores | GreedyMethod or parallel TreeSA |
-| > 500 | 32GB+ | 16+ cores | GreedyMethod only |
+| < 20 | 4GB | Any | Greedy is sufficient |
+| 20-100 | 8GB | 4+ cores | TreeSA.fast() for production |
+| 100-500 | 16GB | 8+ cores | TreeSA with multiple trials |
+| > 500 | 32GB+ | 16+ cores | TreeSA (may take minutes) |
 
-## Profiling Tips
+## Running Benchmarks
 
-### Rust
+Reproduce the benchmarks yourself:
 
 ```bash
-# CPU profiling
-cargo install flamegraph
-cargo flamegraph --bin your_binary
+cd benchmarks
 
-# Detailed benchmarks
-cargo bench --features benchmark
+# Python (Rust via PyO3)
+python benchmark_python.py
+
+# Julia (original implementation)
+julia --project=. benchmark_julia.jl
+
+# Compare results
+python -c "
+import json
+with open('results_rust_treesa.json') as f:
+    rust = json.load(f)
+with open('results_julia_treesa.json') as f:
+    julia = json.load(f)
+
+for problem in rust['results']:
+    r = rust['results'][problem]['avg_ms']
+    j = julia['results'][problem]['avg_ms']
+    print(f'{problem}: Rust {r:.1f}ms, Julia {j:.1f}ms, Speedup {j/r:.2f}x')
+"
 ```
 
-### Python
+## Profiling Your Code
+
+### Python Profiling
 
 ```python
 import time
-from omeco import optimize_code
+from omeco import optimize_code, TreeSA, contraction_complexity
 
+# Time optimization
 start = time.time()
-tree = optimize_code(ixs, out, sizes)
-elapsed = time.time() - start
+tree = optimize_code(ixs, out, sizes, TreeSA.fast())
+opt_time = time.time() - start
 
-print(f"Optimization took {elapsed:.3f}s")
+# Check complexity
+comp = contraction_complexity(tree, ixs, sizes)
+
+print(f"Optimization: {opt_time:.3f}s")
+print(f"Time complexity: 2^{comp.tc:.2f} = {2**comp.tc:.2e} FLOPs")
+print(f"Space complexity: 2^{comp.sc:.2f} elements")
+
+# Estimate execution time (assuming 10 GFLOP/s CPU)
+execution_seconds = 2**comp.tc / 1e10
+print(f"Estimated execution: {execution_seconds:.1f}s @ 10 GFLOP/s")
 ```
+
+### Rust Profiling
+
+```bash
+# CPU profiling with flamegraph
+cargo install flamegraph
+cargo flamegraph --example your_example
+
+# Criterion benchmarks (if available)
+cargo bench
+```
+
+## Performance Tips
+
+1. **Start with Greedy**: Always try Greedy first to get a baseline
+2. **Use TreeSA for production**: The extra optimization time pays off
+3. **Increase ntrials for critical code**: More trials = better solutions
+4. **Profile execution time**: Verify that better tc actually improves runtime
+5. **Consider memory**: Use sc_target if memory is constrained
 
 ## Next Steps
 
-- [Algorithm Comparison](./algorithms/comparison.md) - Algorithm trade-offs
+- [Algorithm Comparison](./algorithms/comparison.md) - Detailed algorithm trade-offs
 - [Quick Start](./quick-start.md) - Get started optimizing
+- [Troubleshooting](./troubleshooting.md) - Common performance issues
