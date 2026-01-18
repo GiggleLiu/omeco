@@ -7,8 +7,6 @@ from omeco import (
     TreeSASlicer,
     ScoreFunction,
     optimize_code,
-    optimize_greedy,
-    optimize_treesa,
     contraction_complexity,
     sliced_complexity,
     slice_code,
@@ -23,7 +21,7 @@ def test_optimize_greedy_basic():
     out = [0, 2]
     sizes = {0: 10, 1: 20, 2: 10}
     
-    tree = optimize_greedy(ixs, out, sizes)
+    tree = optimize_code(ixs, out, sizes)
     assert tree is not None
     assert tree.is_binary()
     assert tree.leaf_count() == 2
@@ -35,18 +33,18 @@ def test_optimize_greedy_chain():
     out = [0, 3]
     sizes = {0: 10, 1: 20, 2: 20, 3: 10}
     
-    tree = optimize_greedy(ixs, out, sizes)
+    tree = optimize_code(ixs, out, sizes)
     assert tree.leaf_count() == 3
     assert tree.depth() >= 1
 
 
-def test_optimize_treesa():
+def test_optimize_code():
     """Test TreeSA optimization."""
     ixs = [[0, 1], [1, 2]]
     out = [0, 2]
     sizes = {0: 10, 1: 20, 2: 10}
     
-    tree = optimize_treesa(ixs, out, sizes, TreeSA.fast())
+    tree = optimize_code(ixs, out, sizes, TreeSA.fast())
     assert tree is not None
     assert tree.is_binary()
 
@@ -57,7 +55,7 @@ def test_contraction_complexity():
     out = [0, 2]
     sizes = {0: 10, 1: 20, 2: 10}
     
-    tree = optimize_greedy(ixs, out, sizes)
+    tree = optimize_code(ixs, out, sizes)
     complexity = contraction_complexity(tree, ixs, sizes)
     
     assert complexity.tc > 0
@@ -72,7 +70,7 @@ def test_sliced_einsum():
     out = [0, 2]
     sizes = {0: 10, 1: 20, 2: 10}
     
-    tree = optimize_greedy(ixs, out, sizes)
+    tree = optimize_code(ixs, out, sizes)
     sliced = SlicedEinsum([1], tree)
     
     assert sliced.num_slices() == 1
@@ -101,7 +99,7 @@ def test_greedy_method_params():
     out = [0, 2]
     sizes = {0: 10, 1: 20, 2: 10}
     
-    tree = optimize_greedy(ixs, out, sizes, opt)
+    tree = optimize_code(ixs, out, sizes, opt)
     assert tree is not None
 
 
@@ -114,7 +112,7 @@ def test_treesa_config():
     out = [0, 2]
     sizes = {0: 4, 1: 8, 2: 4}
 
-    tree = optimize_treesa(ixs, out, sizes, opt)
+    tree = optimize_code(ixs, out, sizes, opt)
     assert tree is not None
 
 
@@ -124,7 +122,7 @@ def test_to_dict_leaf():
     out = [0, 1]
     sizes = {0: 10, 1: 20}
     
-    tree = optimize_greedy(ixs, out, sizes)
+    tree = optimize_code(ixs, out, sizes)
     d = tree.to_dict()
     
     # Single tensor should be a leaf
@@ -138,7 +136,7 @@ def test_to_dict_binary():
     out = [0, 2]
     sizes = {0: 10, 1: 20, 2: 10}
     
-    tree = optimize_greedy(ixs, out, sizes)
+    tree = optimize_code(ixs, out, sizes)
     d = tree.to_dict()
     
     # Should be a node with args and eins
@@ -162,7 +160,7 @@ def test_to_dict_chain():
     out = [0, 3]
     sizes = {0: 10, 1: 20, 2: 20, 3: 10}
     
-    tree = optimize_greedy(ixs, out, sizes)
+    tree = optimize_code(ixs, out, sizes)
     d = tree.to_dict()
     
     # Should be a node
@@ -184,7 +182,7 @@ def test_to_dict_indices():
     out = [0, 2]
     sizes = {0: 10, 1: 20, 2: 10}
     
-    tree = optimize_greedy(ixs, out, sizes)
+    tree = optimize_code(ixs, out, sizes)
     d = tree.to_dict()
     
     # Output should match
@@ -712,7 +710,7 @@ def test_hyperedge_multiple_occurrences():
 def test_nested_einsum_pretty_print_simple():
     """Test pretty printing for a simple binary contraction."""
     # Matrix multiplication: A[ab] × B[bc] -> C[ac]
-    nested = optimize_greedy([[1, 2], [2, 3]], [1, 3], {1: 2, 2: 3, 3: 2})
+    nested = optimize_code([[1, 2], [2, 3]], [1, 3], {1: 2, 2: 3, 3: 2})
     output = str(nested)
 
     # Verify output contains einsum notation
@@ -733,7 +731,7 @@ def test_nested_einsum_pretty_print_simple():
 def test_nested_einsum_pretty_print_chain():
     """Test pretty printing for a chain of contractions (deeper tree)."""
     # Chain: A×B×C×D
-    nested = optimize_greedy(
+    nested = optimize_code(
         [[1, 2], [2, 3], [3, 4], [4, 5]],
         [1, 5],
         {1: 2, 2: 3, 3: 4, 4: 3, 5: 2}
@@ -756,7 +754,7 @@ def test_nested_einsum_pretty_print_chain():
 
 def test_nested_einsum_pretty_print_vs_repr():
     """Test that __str__ and __repr__ produce different outputs."""
-    nested = optimize_greedy([[1, 2], [2, 3]], [1, 3], {1: 2, 2: 3, 3: 2})
+    nested = optimize_code([[1, 2], [2, 3]], [1, 3], {1: 2, 2: 3, 3: 2})
 
     str_output = str(nested)
     repr_output = repr(nested)
