@@ -107,16 +107,15 @@ See [CONTRIBUTING.md](https://github.com/GiggleLiu/omeco/blob/master/CONTRIBUTIN
 ### Migrating from 0.1.x to 0.2.x
 
 **Major Changes**:
-1. **New `optimize_code` function**: Replaces direct optimizer usage
+1. **New `optimize_code` function**: Unified API for all optimizers
    ```python
    # Old (0.1.x)
    tree = optimize_greedy(ixs, out, sizes)
-   
-   # New (0.2.x) - still works
-   tree = optimize_greedy(ixs, out, sizes)
-   
-   # New (0.2.x) - recommended for TreeSA
-   from omeco import optimize_code, TreeSA
+   tree = optimize_treesa(ixs, out, sizes)
+
+   # New (0.2.x) - unified interface
+   from omeco import optimize_code, GreedyMethod, TreeSA
+   tree = optimize_code(ixs, out, sizes)  # Uses GreedyMethod by default
    tree = optimize_code(ixs, out, sizes, TreeSA.fast())
    ```
 
@@ -137,7 +136,10 @@ See [CONTRIBUTING.md](https://github.com/GiggleLiu/omeco/blob/master/CONTRIBUTIN
    sliced = slice_code(tree, ixs, sizes, TreeSASlicer.fast())
    ```
 
-**Breaking Changes**: None - 0.2.x is backward compatible with 0.1.x API
+**Breaking Changes**:
+- Removed `optimize_greedy()` and `optimize_treesa()` from Python exports
+- Use `optimize_code(...)` instead with `GreedyMethod()` or `TreeSA()` optimizers
+- Rust API unchanged
 
 ### Migrating from Julia OMEinsumContractionOrders.jl
 
