@@ -160,7 +160,7 @@ sizes = {0: 10, 1: 20, 2: 10}
 **Function Names**:
 | Julia | omeco (Python/Rust) |
 |-------|---------------------|
-| `optimize_greedy` | `optimize_greedy` |
+| `optimize_greedy` | `optimize_code(..., GreedyMethod())` |
 | `optimize_treesa` | `optimize_code(..., TreeSA.fast())` |
 | `contraction_complexity` | `contraction_complexity` |
 | `slicing` | `slice_code` |

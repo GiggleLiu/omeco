@@ -149,10 +149,10 @@ sizes = {0: 10, 1: 20, 2: 10}
 
 2. **Try GreedyMethod first**:
    ```python
-   from omeco import optimize_greedy
+   from omeco import optimize_code, GreedyMethod
    
    # Much faster, good baseline
-   tree = optimize_greedy(ixs, out, sizes)
+   tree = optimize_code(ixs, out, sizes)
    ```
 
 3. **Reduce TreeSA iterations**:
@@ -246,10 +246,10 @@ tree = optimize_code(ixs, out, sizes, TreeSA.fast())
 
 Comparison:
 ```python
-from omeco import optimize_greedy, TreeSA, contraction_complexity
+from omeco import optimize_code, GreedyMethod, TreeSA, contraction_complexity
 
 # Greedy (fast, lower quality)
-greedy_tree = optimize_greedy(ixs, out, sizes)
+greedy_tree = optimize_code(ixs, out, sizes)
 greedy_comp = contraction_complexity(greedy_tree, ixs, sizes)
 
 # TreeSA (slower, higher quality)
@@ -397,11 +397,11 @@ out = [1]
 sizes = Dict(1 => 10, 2 => 20, 3 => 10)
 
 # Greedy
-tree = optimize_greedy(ixs, out, sizes)
+tree = optimize_code(ixs, out, sizes)
 println(tree)
 
 # TreeSA
-tree = optimize_treesa(ixs, out, sizes)
+tree = optimize_code(ixs, out, sizes)
 println(tree)
 ```
 
@@ -437,7 +437,7 @@ print(f"Got tc: {comp.tc:.2f}")
 from omeco import optimize_code, optimize_greedy, TreeSA
 
 # These are equivalent
-tree1 = optimize_greedy(ixs, out, sizes)
+tree1 = optimize_code(ixs, out, sizes)
 tree2 = optimize_code(ixs, out, sizes)  # Uses GreedyMethod by default
 
 # TreeSA requires optimize_code

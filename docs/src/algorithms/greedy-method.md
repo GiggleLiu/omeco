@@ -22,13 +22,13 @@ while more than one tensor remains:
 ### Python
 
 ```python
-from omeco import optimize_greedy, GreedyMethod
+from omeco import optimize_code, GreedyMethod
 
-# Deterministic greedy (default)
-tree = optimize_greedy(ixs, out, sizes)
+# Deterministic greedy (default optimizer)
+tree = optimize_code(ixs, out, sizes)
 
 # Or explicitly
-tree = optimize_greedy(ixs, out, sizes, GreedyMethod())
+tree = optimize_code(ixs, out, sizes, GreedyMethod())
 ```
 
 ### Rust
@@ -48,7 +48,7 @@ Add randomness to explore more solutions:
 # alpha: controls randomness (0 = deterministic, 1 = fully random)
 # temperature: softmax temperature for selection
 method = GreedyMethod(alpha=0.5, temperature=1.0)
-tree = optimize_greedy(ixs, out, sizes, method)
+tree = optimize_code(ixs, out, sizes, method)
 ```
 
 **Parameters**:
@@ -73,14 +73,14 @@ tree = optimize_greedy(ixs, out, sizes, method)
 ## Example: Matrix Chain
 
 ```python
-from omeco import optimize_greedy, contraction_complexity
+from omeco import optimize_code, contraction_complexity
 
 # A[100×10] × B[10×20] × C[20×5]
 ixs = [[0, 1], [1, 2], [2, 3]]
 out = [0, 3]
 sizes = {0: 100, 1: 10, 2: 20, 3: 5}
 
-tree = optimize_greedy(ixs, out, sizes)
+tree = optimize_code(ixs, out, sizes)
 print(tree)
 ```
 
@@ -120,9 +120,9 @@ Alternative order `(A×B)×C` would cost: 100×10×20 + 100×20×5 = 30,000 FLOP
    # Run 10 times with randomness, pick best
    best_tree = None
    best_complexity = float('inf')
-   
+
    for _ in range(10):
-       tree = optimize_greedy(ixs, out, sizes, GreedyMethod(alpha=0.3))
+       tree = optimize_code(ixs, out, sizes, GreedyMethod(alpha=0.3))
        complexity = contraction_complexity(tree, ixs, sizes)
        if complexity.tc < best_complexity:
            best_tree = tree
@@ -131,7 +131,7 @@ Alternative order `(A×B)×C` would cost: 100×10×20 + 100×20×5 = 30,000 FLOP
 
 3. **Combine with slicing** if memory is tight:
    ```python
-   tree = optimize_greedy(ixs, out, sizes)
+   tree = optimize_code(ixs, out, sizes)
    if contraction_complexity(tree, ixs, sizes).sc > 25.0:
        sliced = slice_code(tree, ixs, sizes, TreeSASlicer.fast())
    ```

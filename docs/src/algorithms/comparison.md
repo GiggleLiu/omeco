@@ -67,7 +67,7 @@ ixs = [[0,1], [1,2], [2,3], [3,4]]
 out = [0,4]
 
 # Greedy finds optimal order in O(n²)
-tree = optimize_greedy(ixs, out, sizes)
+tree = optimize_code(ixs, out, sizes, GreedyMethod())
 ```
 
 **Characteristics**:
@@ -84,7 +84,7 @@ ixs = [[0,1,2], [2,3,4], [4,5,6], [6,7,0]]
 out = [1,3,5,7]
 
 # TreeSA explores better orderings
-tree = optimize_treesa(ixs, out, sizes, TreeSA.fast())
+tree = optimize_code(ixs, out, sizes, TreeSA.fast())
 ```
 
 **Characteristics**:
@@ -98,12 +98,12 @@ tree = optimize_treesa(ixs, out, sizes, TreeSA.fast())
 
 ```python
 # Greedy result
-tree_greedy = optimize_greedy(circuit_ixs, out, sizes)
+tree_greedy = optimize_code(circuit_ixs, out, sizes, GreedyMethod())
 comp_greedy = contraction_complexity(tree_greedy, circuit_ixs, sizes)
 # tc: 2^42.3, sc: 2^28.1, time: 0.2s
 
 # TreeSA result
-tree_sa = optimize_treesa(circuit_ixs, out, sizes, TreeSA(ntrials=10, niters=50))
+tree_sa = optimize_code(circuit_ixs, out, sizes, TreeSA(ntrials=10, niters=50))
 comp_sa = contraction_complexity(tree_sa, circuit_ixs, sizes)
 # tc: 2^40.1, sc: 2^26.8, time: 15s
 
@@ -162,17 +162,17 @@ Use both in sequence:
 
 ```python
 # 1. Quick baseline with greedy
-tree_greedy = optimize_greedy(ixs, out, sizes)
+tree_greedy = optimize_code(ixs, out, sizes, GreedyMethod())
 comp_greedy = contraction_complexity(tree_greedy, ixs, sizes)
 print(f"Greedy baseline: tc={comp_greedy.tc:.2f}")
 
 # 2. If not good enough, refine with TreeSA
 if comp_greedy.tc > 35.0:  # Too slow
     print("Refining with TreeSA...")
-    tree_sa = optimize_treesa(ixs, out, sizes, TreeSA.fast())
+    tree_sa = optimize_code(ixs, out, sizes, TreeSA.fast())
     comp_sa = contraction_complexity(tree_sa, ixs, sizes)
     print(f"TreeSA result: tc={comp_sa.tc:.2f}")
-    
+
     improvement = 2 ** (comp_greedy.tc - comp_sa.tc)
     print(f"Improvement: {improvement:.1f}x speedup")
 ```

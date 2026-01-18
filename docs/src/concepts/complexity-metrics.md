@@ -170,11 +170,11 @@ Use when:
 
 ```python
 # Greedy result
-tree_greedy = optimize_greedy(ixs, out, sizes)
+tree_greedy = optimize_code(ixs, out, sizes, GreedyMethod())
 comp_greedy = contraction_complexity(tree_greedy, ixs, sizes)
 
 # TreeSA result
-tree_sa = optimize_treesa(ixs, out, sizes, TreeSA.fast())
+tree_sa = optimize_code(ixs, out, sizes, TreeSA.fast())
 comp_sa = contraction_complexity(tree_sa, ixs, sizes)
 
 # Compare

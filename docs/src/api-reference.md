@@ -41,30 +41,6 @@ tree = optimize_code(
 )
 ```
 
-#### `optimize_greedy`
-
-```python
-def optimize_greedy(
-    ixs: List[List[int]],
-    out: List[int],
-    sizes: Dict[int, int],
-    optimizer: Optional[GreedyMethod] = None
-) -> NestedEinsum
-```
-
-Optimize using greedy method. The `optimizer` parameter is optional (defaults to `GreedyMethod()`).
-
-**Example**:
-```python
-from omeco import optimize_greedy
-
-tree = optimize_greedy(
-    ixs=[[0, 1], [1, 2]],
-    out=[0, 2],
-    sizes={0: 10, 1: 20, 2: 10}
-)
-```
-
 ### Slicing Functions
 
 #### `slice_code`

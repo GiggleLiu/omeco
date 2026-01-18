@@ -18,16 +18,16 @@ TreeSA uses **simulated annealing** to explore the space of contraction trees:
 ### Fast Preset (Recommended)
 
 ```python
-from omeco import optimize_treesa, TreeSA
+from omeco import optimize_code, TreeSA
 
 # Quick optimization with sensible defaults
-tree = optimize_treesa(ixs, out, sizes, TreeSA.fast())
+tree = optimize_code(ixs, out, sizes, TreeSA.fast())
 ```
 
 ### Custom Configuration
 
 ```python
-from omeco import TreeSA, ScoreFunction
+from omeco import optimize_code, TreeSA, ScoreFunction
 
 # More thorough search
 score = ScoreFunction(sc_target=25.0)
@@ -36,7 +36,7 @@ optimizer = TreeSA(
     niters=50,       # Iterations per run
     score=score      # Custom scoring function
 )
-tree = optimize_treesa(ixs, out, sizes, optimizer)
+tree = optimize_code(ixs, out, sizes, optimizer)
 ```
 
 ### Rust
@@ -107,7 +107,7 @@ optimizer = TreeSA(ntrials=5, niters=50, score=score)
 ## Example Comparison
 
 ```python
-from omeco import optimize_greedy, optimize_treesa, TreeSA, contraction_complexity
+from omeco import optimize_code, GreedyMethod, TreeSA, contraction_complexity
 
 # Same problem, different optimizers
 ixs = [[0, 1, 2], [2, 3, 4], [4, 5, 6], [6, 7, 0]]  # Cycle
@@ -115,11 +115,11 @@ out = [1, 3, 5, 7]
 sizes = {i: 2 for i in range(8)}
 
 # Greedy
-tree_greedy = optimize_greedy(ixs, out, sizes)
+tree_greedy = optimize_code(ixs, out, sizes, GreedyMethod())
 comp_greedy = contraction_complexity(tree_greedy, ixs, sizes)
 
 # TreeSA
-tree_sa = optimize_treesa(ixs, out, sizes, TreeSA.fast())
+tree_sa = optimize_code(ixs, out, sizes, TreeSA.fast())
 comp_sa = contraction_complexity(tree_sa, ixs, sizes)
 
 print(f"Greedy - tc: 2^{comp_greedy.tc:.2f}, sc: 2^{comp_greedy.sc:.2f}")
@@ -155,14 +155,14 @@ TreeSA is 2.7x faster
 
 ```python
 # 1. Quick baseline with greedy
-tree_greedy = optimize_greedy(ixs, out, sizes)
+tree_greedy = optimize_code(ixs, out, sizes, GreedyMethod())
 comp_greedy = contraction_complexity(tree_greedy, ixs, sizes)
 print(f"Greedy: tc={comp_greedy.tc:.2f}, sc={comp_greedy.sc:.2f}")
 
 # 2. If not satisfactory, try TreeSA
 if comp_greedy.sc > 28.0:  # Too much memory
     score = ScoreFunction(sc_target=28.0, sc_weight=2.0)
-    tree_sa = optimize_treesa(ixs, out, sizes, TreeSA(ntrials=10, score=score))
+    tree_sa = optimize_code(ixs, out, sizes, TreeSA(ntrials=10, score=score))
     comp_sa = contraction_complexity(tree_sa, ixs, sizes)
     print(f"TreeSA: tc={comp_sa.tc:.2f}, sc={comp_sa.sc:.2f}")
 ```

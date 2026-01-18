@@ -35,8 +35,8 @@ import omeco
 print(omeco.__version__)
 
 # Quick test
-from omeco import optimize_greedy
-tree = optimize_greedy([[0, 1], [1, 2]], [0, 2], {0: 2, 1: 3, 2: 2})
+from omeco import optimize_code, GreedyMethod
+tree = optimize_code([[0, 1], [1, 2]], [0, 2], {0: 2, 1: 3, 2: 2})
 print(tree)
 ```
 
