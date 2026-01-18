@@ -43,7 +43,7 @@ bytes_per_element = 4  # float32
 
 # Maximum usable memory (leave ~20% for overhead)
 usable_gb = gpu_gb * 0.8
-sc_target = math.log2(usable_gb * 1e9 / bytes_per_element)
+sc_target = math.log2(usable_gb * 1024**3 / bytes_per_element)
 # sc_target ≈ 32.0
 
 score = ScoreFunction(

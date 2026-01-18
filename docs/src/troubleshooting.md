@@ -85,22 +85,22 @@ print(sys.path)  # Check if package is in path
    tree = optimize_code(ixs, out, sizes)
    comp = contraction_complexity(tree, ixs, sizes)
    print(f"Space complexity: 2^{comp.sc:.2f} elements")
-   
+
    # Calculate memory usage
    bytes_per_element = 8  # float64
-   memory_gb = (2 ** comp.sc) * bytes_per_element / 1e9
-   print(f"Estimated memory: {memory_gb:.2f} GB")
+   memory_gib = (2 ** comp.sc) * bytes_per_element / 1024**3
+   print(f"Estimated memory: {memory_gib:.2f} GiB")
    ```
 
 2. **Use slicing to reduce memory**:
    ```python
    from omeco import slice_code, TreeSASlicer, ScoreFunction
-   
+
    # Set target memory (e.g., 8GB = sc_target ≈ 30.0 for float64)
    import math
    available_gb = 8
-   sc_target = math.log2(available_gb * 1e9 / 8)
-   
+   sc_target = math.log2(available_gb * 1024**3 / 8)
+
    score = ScoreFunction(sc_target=sc_target, sc_weight=2.0)
    slicer = TreeSASlicer.fast(score=score)
    sliced = slice_code(tree, ixs, sizes, slicer)
@@ -466,13 +466,13 @@ import math
 # For 4GB memory, float64 (8 bytes)
 memory_gb = 4
 bytes_per_element = 8
-sc_target = math.log2(memory_gb * 1e9 / bytes_per_element)
+sc_target = math.log2(memory_gb * 1024**3 / bytes_per_element)
 # sc_target ≈ 29.0
 
 # For 8GB memory, float32 (4 bytes)
 memory_gb = 8
 bytes_per_element = 4
-sc_target = math.log2(memory_gb * 1e9 / bytes_per_element)
+sc_target = math.log2(memory_gb * 1024**3 / bytes_per_element)
 # sc_target ≈ 31.0
 ```
 

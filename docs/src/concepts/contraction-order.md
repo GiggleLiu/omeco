@@ -119,7 +119,7 @@ Different scenarios need different trade-offs:
 3. **Set sc_target** to available memory:
    ```python
    # For 8GB GPU with float32 tensors
-   sc_target = log2(8 * 1e9 / 4) ≈ 31
+   sc_target = log2(8 * 1024**3 / 4) ≈ 31
    ```
 
 4. **Use slicing** when memory is the bottleneck:

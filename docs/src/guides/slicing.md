@@ -263,7 +263,7 @@ print(f"Sliced {len(sliced.slicing())} indices: {sliced.slicing()}")
    ```python
    # Target 80% of available memory
    available_gb = 8
-   sc_target = math.log2(available_gb * 0.8 * 1e9 / 8)
+   sc_target = math.log2(available_gb * 0.8 * 1024**3 / 8)
    ```
 
 3. **Profile actual memory usage**:

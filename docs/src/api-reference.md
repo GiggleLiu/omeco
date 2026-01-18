@@ -518,9 +518,9 @@ comp = contraction_complexity(tree, ixs, sizes)
 print(f"Time: 2^{comp.tc:.2f} FLOPs = {2**comp.tc:.2e} FLOPs")
 print(f"Space: 2^{comp.sc:.2f} elements = {2**comp.sc:.2e} elements")
 
-# Memory in GB (float64)
-memory_gb = (2 ** comp.sc) * 8 / 1e9
-print(f"Memory: {memory_gb:.2f} GB")
+# Memory in GiB (float64)
+memory_gib = (2 ** comp.sc) * 8 / 1024**3
+print(f"Memory: {memory_gib:.2f} GiB")
 ```
 
 ## Next Steps

@@ -76,7 +76,7 @@ import math
 # For 16GB RAM, reserve half for tensors
 available_gb = 8
 bytes_per_element = 8  # float64
-sc_target = math.log2(available_gb * 1e9 / bytes_per_element)
+sc_target = math.log2(available_gb * 1024**3 / bytes_per_element)
 # sc_target ≈ 30.0 (8GB)
 ```
 
@@ -102,7 +102,7 @@ import math
 # NVIDIA RTX 3090: 24GB VRAM
 gpu_gb = 24
 bytes_per_element = 4  # float32 (most common on GPU)
-sc_target = math.log2(gpu_gb * 1e9 / bytes_per_element)
+sc_target = math.log2(gpu_gb * 1024**3 / bytes_per_element)
 # sc_target ≈ 32.5
 
 # Be conservative (leave room for framework overhead)

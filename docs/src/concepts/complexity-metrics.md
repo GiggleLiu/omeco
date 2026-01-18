@@ -36,8 +36,8 @@ print(f"Space: 2^{complexity.sc:.2f} elements")
 print(f"Peak memory: {complexity.peak_memory():,.0f} elements")
 
 # For float64 (8 bytes)
-memory_gb = complexity.peak_memory() * 8 / 1e9
-print(f"Memory: {memory_gb:.2f} GB")
+memory_gib = complexity.peak_memory() * 8 / 1024**3
+print(f"Memory: {memory_gib:.2f} GiB")
 ```
 
 ### Read-Write Complexity (rwc)
