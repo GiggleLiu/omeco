@@ -125,7 +125,7 @@ See [CONTRIBUTING.md](https://github.com/GiggleLiu/omeco/blob/master/CONTRIBUTIN
    # New in 0.2.x
    from omeco import ScoreFunction, TreeSA
    
-   score = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=20.0, sc_target=30.0)
+   score = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=0.1, sc_target=30.0)
    tree = optimize_code(ixs, out, sizes, TreeSA(score=score))
    ```
 

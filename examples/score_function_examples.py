@@ -139,10 +139,10 @@ def example_5_dynamic_sc_target():
     score = ScoreFunction(
         tc_weight=1.0,
         sc_weight=1.0,
-        rw_weight=20.0,
+        rw_weight=0.1,      # Experimental: tune empirically
         sc_target=sc_target
     )
-    print(f"  score = ScoreFunction(tc=1.0, sc=1.0, rw=20.0, sc_target={sc_target:.1f})")
+    print(f"  score = ScoreFunction(tc=1.0, sc=1.0, rw=0.1, sc_target={sc_target:.1f})")
     print()
 
 
@@ -156,7 +156,7 @@ def example_6_comparison_table():
         ("Default", ScoreFunction()),
         ("Time-optimized", ScoreFunction(1.0, 0.0, 0.0, float('inf'))),
         ("Space-optimized", ScoreFunction(0.0, 1.0, 0.0, 25.0)),
-        ("GPU (rw=20)", ScoreFunction(1.0, 1.0, 20.0, 28.0)),
+        ("GPU (experimental)", ScoreFunction(1.0, 1.0, 0.1, 28.0)),
     ]
 
     print(f"{'Config':<20} {'tc':<10} {'sc':<10} {'rw':<10} {'target':<10}")

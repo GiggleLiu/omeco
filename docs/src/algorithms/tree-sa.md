@@ -85,7 +85,7 @@ Custom [ScoreFunction](../guides/score-function.md) for hardware-specific optimi
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=20.0,     # Important for GPU!
+    rw_weight=0.1,      # Experimental for GPU
     sc_target=30.0
 )
 optimizer = TreeSA(ntrials=5, niters=50, score=score)

@@ -68,7 +68,7 @@ sc_target = math.log2(usable_gb * 1e9 / bytes_per_element)
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=20.0,
+    rw_weight=0.1,      # Experimental: tune empirically
     sc_target=sc_target
 )
 ```
@@ -102,11 +102,11 @@ score_cpu = ScoreFunction(
 tree_cpu = optimize_code(ixs, out, sizes, TreeSA(score=score_cpu))
 comp_cpu = contraction_complexity(tree_cpu, ixs, sizes)
 
-# GPU optimization (rw_weight=20)
+# GPU optimization (experimental rw_weight)
 score_gpu = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=20.0,
+    rw_weight=0.1,      # Experimental: tune empirically
     sc_target=30.0
 )
 tree_gpu = optimize_code(ixs, out, sizes, TreeSA(score=score_gpu))
@@ -158,7 +158,7 @@ sc_target = math.log2(gpu_gb * 1e9 / bytes_per_element)
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=20.0,
+    rw_weight=0.1,      # Experimental: tune empirically
     sc_target=32.5
 )
 ```
@@ -180,7 +180,7 @@ batched_sc_target = base_sc_target + math.log2(batch_size)
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=20.0,
+    rw_weight=0.1,      # Experimental: tune empirically
     sc_target=batched_sc_target
 )
 ```
@@ -194,8 +194,8 @@ After optimization, verify the improvement:
 tree_default = optimize_code(ixs, out, sizes)
 comp_default = contraction_complexity(tree_default, ixs, sizes)
 
-# With GPU optimization
-score_gpu = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=20.0, sc_target=30.0)
+# With GPU optimization (experimental rw_weight)
+score_gpu = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=0.1, sc_target=30.0)
 tree_gpu = optimize_code(ixs, out, sizes, TreeSA(score=score_gpu))
 comp_gpu = contraction_complexity(tree_gpu, ixs, sizes)
 
@@ -223,7 +223,7 @@ tree = optimize_code(ixs, out, sizes, TreeSA(score=score))
 
 ```python
 # WRONG: Using CPU memory size for GPU
-score = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=20.0, sc_target=35.0)
+score = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=0.1, sc_target=35.0)
 # Result: Assumes 32GB GPU, but you only have 8GB → OOM errors
 ```
 
@@ -241,8 +241,8 @@ tree = optimize_greedy(ixs, out, sizes)
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=20.0,
-    sc_target=30.0  # Your GPU memory
+    rw_weight=0.1,      # Experimental: tune empirically
+    sc_target=30.0      # Your GPU memory
 )
 tree = optimize_code(ixs, out, sizes, TreeSA(score=score))
 ```

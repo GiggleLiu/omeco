@@ -207,7 +207,7 @@ score = ScoreFunction(
 2. **Identify bottleneck**:
    - If `sc` too high → increase `sc_weight` or lower `sc_target`
    - If `tc` too high → try TreeSA with default score
-   - If running on GPU → set `rw_weight=20.0`
+   - If running on GPU → try `rw_weight=0.1` to `1.0` (experimental)
 
 3. **Adjust and re-optimize**:
    ```python
@@ -225,7 +225,7 @@ score = ScoreFunction(
 
 See [examples/score_function_examples.py](https://github.com/GiggleLiu/omeco/blob/master/examples/score_function_examples.py) for complete examples:
 - CPU optimization
-- GPU optimization with rw_weight=20
+- GPU optimization (experimental rw_weight tuning)
 - Memory-limited environments
 - Dynamic sc_target calculation
 

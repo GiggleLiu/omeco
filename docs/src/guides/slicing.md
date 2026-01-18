@@ -172,7 +172,7 @@ For GPU workloads, consider both memory and I/O:
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=2.0,      # Space is critical on GPU
-    rw_weight=20.0,     # I/O still matters!
+    rw_weight=0.1,      # Experimental: tune empirically
     sc_target=30.0      # 8GB GPU limit
 )
 
