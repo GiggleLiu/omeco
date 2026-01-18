@@ -48,7 +48,7 @@ print(f"Memory: {memory_gb:.2f} GB")
 
 **Interpretation**:
 - On CPU: Usually ignored (rw_weight=0)
-- On GPU: Critical! Memory I/O is 20x slower than arithmetic
+- On GPU: Critical! Compute-to-memory-bandwidth ratio is high (10-30x)
 - Lower is better (less data movement)
 
 **Example**:

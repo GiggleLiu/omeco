@@ -34,26 +34,27 @@ def example_1_cpu_optimization():
 
 
 def example_2_gpu_optimization():
-    """Example 2: GPU optimization with high rw_weight"""
+    """Example 2: GPU optimization (experimental rw_weight)"""
     print("=" * 60)
-    print("Example 2: GPU Optimization")
+    print("Example 2: GPU Optimization (Experimental)")
     print("=" * 60)
 
     score = ScoreFunction(
         tc_weight=1.0,   # Time still matters
         sc_weight=1.0,   # GPU memory is limited
-        rw_weight=20.0,  # ⚠️ CRITICAL: Memory I/O is 20x more expensive!
+        rw_weight=0.1,   # Experimental: tune based on profiling
         sc_target=30.0   # ~8GB GPU memory (2^30 floats × 4 bytes)
     )
 
     print("Configuration:")
     print(f"  tc_weight: {score.tc_weight}")
     print(f"  sc_weight: {score.sc_weight}")
-    print(f"  rw_weight: {score.rw_weight} ⚠️ KEY FOR GPU!")
+    print(f"  rw_weight: {score.rw_weight} (experimental - tune empirically)")
     print(f"  sc_target: {score.sc_target} (~8GB GPU)")
-    print("\nWhy rw_weight=20?")
-    print("  - GPU memory I/O is 20x slower than arithmetic")
-    print("  - Reducing read-write operations critical for performance")
+    print("\nAbout rw_weight for GPU:")
+    print("  - No established 'best' value - requires empirical tuning")
+    print("  - Start with 0.1, try 1.0, profile actual GPU execution time")
+    print("  - Reference: cotengra uses weight=64 for memory writes")
     print()
 
 

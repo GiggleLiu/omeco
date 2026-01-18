@@ -11,32 +11,45 @@ GPUs have a critical difference from CPUs: **memory bandwidth is the bottleneck*
 | **Arithmetic** | 10-100x faster than CPU | ✅ Plenty |
 | **Memory Bandwidth** | 2-4x faster than CPU | ❌ Limited |
 
-**Result**: On GPU, memory I/O is ~20x more expensive than arithmetic!
+**Result**: On GPU, the ratio of compute throughput to memory bandwidth is much higher than on CPU. Reducing memory I/O operations is critical for performance.
 
 ## Critical Configuration
 
-### Always Set rw_weight=20
+### Experimental: Set rw_weight for GPU
 
 ```python
 from omeco import ScoreFunction, TreeSA, optimize_code
 
-# GPU optimization
+# GPU optimization (experimental)
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=20.0,     # ⚠️ CRITICAL FOR GPU!
+    rw_weight=0.1,      # Experimental: tune based on profiling
     sc_target=30.0      # Your GPU memory limit
 )
 
 tree = optimize_code(ixs, out, sizes, TreeSA(score=score))
 ```
 
-**Why 20?**
-```
-GPU compute: ~10 TFLOP/s
-GPU memory: ~500 GB/s = ~0.5 TFLOP/s equivalent
-Ratio: 10 / 0.5 = 20
-```
+**About rw_weight for GPU:**
+
+The `rw_weight` parameter is **experimental** and should be tuned empirically:
+
+- **Default**: 0.0 (CPU optimization)
+- **Starting point for GPU**: Try 0.1 to 1.0
+- **Reference**: [cotengra](https://cotengra.readthedocs.io/en/latest/basics.html) uses weight=64 for memory writes
+- **Rationale**: GPUs have high compute-to-memory-bandwidth ratio
+
+**Important**: There is no established "best" value. Profile your specific workload:
+1. Start with `rw_weight=0.0` (default)
+2. Try `rw_weight=0.1`, then `rw_weight=1.0`
+3. Measure actual execution time on your GPU
+4. Adjust based on results
+
+The optimal value depends on:
+- GPU model and memory bandwidth
+- Tensor sizes and network topology
+- Precision (FP16 vs FP32 vs FP64)
 
 ### Calculate sc_target for Your GPU
 
@@ -237,11 +250,14 @@ tree = optimize_code(ixs, out, sizes, TreeSA(score=score))
 ## Summary
 
 **GPU Optimization Checklist**:
-- ✅ Set `rw_weight=20.0` (or 10-30 range)
-- ✅ Calculate `sc_target` from your GPU memory
-- ✅ Use TreeSA for better I/O optimization
+- ✅ Calculate `sc_target` from your GPU memory (critical)
 - ✅ Use float32 (4 bytes) for sc_target calculation
 - ✅ Reserve 20% memory for framework overhead
+- ✅ Use TreeSA for better overall optimization
+- ⚠️ **Experimental**: Try `rw_weight=0.1` to `1.0` and profile
+  - No established best value - requires empirical tuning
+  - Start with default (0.0), then try 0.1, then 1.0
+  - Measure actual GPU execution time for your workload
 
 ## Next Steps
 

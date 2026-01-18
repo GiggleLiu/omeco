@@ -82,21 +82,25 @@ sc_target = math.log2(available_gb * 1e9 / bytes_per_element)
 
 ### GPU Optimization
 
-**Critical**: On GPUs, memory I/O is **20x slower** than arithmetic!
+**Note**: GPU memory bandwidth is often the bottleneck, not compute.
 
 ```python
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=20.0,     # ⚠️ KEY FOR GPU!
+    rw_weight=0.1,      # Experimental: tune empirically
     sc_target=30.0      # ~8GB GPU (2^30 × 4 bytes for float32)
 )
 ```
 
-**Why rw_weight=20?**
-- GPU arithmetic: ~10 TFLOP/s
-- GPU memory bandwidth: ~500 GB/s = ~0.5 TFLOP/s equivalent
-- Ratio: 10/0.5 = **20x**
+**About rw_weight for GPU:**
+
+The optimal value is **workload-dependent** and should be tuned empirically:
+- **Default**: 0.0 (CPU)
+- **Starting point**: Try 0.1, then 1.0
+- **Requires profiling** on your specific GPU and workload
+
+See [GPU Optimization Guide](./gpu-optimization.md) for full details and tuning methodology.
 
 **Calculate sc_target for GPU**:
 ```python
@@ -112,15 +116,25 @@ sc_target = math.log2(gpu_gb * 1e9 / bytes_per_element)
 sc_target = 32.0  # ~16GB usable
 ```
 
-## Common Scenarios
+## Decision Guide
 
-| Use Case | tc_weight | sc_weight | rw_weight | sc_target | Notes |
-|----------|-----------|-----------|-----------|-----------|-------|
-| **CPU (balanced)** | 1.0 | 1.0 | 0.0 | 28.0 | Default works well |
-| **GPU** | 1.0 | 1.0 | **20.0** | 30.0 | **Must set rw_weight=20** |
-| **Low memory** | 1.0 | 3.0 | 0.0 | 25.0 | Penalize memory 3x |
-| **Speed critical** | 1.0 | 0.0 | 0.0 | ∞ | Ignore memory |
-| **Embedded** | 0.1 | 10.0 | 0.0 | 20.0 | Memory is scarce |
+**Choose based on your bottleneck:**
+
+1. **Default (CPU, balanced)**: Use `ScoreFunction()` with defaults
+   - Works for most CPU scenarios
+   - Balances time and memory
+
+2. **GPU**: See [GPU Optimization Guide](./gpu-optimization.md)
+   - Experiment with `rw_weight=0.1` to `1.0` (requires empirical tuning)
+   - May improve GPU performance by reducing memory I/O
+
+3. **Memory constrained**: Increase `sc_weight` and lower `sc_target`
+   - Example: `ScoreFunction(sc_weight=3.0, sc_target=25.0)`
+   - Accepts slower execution to fit in memory
+
+4. **Need slicing**: See [Slicing Strategy Guide](./slicing.md)
+   - Use when contraction exceeds available memory
+   - Trades time for space
 
 ## Advanced Configuration
 
