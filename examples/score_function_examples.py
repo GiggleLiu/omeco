@@ -4,7 +4,7 @@ Score Function Configuration Examples
 This file demonstrates practical examples of configuring the ScoreFunction
 for different hardware and use cases.
 
-See docs/score_function_guide.md for detailed explanations.
+See the Score Function section in the documentation for detailed explanations.
 """
 
 from omeco import ScoreFunction

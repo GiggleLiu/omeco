@@ -6,9 +6,7 @@ High-performance tensor network contraction order optimization in Rust.
 
 omeco (**O**ne **M**ore **E**insum **C**ontraction **O**rder) is a library for optimizing tensor network contractions. When contracting multiple tensors together, the order of contractions can make an exponential difference in computational cost. omeco provides fast algorithms to find near-optimal contraction orders.
 
-Port
-
-ed from the Julia library [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).
+Ported from the Julia library [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).
 
 ## Why Optimize Contraction Order?
 

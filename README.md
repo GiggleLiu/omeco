@@ -10,13 +10,13 @@ Ported from [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsum
 
 ## Documentation
 
-📖 **[Read the full documentation](https://gigglueliu.github.io/omeco/)** (mdBook)
+📖 **[Read the full documentation](https://GiggleLiu.github.io/omeco/)** (mdBook)
 
-- [Getting Started Guide](https://gigglueliu.github.io/omeco/getting-started.html)
-- [Algorithm Comparison](https://gigglueliu.github.io/omeco/algorithms/comparison.html)
-- [GPU Optimization](https://gigglueliu.github.io/omeco/guides/gpu-optimization.html)
-- [PyTorch Integration](https://gigglueliu.github.io/omeco/guides/pytorch-integration.html)
-- [API Reference](https://gigglueliu.github.io/omeco/api-reference.html)
+- [Getting Started Guide](https://GiggleLiu.github.io/omeco/getting-started.html)
+- [Algorithm Comparison](https://GiggleLiu.github.io/omeco/algorithms/comparison.html)
+- [GPU Optimization](https://GiggleLiu.github.io/omeco/guides/gpu-optimization.html)
+- [PyTorch Integration](https://GiggleLiu.github.io/omeco/guides/pytorch-integration.html)
+- [API Reference](https://GiggleLiu.github.io/omeco/api-reference.html)
 - [Rust API Docs](https://docs.rs/omeco)
 
 ## Overview
