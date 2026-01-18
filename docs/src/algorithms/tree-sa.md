@@ -81,11 +81,11 @@ Temperature schedule for simulated annealing.
 Custom [ScoreFunction](../guides/score-function.md) for hardware-specific optimization.
 
 ```python
-# GPU optimization (penalize memory I/O)
+# GPU optimization (see GPU Optimization Guide)
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=0.1,      # Experimental for GPU
+    rw_weight=10.0,
     sc_target=30.0
 )
 optimizer = TreeSA(ntrials=5, niters=50, score=score)

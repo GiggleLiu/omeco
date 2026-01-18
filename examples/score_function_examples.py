@@ -42,7 +42,7 @@ def example_2_gpu_optimization():
     score = ScoreFunction(
         tc_weight=1.0,   # Time still matters
         sc_weight=1.0,   # GPU memory is limited
-        rw_weight=0.1,   # Experimental: tune based on profiling
+        rw_weight=10.0,  # Experimental: tune based on profiling (try 1.0 to >20)
         sc_target=30.0   # ~8GB GPU memory (2^30 floats × 4 bytes)
     )
 
@@ -53,7 +53,8 @@ def example_2_gpu_optimization():
     print(f"  sc_target: {score.sc_target} (~8GB GPU)")
     print("\nAbout rw_weight for GPU:")
     print("  - No established 'best' value - requires empirical tuning")
-    print("  - Start with 0.1, try 1.0, profile actual GPU execution time")
+    print("  - Range: 1.0 to >20 (depends on GPU compute-to-memory-bandwidth ratio)")
+    print("  - Start with 1.0, try 10.0, then 20.0, profile actual GPU execution time")
     print("  - Reference: cotengra uses weight=64 for memory writes")
     print()
 
@@ -139,10 +140,10 @@ def example_5_dynamic_sc_target():
     score = ScoreFunction(
         tc_weight=1.0,
         sc_weight=1.0,
-        rw_weight=0.1,      # Experimental: tune empirically
+        rw_weight=10.0,     # Experimental: try 1.0 to >20
         sc_target=sc_target
     )
-    print(f"  score = ScoreFunction(tc=1.0, sc=1.0, rw=0.1, sc_target={sc_target:.1f})")
+    print(f"  score = ScoreFunction(tc=1.0, sc=1.0, rw=10.0, sc_target={sc_target:.1f})")
     print()
 
 
@@ -156,7 +157,7 @@ def example_6_comparison_table():
         ("Default", ScoreFunction()),
         ("Time-optimized", ScoreFunction(1.0, 0.0, 0.0, float('inf'))),
         ("Space-optimized", ScoreFunction(0.0, 1.0, 0.0, 25.0)),
-        ("GPU (experimental)", ScoreFunction(1.0, 1.0, 0.1, 28.0)),
+        ("GPU (experimental)", ScoreFunction(1.0, 1.0, 10.0, 28.0)),
     ]
 
     print(f"{'Config':<20} {'tc':<10} {'sc':<10} {'rw':<10} {'target':<10}")

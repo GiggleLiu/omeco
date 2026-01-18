@@ -268,7 +268,7 @@ Configure optimization objectives.
 **Parameters**:
 - `tc_weight`: Weight for time complexity
 - `sc_weight`: Weight for space complexity
-- `rw_weight`: Weight for read-write complexity (experimental: try 0.1-1.0 for GPU)
+- `rw_weight`: Weight for read-write complexity (default: 0.0 for CPU, see GPU Optimization Guide for GPU)
 - `sc_target`: Target space complexity (log₂ elements)
 
 **Score Formula**:
@@ -281,8 +281,8 @@ score = tc_weight × 2^tc + rw_weight × 2^rwc + sc_weight × max(0, 2^sc - 2^sc
 # CPU optimization
 ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=0.0, sc_target=28.0)
 
-# GPU optimization (experimental: tune rw_weight empirically)
-ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=0.1, sc_target=30.0)
+# GPU optimization (see GPU Optimization Guide)
+ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=10.0, sc_target=30.0)
 
 # Memory-constrained
 ScoreFunction(tc_weight=0.1, sc_weight=10.0, rw_weight=0.0, sc_target=25.0)
@@ -481,7 +481,7 @@ from omeco import optimize_code, TreeSA, ScoreFunction
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=0.1,   # Experimental for GPU
+    rw_weight=10.0,  # For GPU (see GPU Optimization Guide)
     sc_target=30.0
 )
 

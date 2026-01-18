@@ -88,19 +88,12 @@ sc_target = math.log2(available_gb * 1e9 / bytes_per_element)
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=0.1,      # Experimental: tune empirically
+    rw_weight=10.0,     # See GPU Optimization Guide for tuning
     sc_target=30.0      # ~8GB GPU (2^30 × 4 bytes for float32)
 )
 ```
 
-**About rw_weight for GPU:**
-
-The optimal value is **workload-dependent** and should be tuned empirically:
-- **Default**: 0.0 (CPU)
-- **Starting point**: Try 0.1, then 1.0
-- **Requires profiling** on your specific GPU and workload
-
-See [GPU Optimization Guide](./gpu-optimization.md) for full details and tuning methodology.
+**For GPU optimization:** See [GPU Optimization Guide](./gpu-optimization.md) for rw_weight tuning methodology.
 
 **Calculate sc_target for GPU**:
 ```python
@@ -124,9 +117,7 @@ sc_target = 32.0  # ~16GB usable
    - Works for most CPU scenarios
    - Balances time and memory
 
-2. **GPU**: See [GPU Optimization Guide](./gpu-optimization.md)
-   - Experiment with `rw_weight=0.1` to `1.0` (requires empirical tuning)
-   - May improve GPU performance by reducing memory I/O
+2. **GPU**: See [GPU Optimization Guide](./gpu-optimization.md) for complete rw_weight tuning methodology
 
 3. **Memory constrained**: Increase `sc_weight` and lower `sc_target`
    - Example: `ScoreFunction(sc_weight=3.0, sc_target=25.0)`
@@ -207,7 +198,7 @@ score = ScoreFunction(
 2. **Identify bottleneck**:
    - If `sc` too high → increase `sc_weight` or lower `sc_target`
    - If `tc` too high → try TreeSA with default score
-   - If running on GPU → try `rw_weight=0.1` to `1.0` (experimental)
+   - If running on GPU → see [GPU Optimization Guide](./gpu-optimization.md)
 
 3. **Adjust and re-optimize**:
    ```python

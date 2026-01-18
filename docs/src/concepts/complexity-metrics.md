@@ -56,8 +56,8 @@ print(f"Memory: {memory_gb:.2f} GB")
 # CPU optimization (ignore I/O)
 score = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=0.0)
 
-# GPU optimization (I/O matters!)
-score = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=0.1)  # Experimental for GPU
+# GPU optimization (I/O matters! See GPU Optimization Guide)
+score = ScoreFunction(tc_weight=1.0, sc_weight=1.0, rw_weight=10.0)
 ```
 
 ## Why Logarithmic Scale?

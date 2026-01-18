@@ -179,12 +179,12 @@ If `rwc` is high, the contraction does excessive memory I/O.
 ```python
 from omeco import ScoreFunction, TreeSA
 
-# Experimental: try rw_weight for GPU optimization
+# GPU optimization (see GPU Optimization Guide for rw_weight tuning)
 score = ScoreFunction(
     tc_weight=1.0,
     sc_weight=1.0,
-    rw_weight=0.1,       # Experimental: tune empirically
-    sc_target=30.0       # Your GPU memory
+    rw_weight=10.0,
+    sc_target=30.0
 )
 
 tree = optimize_code(ixs, out, sizes, TreeSA(score=score))
@@ -478,14 +478,12 @@ sc_target = math.log2(memory_gb * 1e9 / bytes_per_element)
 
 ### Q: Why is GPU optimization different?
 
-**A**: GPUs have limited memory bandwidth relative to compute.
+**A**: GPUs have limited memory bandwidth relative to compute (10-100x higher compute-to-memory-bandwidth ratio than CPUs).
 
-On CPU: Memory I/O is fast → `rw_weight=0.0`  
-On GPU: Try `rw_weight=0.1` to `1.0` (experimental, requires profiling)
+- CPU: Memory I/O is fast → `rw_weight=0.0`
+- GPU: Use `rw_weight` to penalize memory I/O
 
-This 20x difference means the optimizer will restructure the contraction to minimize memory transfers, even if it increases FLOPs slightly.
-
-See [GPU Optimization Guide](./guides/gpu-optimization.md).
+See [GPU Optimization Guide](./guides/gpu-optimization.md) for complete tuning methodology.
 
 ### Q: Can I save and load optimized trees?
 
