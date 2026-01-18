@@ -73,7 +73,7 @@ score = ScoreFunction(
 
 - ❌ Using `rw_weight=0.0` (CPU default) on GPU
 - ❌ Wrong `sc_target` (e.g., using CPU memory size for GPU)
-- ❌ Using `optimize_greedy` instead of TreeSA (greedy doesn't optimize for I/O)
+- ❌ Using GreedyMethod instead of TreeSA (greedy doesn't optimize for I/O)
 
 ## Checklist
 
