@@ -64,8 +64,6 @@ from omeco._core import (
     TreeSASlicer,
     # Functions
     optimize_code,
-    optimize_greedy,
-    optimize_treesa,
     contraction_complexity,
     sliced_complexity,
     slice_code,
@@ -82,8 +80,6 @@ __all__ = [
     "TreeSA",
     "TreeSASlicer",
     "optimize_code",
-    "optimize_greedy",
-    "optimize_treesa",
     "contraction_complexity",
     "sliced_complexity",
     "slice_code",

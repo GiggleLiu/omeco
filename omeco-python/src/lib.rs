@@ -59,6 +59,10 @@ impl PyNestedEinsum {
             self.depth()
         )
     }
+
+    fn __str__(&self) -> String {
+        format_nested_tree(&self.inner)
+    }
 }
 
 fn nested_to_dict(py: Python<'_>, nested: &NestedEinsum<i64>) -> PyResult<Py<PyAny>> {
@@ -83,6 +87,101 @@ fn nested_to_dict(py: Python<'_>, nested: &NestedEinsum<i64>) -> PyResult<Py<PyA
         }
     }
     Ok(dict.into())
+}
+
+/// Format a NestedEinsum as an ASCII tree with box-drawing characters.
+fn format_nested_tree(nested: &NestedEinsum<i64>) -> String {
+    let mut output = String::new();
+    format_tree_recursive(nested, &mut output, "", true, true);
+    // Remove trailing newline
+    if output.ends_with('\n') {
+        output.pop();
+    }
+    output
+}
+
+/// Recursively format the tree with proper indentation and box-drawing.
+fn format_tree_recursive(
+    nested: &NestedEinsum<i64>,
+    output: &mut String,
+    prefix: &str,
+    is_last: bool,
+    is_root: bool,
+) {
+    match nested {
+        NestedEinsum::Leaf { tensor_index } => {
+            if !is_root {
+                output.push_str(prefix);
+                output.push_str(if is_last { "└─ " } else { "├─ " });
+            }
+            output.push_str(&format!("tensor_{}\n", tensor_index));
+        }
+        NestedEinsum::Node { args, eins } => {
+            // Format the einsum operation
+            let ixs_str: Vec<String> = eins
+                .ixs
+                .iter()
+                .map(|ix| indices_to_letters(ix))
+                .collect();
+            let iy_str = indices_to_letters(&eins.iy);
+            let einsum_notation = if iy_str.is_empty() {
+                ixs_str.join(", ")
+            } else {
+                format!("{} -> {}", ixs_str.join(", "), iy_str)
+            };
+
+            if !is_root {
+                output.push_str(prefix);
+                output.push_str(if is_last { "└─ " } else { "├─ " });
+            }
+            output.push_str(&einsum_notation);
+            output.push('\n');
+
+            // Format children
+            let child_count = args.len();
+            for (i, child) in args.iter().enumerate() {
+                let child_is_last = i == child_count - 1;
+                let child_prefix = if is_root {
+                    String::new()
+                } else {
+                    format!(
+                        "{}{}",
+                        prefix,
+                        if is_last { "   " } else { "│  " }
+                    )
+                };
+
+                format_tree_recursive(child, output, &child_prefix, child_is_last, false);
+            }
+        }
+    }
+}
+
+/// Convert integer indices to letter representation (1→a, 2→b, ..., 26→z, 27→aa, ...).
+fn indices_to_letters(indices: &[i64]) -> String {
+    indices
+        .iter()
+        .map(|&idx| index_to_letter(idx))
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+/// Convert a single index to letter(s).
+fn index_to_letter(idx: i64) -> String {
+    if idx <= 0 {
+        return format!("_{}", idx);
+    }
+
+    let mut result = String::new();
+    let mut n = idx;
+
+    while n > 0 {
+        let remainder = ((n - 1) % 26) as u8;
+        result.insert(0, (b'a' + remainder) as char);
+        n = (n - 1) / 26;
+    }
+
+    result
 }
 
 /// A sliced einsum with indices to loop over.
