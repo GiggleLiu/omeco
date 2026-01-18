@@ -47,11 +47,12 @@ tree = optimize_code(
 def optimize_greedy(
     ixs: List[List[int]],
     out: List[int],
-    sizes: Dict[int, int]
+    sizes: Dict[int, int],
+    optimizer: Optional[GreedyMethod] = None
 ) -> NestedEinsum
 ```
 
-Optimize using greedy method (shorthand for `optimize_code` with `GreedyMethod()`).
+Optimize using greedy method. The `optimizer` parameter is optional (defaults to `GreedyMethod()`).
 
 **Example**:
 ```python
@@ -73,7 +74,7 @@ def slice_code(
     tree: NestedEinsum,
     ixs: List[List[int]],
     sizes: Dict[int, int],
-    slicer: Slicer
+    slicer: Optional[TreeSASlicer] = None
 ) -> SlicedCode
 ```
 
@@ -83,7 +84,7 @@ Apply slicing to reduce memory usage.
 - `tree`: Optimized contraction tree from `optimize_code`
 - `ixs`: Original index lists
 - `sizes`: Dimension sizes
-- `slicer`: Slicer instance (e.g., `TreeSASlicer.fast()`)
+- `slicer`: Slicer instance (optional, defaults to `TreeSASlicer()`)
 
 **Returns**: `SlicedCode` with slicing applied
 
