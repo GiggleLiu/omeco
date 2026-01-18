@@ -430,17 +430,19 @@ print(f"Got tc: {comp.tc:.2f}")
 
 ## FAQ
 
-### Q: What's the difference between `optimize_code` and `optimize_greedy`?
+### Q: How do I use different optimizers?
 
-**A**: `optimize_code` is a generic function that accepts an optimizer:
+**A**: `optimize_code` is the unified function that accepts different optimizer types:
 ```python
-from omeco import optimize_code, optimize_greedy, TreeSA
+from omeco import optimize_code, GreedyMethod, TreeSA
 
-# These are equivalent
+# Use default optimizer (GreedyMethod)
 tree1 = optimize_code(ixs, out, sizes)
-tree2 = optimize_code(ixs, out, sizes)  # Uses GreedyMethod by default
 
-# TreeSA requires optimize_code
+# Explicitly specify GreedyMethod
+tree2 = optimize_code(ixs, out, sizes, GreedyMethod())
+
+# Use TreeSA optimizer
 tree3 = optimize_code(ixs, out, sizes, TreeSA.fast())
 ```
 
