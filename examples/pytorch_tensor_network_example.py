@@ -6,7 +6,7 @@ Demonstrates: optimize_code, slice_code, and contraction with PyTorch.
 
 import torch
 from omeco import (
-    optimize_code, slice_code, contraction_complexity, sliced_complexity,
+    optimize_code, slice_code,
     GreedyMethod, TreeSA, TreeSASlicer, ScoreFunction, NestedEinsum,
 )
 
@@ -57,8 +57,8 @@ def main():
     tree_greedy = optimize_code(ixs, out, sizes, GreedyMethod())
     tree_treesa = optimize_code(ixs, out, sizes, TreeSA.fast())
     
-    c_greedy = contraction_complexity(tree_greedy, ixs, sizes)
-    c_treesa = contraction_complexity(tree_treesa, ixs, sizes)
+    c_greedy = tree_greedy.complexity(ixs, sizes)
+    c_treesa = tree_treesa.complexity(ixs, sizes)
     
     print(f"Greedy: tc=2^{c_greedy.tc:.1f}, sc=2^{c_greedy.sc:.1f}")
     print(f"TreeSA: tc=2^{c_treesa.tc:.1f}, sc=2^{c_treesa.sc:.1f}")
@@ -66,7 +66,7 @@ def main():
     # 2. Slice to reduce memory (trade space for time)
     slicer = TreeSASlicer.fast(score=ScoreFunction(sc_target=9.0))
     sliced = slice_code(tree_treesa, ixs, sizes, slicer)
-    c_sliced = sliced_complexity(sliced, ixs, sizes)
+    c_sliced = sliced.complexity(ixs, sizes)
     
     print(f"Sliced: tc=2^{c_sliced.tc:.1f}, sc=2^{c_sliced.sc:.1f}, sliced={sliced.slicing()}")
 

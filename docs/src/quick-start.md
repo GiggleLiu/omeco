@@ -7,7 +7,7 @@ This guide shows the basics of tensor contraction optimization.
 ### Python
 
 ```python
-from omeco import optimize_code, contraction_complexity
+from omeco import optimize_code
 
 # Matrix chain: A[i,j] × B[j,k] × C[k,l] → D[i,l]
 ixs = [[0, 1], [1, 2], [2, 3]]  # Input tensor indices
@@ -18,7 +18,7 @@ sizes = {0: 10, 1: 100, 2: 20, 3: 5}  # Dimension sizes
 tree = optimize_code(ixs, out, sizes)
 
 # Compute complexity
-complexity = contraction_complexity(tree, ixs, sizes)
+complexity = tree.complexity(ixs, sizes)
 print(f"Time complexity: 2^{complexity.tc:.2f} FLOPs")
 print(f"Space complexity: 2^{complexity.sc:.2f} elements")
 print(f"Actual FLOPs: {complexity.flops():,.0f}")
@@ -51,7 +51,7 @@ ab, bd -> ad
 
 ```rust
 use omeco::{
-    EinCode, GreedyMethod, optimize_code, contraction_complexity
+    EinCode, GreedyMethod, optimize_code
 };
 use std::collections::HashMap;
 
@@ -176,13 +176,13 @@ leaves = tree.leaf_indices()
 For large tensor networks that don't fit in memory:
 
 ```python
-from omeco import slice_code, sliced_complexity, TreeSASlicer, ScoreFunction
+from omeco import slice_code, TreeSASlicer, ScoreFunction
 
 # Optimize contraction first
 tree = optimize_code(ixs, out, sizes)
 
 # Check if memory is too large
-complexity = contraction_complexity(tree, ixs, sizes)
+complexity = tree.complexity(ixs, sizes)
 if complexity.sc > 25.0:  # More than 2^25 elements (~256MB for float64)
     # Slice to reduce memory
     score = ScoreFunction(sc_target=25.0)
@@ -190,7 +190,7 @@ if complexity.sc > 25.0:  # More than 2^25 elements (~256MB for float64)
     sliced = slice_code(tree, ixs, sizes, slicer)
     
     # Check new complexity
-    sliced_comp = sliced_complexity(sliced, ixs, sizes)
+    sliced_comp = sliced.complexity(ixs, sizes)
     print(f"Original space: 2^{complexity.sc:.2f}")
     print(f"Sliced space: 2^{sliced_comp.sc:.2f}")
     print(f"Sliced indices: {sliced.slicing()}")

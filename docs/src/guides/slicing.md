@@ -44,13 +44,13 @@ sc > sc_target?
 ### Automatic Slicing
 
 ```python
-from omeco import optimize_code, slice_code, TreeSASlicer, ScoreFunction, contraction_complexity, sliced_complexity
+from omeco import optimize_code, slice_code, TreeSASlicer, ScoreFunction, 
 
 # 1. Optimize contraction order
 tree = optimize_code(ixs, out, sizes)
 
 # 2. Check if memory is too large
-complexity = contraction_complexity(tree, ixs, sizes)
+complexity = tree.complexity(ixs, sizes)
 if complexity.sc > 28.0:  # More than 256MB
     # 3. Slice to reduce memory
     score = ScoreFunction(sc_target=28.0)
@@ -58,7 +58,7 @@ if complexity.sc > 28.0:  # More than 256MB
     sliced = slice_code(tree, ixs, sizes, slicer)
     
     # 4. Verify reduction
-    sliced_comp = sliced_complexity(sliced, ixs, sizes)
+    sliced_comp = sliced.complexity(ixs, sizes)
     print(f"Original: 2^{complexity.sc:.2f} elements")
     print(f"Sliced: 2^{sliced_comp.sc:.2f} elements")
     print(f"Sliced indices: {sliced.slicing()}")
@@ -121,14 +121,14 @@ sizes = {0: 10000, 1: 10000, 2: 10000}
 
 # Without slicing
 tree = optimize_code(ixs, out, sizes)
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 # tc ≈ 33.2 (10^10 FLOPs)
 # sc ≈ 26.6 (100M elements = 800MB for float64)
 
 # With slicing on index 1 (middle dimension)
 slicer = TreeSASlicer.fast(fixed_slices=[1])
 sliced = slice_code(tree, ixs, sizes, slicer)
-sliced_comp = sliced_complexity(sliced, ixs, sizes)
+sliced_comp = sliced.complexity(ixs, sizes)
 # tc ≈ 33.2 (same FLOPs, distributed over slices)
 # sc ≈ 23.3 (10M elements = 80MB for float64)
 
@@ -190,7 +190,7 @@ sliced = slice_code(tree, ixs, sizes, slicer)
 ## Example Workflow
 
 ```python
-from omeco import optimize_code, slice_code, contraction_complexity, sliced_complexity
+from omeco import optimize_code, slice_code, 
 from omeco import TreeSA, TreeSASlicer, ScoreFunction
 
 # Problem setup
@@ -200,7 +200,7 @@ sizes = {i: 32 for i in range(8)}
 
 # Step 1: Optimize contraction order
 tree = optimize_code(ixs, out, sizes, TreeSA.fast())
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 print(f"Optimized: sc = 2^{comp.sc:.2f}")
 
 # Step 2: Check if slicing needed
@@ -212,7 +212,7 @@ if comp.sc > 20.0:  # Exceeds 1MB
     sliced = slice_code(tree, ixs, sizes, slicer)
     
     # Step 4: Verify
-    sliced_comp = sliced_complexity(sliced, ixs, sizes)
+    sliced_comp = sliced.complexity(ixs, sizes)
     print(f"Sliced: sc = 2^{sliced_comp.sc:.2f}")
     print(f"Sliced indices: {sliced.slicing()}")
     
