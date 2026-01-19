@@ -44,7 +44,7 @@ sc > sc_target?
 ### Automatic Slicing
 
 ```python
-from omeco import optimize_code, slice_code, TreeSASlicer, ScoreFunction, 
+from omeco import optimize_code, slice_code, TreeSASlicer, ScoreFunction
 
 # 1. Optimize contraction order
 tree = optimize_code(ixs, out, sizes)
@@ -190,7 +190,7 @@ sliced = slice_code(tree, ixs, sizes, slicer)
 ## Example Workflow
 
 ```python
-from omeco import optimize_code, slice_code, 
+from omeco import optimize_code, slice_code
 from omeco import TreeSA, TreeSASlicer, ScoreFunction
 
 # Problem setup

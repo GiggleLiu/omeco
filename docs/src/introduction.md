@@ -36,7 +36,7 @@ Finding the optimal order is NP-complete, but heuristics find near-optimal solut
 **Python:**
 
 ```python
-from omeco import optimize_code, 
+from omeco import optimize_code
 
 # Matrix chain: A[i,j] × B[j,k] × C[k,l]
 ixs = [[0, 1], [1, 2], [2, 3]]

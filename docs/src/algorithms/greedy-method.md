@@ -73,7 +73,7 @@ tree = optimize_code(ixs, out, sizes, method)
 ## Example: Matrix Chain
 
 ```python
-from omeco import optimize_code, 
+from omeco import optimize_code
 
 # A[100×10] × B[10×20] × C[20×5]
 ixs = [[0, 1], [1, 2], [2, 3]]

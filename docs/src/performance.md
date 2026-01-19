@@ -132,7 +132,7 @@ for problem in rust['results']:
 
 ```python
 import time
-from omeco import optimize_code, TreeSA, 
+from omeco import optimize_code, TreeSA
 
 # Time optimization
 start = time.time()

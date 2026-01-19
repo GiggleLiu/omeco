@@ -80,7 +80,7 @@ print(sys.path)  # Check if package is in path
 
 1. **Check space complexity**:
    ```python
-   from omeco import optimize_code, 
+   from omeco import optimize_code
    
    tree = optimize_code(ixs, out, sizes)
    comp = tree.complexity(ixs, sizes)
@@ -246,7 +246,7 @@ tree = optimize_code(ixs, out, sizes, TreeSA.fast())
 
 Comparison:
 ```python
-from omeco import optimize_code, GreedyMethod, TreeSA, 
+from omeco import optimize_code, GreedyMethod, TreeSA
 
 # Greedy (fast, lower quality)
 greedy_tree = optimize_code(ixs, out, sizes)
@@ -277,7 +277,7 @@ print(f"Improvement: {2**(greedy_comp.tc - sa_comp.tc):.1f}x faster")
 
 2. **Use best-of-many**:
    ```python
-   from omeco import TreeSA, 
+   from omeco import TreeSA
    
    best_tree = None
    best_tc = float('inf')
@@ -336,7 +336,7 @@ See [PyTorch Integration Guide](./guides/pytorch-integration.md) for complete ex
 
 **Diagnosis**:
 ```python
-from omeco import slice_code, 
+from omeco import slice_code
 
 # Before slicing
 comp_original = tree.complexity(ixs, sizes)
@@ -410,7 +410,7 @@ println(tree)
 When reporting issues, provide:
 
 ```python
-from omeco import optimize_code, 
+from omeco import optimize_code
 
 # Minimal example
 ixs = [[0, 1], [1, 2]]

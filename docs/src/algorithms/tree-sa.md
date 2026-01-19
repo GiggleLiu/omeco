@@ -107,7 +107,7 @@ optimizer = TreeSA(ntrials=5, niters=50, score=score)
 ## Example Comparison
 
 ```python
-from omeco import optimize_code, GreedyMethod, TreeSA, 
+from omeco import optimize_code, GreedyMethod, TreeSA
 
 # Same problem, different optimizers
 ixs = [[0, 1, 2], [2, 3, 4], [4, 5, 6], [6, 7, 0]]  # Cycle

@@ -97,7 +97,7 @@ Calculate complexity metrics for a contraction tree.
 
 **Example**:
 ```python
-from omeco import optimize_code, 
+from omeco import optimize_code
 
 tree = optimize_code(ixs, out, sizes)
 comp = tree.complexity(ixs, sizes)
@@ -121,7 +121,7 @@ Calculate complexity for sliced code.
 
 **Example**:
 ```python
-from omeco import slice_code, 
+from omeco import slice_code
 
 sliced = slice_code(tree, ixs, sizes, slicer)
 comp = sliced.complexity(ixs, sizes)
@@ -486,7 +486,7 @@ sliced = slice_code(tree, ixs, sizes, slicer)
 ### Check complexity
 
 ```python
-from omeco import optimize_code, 
+from omeco import optimize_code
 
 tree = optimize_code(ixs, out, sizes)
 comp = tree.complexity(ixs, sizes)
