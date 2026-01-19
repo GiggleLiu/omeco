@@ -15,7 +15,7 @@ omeco optimizes the **contraction order**, then you execute with PyTorch tensors
 
 ```python
 import torch
-from omeco import optimize_code, contraction_complexity
+from omeco import optimize_code, 
 
 # Define tensor network structure
 ixs = [[0, 1], [1, 2], [2, 3]]  # Matrix chain

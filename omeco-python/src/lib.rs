@@ -63,6 +63,29 @@ impl PyNestedEinsum {
     fn __str__(&self) -> String {
         format_nested_tree(&self.inner)
     }
+
+    /// Compute the contraction complexity of this einsum code.
+    ///
+    /// Args:
+    ///     ixs: List of input tensor index lists.
+    ///     sizes: Dictionary mapping indices to their dimensions.
+    ///
+    /// Returns:
+    ///     ContractionComplexity with tc, sc, and rwc metrics.
+    ///
+    /// Example:
+    ///     ```python
+    ///     tree = optimize_code(ixs, out, sizes)
+    ///     comp = tree.complexity(ixs, sizes)
+    ///     print(f"Time: 2^{comp.tc:.2f}, Space: 2^{comp.sc:.2f}")
+    ///     ```
+    fn complexity(
+        &self,
+        ixs: Vec<Vec<i64>>,
+        sizes: HashMap<i64, usize>,
+    ) -> PyContractionComplexity {
+        omeco::contraction_complexity(&self.inner, &sizes, &ixs).into()
+    }
 }
 
 fn nested_to_dict(py: Python<'_>, nested: &NestedEinsum<i64>) -> PyResult<Py<PyAny>> {
@@ -213,6 +236,32 @@ impl PySlicedEinsum {
 
     fn __repr__(&self) -> String {
         format!("SlicedEinsum(slicing={:?})", self.inner.slicing)
+    }
+
+    /// Compute the contraction complexity of this sliced einsum code.
+    ///
+    /// The complexity accounts for slicing by setting sliced indices to size 1,
+    /// representing the complexity of computing a single slice.
+    ///
+    /// Args:
+    ///     ixs: List of input tensor index lists.
+    ///     sizes: Dictionary mapping indices to their dimensions.
+    ///
+    /// Returns:
+    ///     ContractionComplexity with adjusted metrics for sliced computation.
+    ///
+    /// Example:
+    ///     ```python
+    ///     sliced = slice_code(tree, ixs, sizes, slicer)
+    ///     comp = sliced.complexity(ixs, sizes)
+    ///     print(f"Space per slice: 2^{comp.sc:.2f}")
+    ///     ```
+    fn complexity(
+        &self,
+        ixs: Vec<Vec<i64>>,
+        sizes: HashMap<i64, usize>,
+    ) -> PyContractionComplexity {
+        omeco::sliced_complexity(&self.inner, &sizes, &ixs).into()
     }
 }
 
@@ -661,6 +710,9 @@ fn optimize_treesa(
 
 /// Compute the contraction complexity of an optimized tree.
 ///
+/// .. deprecated:: 0.3.0
+///     Use `tree.complexity(ixs, sizes)` instead.
+///
 /// Args:
 ///     tree: Optimized contraction tree.
 ///     ixs: Original index lists for each tensor.
@@ -670,14 +722,29 @@ fn optimize_treesa(
 ///     ContractionComplexity with tc, sc, and rwc metrics.
 #[pyfunction]
 fn contraction_complexity(
+    py: Python<'_>,
     tree: &PyNestedEinsum,
     ixs: Vec<Vec<i64>>,
     sizes: HashMap<i64, usize>,
-) -> PyContractionComplexity {
-    omeco::contraction_complexity(&tree.inner, &sizes, &ixs).into()
+) -> PyResult<PyContractionComplexity> {
+    // Emit deprecation warning
+    let warnings = py.import("warnings")?;
+    warnings.call_method1(
+        "warn",
+        (
+            "contraction_complexity() is deprecated, use tree.complexity(ixs, sizes) instead",
+            py.get_type::<pyo3::exceptions::PyDeprecationWarning>(),
+            2,
+        ),
+    )?;
+
+    Ok(omeco::contraction_complexity(&tree.inner, &sizes, &ixs).into())
 }
 
 /// Compute the complexity of a sliced contraction.
+///
+/// .. deprecated:: 0.3.0
+///     Use `sliced.complexity(ixs, sizes)` instead.
 ///
 /// Args:
 ///     sliced: Sliced einsum.
@@ -688,11 +755,23 @@ fn contraction_complexity(
 ///     ContractionComplexity with adjusted metrics.
 #[pyfunction]
 fn sliced_complexity(
+    py: Python<'_>,
     sliced: &PySlicedEinsum,
     ixs: Vec<Vec<i64>>,
     sizes: HashMap<i64, usize>,
-) -> PyContractionComplexity {
-    omeco::sliced_complexity(&sliced.inner, &sizes, &ixs).into()
+) -> PyResult<PyContractionComplexity> {
+    // Emit deprecation warning
+    let warnings = py.import("warnings")?;
+    warnings.call_method1(
+        "warn",
+        (
+            "sliced_complexity() is deprecated, use sliced.complexity(ixs, sizes) instead",
+            py.get_type::<pyo3::exceptions::PyDeprecationWarning>(),
+            2,
+        ),
+    )?;
+
+    Ok(omeco::sliced_complexity(&sliced.inner, &sizes, &ixs).into())
 }
 
 /// Create a size dictionary with uniform dimensions.

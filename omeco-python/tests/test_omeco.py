@@ -7,8 +7,6 @@ from omeco import (
     TreeSASlicer,
     ScoreFunction,
     optimize_code,
-    contraction_complexity,
-    sliced_complexity,
     slice_code,
     SlicedEinsum,
     uniform_size_dict,
@@ -56,7 +54,7 @@ def test_contraction_complexity():
     sizes = {0: 10, 1: 20, 2: 10}
     
     tree = optimize_code(ixs, out, sizes)
-    complexity = contraction_complexity(tree, ixs, sizes)
+    complexity = tree.complexity(ixs, sizes)
     
     assert complexity.tc > 0
     assert complexity.sc > 0
@@ -76,7 +74,7 @@ def test_sliced_einsum():
     assert sliced.num_slices() == 1
     assert 1 in sliced.slicing()
     
-    complexity = sliced_complexity(sliced, ixs, sizes)
+    complexity = sliced.complexity(ixs, sizes)
     assert complexity.sc > 0
 
 
@@ -258,12 +256,12 @@ def test_slice_code_reduces_space():
     sizes = uniform_size_dict(ixs, out, 64)
 
     tree = optimize_code(ixs, out, sizes, GreedyMethod())
-    original = contraction_complexity(tree, ixs, sizes)
+    original = tree.complexity(ixs, sizes)
 
     slicer = TreeSASlicer.fast(score=ScoreFunction(sc_target=8.0))
     sliced = slice_code(tree, ixs, sizes, slicer)
 
-    sliced_comp = sliced_complexity(sliced, ixs, sizes)
+    sliced_comp = sliced.complexity(ixs, sizes)
 
     # Space complexity should be reduced or at least not increased
     assert sliced_comp.sc <= original.sc + 1.0
@@ -561,7 +559,7 @@ def test_3regular_graph_greedy():
     assert tree.is_binary()
     
     # Compute complexity
-    cc = contraction_complexity(tree, ixs, sizes)
+    cc = tree.complexity(ixs, sizes)
     
     # For a 50-node 3-regular graph with d=2, greedy should achieve sc around 10-15
     assert cc.sc <= 15, f"Greedy sc={cc.sc} too high for 50-node 3-regular graph"
@@ -583,7 +581,7 @@ def test_3regular_graph_treesa():
     
     # First get greedy baseline
     greedy_tree = optimize_code(ixs, out, sizes, GreedyMethod())
-    greedy_cc = contraction_complexity(greedy_tree, ixs, sizes)
+    greedy_cc = greedy_tree.complexity(ixs, sizes)
     
     # Optimize with TreeSA - use enough trials for reliable results
     # Target a reasonable space complexity for 50-node 3-regular graph
@@ -595,7 +593,7 @@ def test_3regular_graph_treesa():
     assert treesa_tree is not None
     assert treesa_tree.is_binary()
     
-    treesa_cc = contraction_complexity(treesa_tree, ixs, sizes)
+    treesa_cc = treesa_tree.complexity(ixs, sizes)
     
     # For 50-node 3-regular graph with d=2, sc should be around 10-12
     # Both greedy and TreeSA should achieve reasonable complexity
@@ -616,12 +614,12 @@ def test_3regular_graph_larger():
     
     # Greedy optimization
     greedy_tree = optimize_code(ixs, out, sizes, GreedyMethod())
-    greedy_cc = contraction_complexity(greedy_tree, ixs, sizes)
+    greedy_cc = greedy_tree.complexity(ixs, sizes)
     
     # TreeSA optimization with fast settings
     opt = TreeSA.fast(score=ScoreFunction(sc_target=20.0))
     treesa_tree = optimize_code(ixs, out, sizes, opt)
-    treesa_cc = contraction_complexity(treesa_tree, ixs, sizes)
+    treesa_cc = treesa_tree.complexity(ixs, sizes)
     
     # For 100-node 3-regular graph, sc should be achievable around 15-30
     # Using TreeSA.fast() with randomness, allow some tolerance
@@ -661,7 +659,7 @@ def test_issue_6_hyperedge_with_trace_and_broadcast():
     assert greedy_tree is not None
     assert greedy_tree.is_binary()
 
-    greedy_cc = contraction_complexity(greedy_tree, ixs, sizes)
+    greedy_cc = greedy_tree.complexity(ixs, sizes)
     assert greedy_cc.tc > 0, "Time complexity should be positive"
     assert greedy_cc.sc > 0, "Space complexity should be positive"
 
@@ -670,7 +668,7 @@ def test_issue_6_hyperedge_with_trace_and_broadcast():
     assert treesa_tree is not None
     assert treesa_tree.is_binary()
 
-    treesa_cc = contraction_complexity(treesa_tree, ixs, sizes)
+    treesa_cc = treesa_tree.complexity(ixs, sizes)
     assert treesa_cc.tc > 0
     assert treesa_cc.sc > 0
 
@@ -698,7 +696,7 @@ def test_hyperedge_multiple_occurrences():
     assert greedy_tree is not None
     assert greedy_tree.is_binary()
 
-    cc = contraction_complexity(greedy_tree, ixs, sizes)
+    cc = greedy_tree.complexity(ixs, sizes)
     assert cc.tc > 0
     assert cc.sc > 0
 
