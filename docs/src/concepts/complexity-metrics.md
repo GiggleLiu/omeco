@@ -15,7 +15,7 @@ omeco tracks three key metrics for tensor contractions.
 
 **Example**:
 ```python
-complexity = contraction_complexity(tree, ixs, sizes)
+complexity = tree.complexity(ixs, sizes)
 print(f"Time: 2^{complexity.tc:.2f} FLOPs")
 print(f"Actual FLOPs: {complexity.flops():,.0f}")
 ```
@@ -31,7 +31,7 @@ print(f"Actual FLOPs: {complexity.flops():,.0f}")
 
 **Example**:
 ```python
-complexity = contraction_complexity(tree, ixs, sizes)
+complexity = tree.complexity(ixs, sizes)
 print(f"Space: 2^{complexity.sc:.2f} elements")
 print(f"Peak memory: {complexity.peak_memory():,.0f} elements")
 
@@ -171,11 +171,11 @@ Use when:
 ```python
 # Greedy result
 tree_greedy = optimize_code(ixs, out, sizes, GreedyMethod())
-comp_greedy = contraction_complexity(tree_greedy, ixs, sizes)
+comp_greedy = tree_greedy.complexity(ixs, sizes)
 
 # TreeSA result
 tree_sa = optimize_code(ixs, out, sizes, TreeSA.fast())
-comp_sa = contraction_complexity(tree_sa, ixs, sizes)
+comp_sa = tree_sa.complexity(ixs, sizes)
 
 # Compare
 print(f"Greedy - Time: 2^{comp_greedy.tc:.2f}, Space: 2^{comp_greedy.sc:.2f}")

@@ -80,10 +80,10 @@ print(sys.path)  # Check if package is in path
 
 1. **Check space complexity**:
    ```python
-   from omeco import optimize_code, contraction_complexity
+   from omeco import optimize_code
    
    tree = optimize_code(ixs, out, sizes)
-   comp = contraction_complexity(tree, ixs, sizes)
+   comp = tree.complexity(ixs, sizes)
    print(f"Space complexity: 2^{comp.sc:.2f} elements")
 
    # Calculate memory usage
@@ -169,7 +169,7 @@ sizes = {0: 10, 1: 20, 2: 10}
 
 **Diagnosis**: Check if optimization used correct GPU settings:
 ```python
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 print(f"Read-write complexity: 2^{comp.rwc:.2f}")
 ```
 
@@ -206,7 +206,7 @@ See [GPU Optimization Guide](./guides/gpu-optimization.md) for details.
 
 2. **Check complexity metrics**:
    ```python
-   comp = contraction_complexity(tree, ixs, sizes)
+   comp = tree.complexity(ixs, sizes)
    print(f"tc: {comp.tc:.2f}, sc: {comp.sc:.2f}, rwc: {comp.rwc:.2f}")
    ```
 
@@ -246,15 +246,15 @@ tree = optimize_code(ixs, out, sizes, TreeSA.fast())
 
 Comparison:
 ```python
-from omeco import optimize_code, GreedyMethod, TreeSA, contraction_complexity
+from omeco import optimize_code, GreedyMethod, TreeSA
 
 # Greedy (fast, lower quality)
 greedy_tree = optimize_code(ixs, out, sizes)
-greedy_comp = contraction_complexity(greedy_tree, ixs, sizes)
+greedy_comp = greedy_tree.complexity(ixs, sizes)
 
 # TreeSA (slower, higher quality)
 sa_tree = optimize_code(ixs, out, sizes, TreeSA.fast())
-sa_comp = contraction_complexity(sa_tree, ixs, sizes)
+sa_comp = sa_tree.complexity(ixs, sizes)
 
 print(f"Greedy tc: {greedy_comp.tc:.2f}")
 print(f"TreeSA tc: {sa_comp.tc:.2f}")
@@ -277,14 +277,14 @@ print(f"Improvement: {2**(greedy_comp.tc - sa_comp.tc):.1f}x faster")
 
 2. **Use best-of-many**:
    ```python
-   from omeco import TreeSA, contraction_complexity
+   from omeco import TreeSA
    
    best_tree = None
    best_tc = float('inf')
    
    for _ in range(10):
        tree = optimize_code(ixs, out, sizes, TreeSA.fast())
-       comp = contraction_complexity(tree, ixs, sizes)
+       comp = tree.complexity(ixs, sizes)
        if comp.tc < best_tc:
            best_tc = comp.tc
            best_tree = tree
@@ -336,14 +336,14 @@ See [PyTorch Integration Guide](./guides/pytorch-integration.md) for complete ex
 
 **Diagnosis**:
 ```python
-from omeco import slice_code, sliced_complexity, contraction_complexity
+from omeco import slice_code
 
 # Before slicing
-comp_original = contraction_complexity(tree, ixs, sizes)
+comp_original = tree.complexity(ixs, sizes)
 
 # After slicing
 sliced = slice_code(tree, ixs, sizes, slicer)
-comp_sliced = sliced_complexity(sliced, ixs, sizes)
+comp_sliced = sliced.complexity(ixs, sizes)
 
 print(f"Original sc: 2^{comp_original.sc:.2f}")
 print(f"Sliced sc: 2^{comp_sliced.sc:.2f}")
@@ -377,7 +377,7 @@ tree = optimize_code(ixs, out, sizes)
 print(f"Tree:\n{tree}")
 
 # Check complexity
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 print(f"tc: 2^{comp.tc:.2f}, sc: 2^{comp.sc:.2f}, rwc: 2^{comp.rwc:.2f}")
 
 # Check slicing
@@ -410,7 +410,7 @@ println(tree)
 When reporting issues, provide:
 
 ```python
-from omeco import optimize_code, contraction_complexity
+from omeco import optimize_code
 
 # Minimal example
 ixs = [[0, 1], [1, 2]]
@@ -420,7 +420,7 @@ sizes = {0: 10, 1: 20, 2: 10}
 tree = optimize_code(ixs, out, sizes)
 print(f"Tree:\n{tree}")
 
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 print(f"Complexity: tc={comp.tc:.2f}, sc={comp.sc:.2f}")
 
 # What was expected vs what you got

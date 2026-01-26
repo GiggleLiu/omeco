@@ -132,7 +132,7 @@ for problem in rust['results']:
 
 ```python
 import time
-from omeco import optimize_code, TreeSA, contraction_complexity
+from omeco import optimize_code, TreeSA
 
 # Time optimization
 start = time.time()
@@ -140,7 +140,7 @@ tree = optimize_code(ixs, out, sizes, TreeSA.fast())
 opt_time = time.time() - start
 
 # Check complexity
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 
 print(f"Optimization: {opt_time:.3f}s")
 print(f"Time complexity: 2^{comp.tc:.2f} = {2**comp.tc:.2e} FLOPs")

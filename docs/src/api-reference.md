@@ -97,10 +97,10 @@ Calculate complexity metrics for a contraction tree.
 
 **Example**:
 ```python
-from omeco import optimize_code, contraction_complexity
+from omeco import optimize_code
 
 tree = optimize_code(ixs, out, sizes)
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 
 print(f"Time: 2^{comp.tc:.2f} FLOPs")
 print(f"Space: 2^{comp.sc:.2f} elements")
@@ -121,10 +121,10 @@ Calculate complexity for sliced code.
 
 **Example**:
 ```python
-from omeco import slice_code, sliced_complexity
+from omeco import slice_code
 
 sliced = slice_code(tree, ixs, sizes, slicer)
-comp = sliced_complexity(sliced, ixs, sizes)
+comp = sliced.complexity(ixs, sizes)
 print(f"Sliced space: 2^{comp.sc:.2f}")
 ```
 
@@ -339,7 +339,7 @@ comp.rwc: float  # Read-write complexity (log₂ elements)
 
 **Example**:
 ```python
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 
 # Interpret log₂ values
 flops = 2 ** comp.tc
@@ -486,10 +486,10 @@ sliced = slice_code(tree, ixs, sizes, slicer)
 ### Check complexity
 
 ```python
-from omeco import optimize_code, contraction_complexity
+from omeco import optimize_code
 
 tree = optimize_code(ixs, out, sizes)
-comp = contraction_complexity(tree, ixs, sizes)
+comp = tree.complexity(ixs, sizes)
 
 print(f"Time: 2^{comp.tc:.2f} FLOPs = {2**comp.tc:.2e} FLOPs")
 print(f"Space: 2^{comp.sc:.2f} elements = {2**comp.sc:.2e} elements")

@@ -36,7 +36,7 @@ Finding the optimal order is NP-complete, but heuristics find near-optimal solut
 **Python:**
 
 ```python
-from omeco import optimize_code, contraction_complexity
+from omeco import optimize_code
 
 # Matrix chain: A[i,j] × B[j,k] × C[k,l]
 ixs = [[0, 1], [1, 2], [2, 3]]
@@ -44,14 +44,14 @@ out = [0, 3]
 sizes = {0: 10, 1: 100, 2: 20, 3: 5}
 
 tree = optimize_code(ixs, out, sizes)
-complexity = contraction_complexity(tree, ixs, sizes)
+complexity = tree.complexity(ixs, sizes)
 print(f"Time: 2^{complexity.tc:.2f}, Space: 2^{complexity.sc:.2f}")
 ```
 
 **Rust:**
 
 ```rust
-use omeco::{EinCode, GreedyMethod, optimize_code, contraction_complexity};
+use omeco::{EinCode, GreedyMethod, optimize_code};
 use std::collections::HashMap;
 
 let code = EinCode::new(vec![vec![0, 1], vec![1, 2], vec![2, 3]], vec![0, 3]);

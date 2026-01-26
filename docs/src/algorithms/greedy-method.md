@@ -73,7 +73,7 @@ tree = optimize_code(ixs, out, sizes, method)
 ## Example: Matrix Chain
 
 ```python
-from omeco import optimize_code, contraction_complexity
+from omeco import optimize_code
 
 # A[100×10] × B[10×20] × C[20×5]
 ixs = [[0, 1], [1, 2], [2, 3]]
@@ -123,7 +123,7 @@ Alternative order `(A×B)×C` would cost: 100×10×20 + 100×20×5 = 30,000 FLOP
 
    for _ in range(10):
        tree = optimize_code(ixs, out, sizes, GreedyMethod(alpha=0.3))
-       complexity = contraction_complexity(tree, ixs, sizes)
+       complexity = tree.complexity(ixs, sizes)
        if complexity.tc < best_complexity:
            best_tree = tree
            best_complexity = complexity.tc
@@ -132,7 +132,7 @@ Alternative order `(A×B)×C` would cost: 100×10×20 + 100×20×5 = 30,000 FLOP
 3. **Combine with slicing** if memory is tight:
    ```python
    tree = optimize_code(ixs, out, sizes)
-   if contraction_complexity(tree, ixs, sizes).sc > 25.0:
+   if tree.complexity(ixs, sizes).sc > 25.0:
        sliced = slice_code(tree, ixs, sizes, TreeSASlicer.fast())
    ```
 

@@ -191,7 +191,7 @@ score = ScoreFunction(
 1. **Start with defaults**:
    ```python
    tree = optimize_code(ixs, out, sizes)
-   complexity = contraction_complexity(tree, ixs, sizes)
+   complexity = tree.complexity(ixs, sizes)
    print(f"tc: {complexity.tc:.2f}, sc: {complexity.sc:.2f}")
    ```
 
@@ -208,7 +208,7 @@ score = ScoreFunction(
 
 4. **Verify improvement**:
    ```python
-   new_complexity = contraction_complexity(tree, ixs, sizes)
+   new_complexity = tree.complexity(ixs, sizes)
    print(f"New tc: {new_complexity.tc:.2f}, sc: {new_complexity.sc:.2f}")
    ```
 
