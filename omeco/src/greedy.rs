@@ -197,17 +197,17 @@ pub fn tree_greedy<E: Label>(
         .map(|&v| (v, ContractionTree::leaf(v)))
         .collect();
 
-    // Initialize priority queue with all pairs
+    // Initialize priority queue with all pairs (including disconnected tensors for outer products)
     let mut pq = PriorityQueue::new();
     let vertices: Vec<usize> = il.vertices().cloned().collect();
 
     for (i, &vi) in vertices.iter().enumerate() {
         for &vj in &vertices[i + 1..] {
-            if il.are_neighbors(&vi, &vj) {
-                let dims = ContractionDims::compute(&il, log2_sizes, &vi, &vj);
-                let loss = greedy_loss(&dims, alpha);
-                pq.push((vi.min(vj), vi.max(vj)), Cost(loss));
-            }
+            // Include ALL pairs, not just neighbors - this handles outer products
+            // where tensors have no shared indices (issue #11)
+            let dims = ContractionDims::compute(&il, log2_sizes, &vi, &vj);
+            let loss = greedy_loss(&dims, alpha);
+            pq.push((vi.min(vj), vi.max(vj)), Cost(loss));
         }
     }
 
@@ -254,12 +254,15 @@ pub fn tree_greedy<E: Label>(
         // Store the new tree
         trees.insert(new_v, new_tree);
 
-        // Update costs for neighbors of the new vertex
-        for neighbor in il.neighbors(&new_v) {
-            let pair_key = (new_v.min(neighbor), new_v.max(neighbor));
-            let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &neighbor);
-            let loss = greedy_loss(&new_dims, alpha);
-            pq.push(pair_key, Cost(loss));
+        // Update costs for ALL remaining vertices (not just neighbors)
+        // This handles outer products where tensors have no shared indices
+        for &other_v in il.vertices() {
+            if other_v != new_v {
+                let pair_key = (new_v.min(other_v), new_v.max(other_v));
+                let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &other_v);
+                let loss = greedy_loss(&new_dims, alpha);
+                pq.push(pair_key, Cost(loss));
+            }
         }
     }
 
@@ -797,6 +800,141 @@ mod tests {
         let result = tree_greedy(&il, &log2_sizes, 0.0, 0.0);
         // Even disconnected tensors should produce a result
         assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_outer_product_returns_node_not_leaf() {
+        // Regression test for issue #11
+        // Outer product: i,j -> ij (no shared indices between tensors)
+        // optimize_code was returning Leaf { tensor_index: 0 } instead of Node
+        let ixs = vec![vec![0usize], vec![1usize]]; // tensor A has index 0, tensor B has index 1
+        let iy = vec![0usize, 1]; // output has indices 0,1
+        let code = EinCode::new(ixs, iy);
+
+        let size_dict: HashMap<usize, usize> = [(0, 2), (1, 3)].into();
+        let optimizer = GreedyMethod::new(0.0, 0.0);
+
+        let result = optimize_greedy(&code, &size_dict, &optimizer);
+
+        assert!(result.is_some(), "Should return Some for multi-tensor einsum");
+        let nested = result.unwrap();
+
+        // For a 2-tensor operation, we should get a Node, not a Leaf
+        assert!(
+            !nested.is_leaf(),
+            "Multi-tensor outer product should return Node, not Leaf. Got: {:?}",
+            nested
+        );
+        assert_eq!(
+            nested.leaf_count(),
+            2,
+            "Should have 2 leaves for 2 input tensors"
+        );
+        assert!(nested.is_binary(), "Should be a binary tree");
+    }
+
+    #[test]
+    fn test_outer_product_three_tensors() {
+        // Three tensors with no shared indices (all outer products)
+        let ixs = vec![vec!['a'], vec!['b'], vec!['c']];
+        let iy = vec!['a', 'b', 'c'];
+        let code = EinCode::new(ixs, iy);
+
+        let mut size_dict = HashMap::new();
+        size_dict.insert('a', 2);
+        size_dict.insert('b', 3);
+        size_dict.insert('c', 4);
+
+        let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
+
+        assert!(result.is_some());
+        let nested = result.unwrap();
+
+        assert!(!nested.is_leaf(), "3-tensor operation should not return Leaf");
+        assert_eq!(nested.leaf_count(), 3);
+        assert!(nested.is_binary());
+    }
+
+    #[test]
+    fn test_disconnected_contraction_tree() {
+        // From Julia test: disconnect contraction tree
+        // Tensor ['f'] is disconnected from other tensors
+        // eincode = EinCode([['a', 'b'], ['a', 'c', 'd'], ['b', 'c', 'e'], ['e'], ['f']], ['a', 'f'])
+        let ixs = vec![
+            vec!['a', 'b'],
+            vec!['a', 'c', 'd'],
+            vec!['b', 'c', 'e'],
+            vec!['e'],
+            vec!['f'],  // disconnected tensor
+        ];
+        let iy = vec!['a', 'f'];
+        let code = EinCode::new(ixs, iy);
+
+        let mut size_dict = HashMap::new();
+        for (i, c) in ['a', 'b', 'c', 'd', 'e', 'f'].iter().enumerate() {
+            size_dict.insert(*c, 1 << (i + 1)); // sizes: 2, 4, 8, 16, 32, 64
+        }
+
+        let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
+
+        assert!(result.is_some(), "Disconnected contraction tree should be optimizable");
+        let nested = result.unwrap();
+
+        // Should include all 5 tensors
+        assert_eq!(nested.leaf_count(), 5, "Should have 5 leaves for 5 input tensors");
+        assert!(nested.is_binary(), "Should produce a binary tree");
+    }
+
+    #[test]
+    fn test_mixed_connected_and_disconnected_tensors() {
+        // Some tensors share indices, some don't
+        // A[i,j], B[j,k], C[m] - C is disconnected from A and B
+        let ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['m']];
+        let iy = vec!['i', 'k', 'm'];
+        let code = EinCode::new(ixs, iy);
+
+        let mut size_dict = HashMap::new();
+        size_dict.insert('i', 2);
+        size_dict.insert('j', 3);
+        size_dict.insert('k', 4);
+        size_dict.insert('m', 5);
+
+        let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
+
+        assert!(result.is_some());
+        let nested = result.unwrap();
+
+        assert_eq!(nested.leaf_count(), 3);
+        assert!(nested.is_binary());
+    }
+
+    #[test]
+    fn test_single_element_tensors_outer_product() {
+        // Outer product of single-element tensors (scalars effectively)
+        // This is the simplest form of outer product
+        let ixs = vec![vec!['a'], vec!['b']];
+        let iy = vec!['a', 'b'];
+        let code = EinCode::new(ixs, iy);
+
+        let mut size_dict = HashMap::new();
+        size_dict.insert('a', 3);
+        size_dict.insert('b', 4);
+
+        let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
+
+        assert!(result.is_some());
+        let nested = result.unwrap();
+
+        // For 2 tensors, we should get a Node
+        assert!(!nested.is_leaf());
+        assert_eq!(nested.leaf_count(), 2);
+
+        // Verify the output has the correct structure
+        if let NestedEinsum::Node { eins, .. } = &nested {
+            // Output should contain both indices
+            assert!(eins.iy.contains(&'a'), "Output should contain 'a'");
+            assert!(eins.iy.contains(&'b'), "Output should contain 'b'");
+        }
     }
 
     #[test]
