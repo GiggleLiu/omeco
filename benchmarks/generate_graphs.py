@@ -7,7 +7,7 @@ These graphs can be loaded by Rust, Python, and Julia benchmarks.
 import json
 import os
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 GRAPHS_DIR = os.path.join(os.path.dirname(__file__), "graphs")
 
