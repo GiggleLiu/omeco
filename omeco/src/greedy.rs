@@ -9,7 +9,7 @@ use crate::Label;
 use priority_queue::PriorityQueue;
 use rand::prelude::*;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A binary contraction tree built during greedy optimization.
 #[derive(Debug, Clone)]
@@ -162,6 +162,11 @@ where
 }
 
 /// Run the greedy contraction algorithm.
+///
+/// This implementation strictly follows the Julia OMEinsumContractionOrders logic:
+/// 1. Initialize priority queue with ONLY neighbor pairs (connected tensors)
+/// 2. Update costs for ONLY neighbors of the merged vertex
+/// 3. Fall back to arbitrary outer product when no more connected pairs
 pub fn tree_greedy<E: Label>(
     il: &IncidenceList<usize, E>,
     log2_sizes: &HashMap<E, f64>,
@@ -197,17 +202,21 @@ pub fn tree_greedy<E: Label>(
         .map(|&v| (v, ContractionTree::leaf(v)))
         .collect();
 
-    // Initialize priority queue with all pairs (including disconnected tensors for outer products)
+    // Initialize priority queue with ONLY neighbor pairs (Julia: evaluate_costs)
+    // This matches Julia's behavior: only consider connected tensors initially
     let mut pq = PriorityQueue::new();
+    let mut cost_graph: HashSet<(usize, usize)> = HashSet::new();
     let vertices: Vec<usize> = il.vertices().cloned().collect();
 
-    for (i, &vi) in vertices.iter().enumerate() {
-        for &vj in &vertices[i + 1..] {
-            // Include ALL pairs, not just neighbors - this handles outer products
-            // where tensors have no shared indices (issue #11)
-            let dims = ContractionDims::compute(&il, log2_sizes, &vi, &vj);
-            let loss = greedy_loss(&dims, alpha);
-            pq.push((vi.min(vj), vi.max(vj)), Cost(loss));
+    for &vi in &vertices {
+        for vj in il.neighbors(&vi) {
+            if vj > vi {
+                let pair = (vi, vj);
+                let dims = ContractionDims::compute(&il, log2_sizes, &vi, &vj);
+                let loss = greedy_loss(&dims, alpha);
+                pq.push(pair, Cost(loss));
+                cost_graph.insert(pair);
+            }
         }
     }
 
@@ -215,10 +224,19 @@ pub fn tree_greedy<E: Label>(
     let mut next_vertex = vertices.iter().max().copied().unwrap_or(0) + 1;
 
     // Main greedy loop
-    while il.nv() > 1 && !pq.is_empty() {
-        // Select pair to contract
-        let (pair, _) = select_pair(&mut pq, temperature, &mut rng)?;
-        let (vi, vj) = pair;
+    while il.nv() > 1 {
+        // Julia: if cost_values is empty, fall back to arbitrary outer product
+        let (vi, vj) = if pq.is_empty() {
+            let vpool: Vec<usize> = il.vertices().cloned().collect();
+            if vpool.len() < 2 {
+                break;
+            }
+            (vpool[0].min(vpool[1]), vpool[0].max(vpool[1]))
+        } else {
+            // Select pair to contract using temperature sampling
+            let (pair, _) = select_pair(&mut pq, temperature, &mut rng, &mut cost_graph)?;
+            pair
+        };
 
         // Check if both vertices still exist
         if il.edges(&vi).is_none() || il.edges(&vj).is_none() {
@@ -242,6 +260,7 @@ pub fn tree_greedy<E: Label>(
         next_vertex += 1;
 
         // Set edges for the new vertex (output edges of the contraction)
+        // Note: vi keeps its identity in Julia, but we use new_v for clarity
         il.set_edges(new_v, dims.edges_out.clone());
 
         // Remove contracted edges
@@ -254,15 +273,31 @@ pub fn tree_greedy<E: Label>(
         // Store the new tree
         trees.insert(new_v, new_tree);
 
-        // Update costs for ALL remaining vertices (not just neighbors)
-        // This handles outer products where tensors have no shared indices
-        for &other_v in il.vertices() {
-            if other_v != new_v {
-                let pair_key = (new_v.min(other_v), new_v.max(other_v));
-                let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &other_v);
-                let loss = greedy_loss(&new_dims, alpha);
+        // Julia: update_costs! - only update for neighbors of the new vertex
+        for other_v in il.neighbors(&new_v) {
+            let pair_key = (new_v.min(other_v), new_v.max(other_v));
+            let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &other_v);
+            let loss = greedy_loss(&new_dims, alpha);
+
+            if cost_graph.contains(&pair_key) {
+                // Update existing entry
+                pq.change_priority(&pair_key, Cost(loss));
+            } else {
+                // Add new entry
                 pq.push(pair_key, Cost(loss));
+                cost_graph.insert(pair_key);
             }
+        }
+
+        // Julia: remove edges to deleted vertex vj from cost_graph
+        let pairs_to_remove: Vec<_> = cost_graph
+            .iter()
+            .filter(|(a, b)| *a == vj || *b == vj || *a == vi || *b == vi)
+            .cloned()
+            .collect();
+        for pair in pairs_to_remove {
+            pq.remove(&pair);
+            cost_graph.remove(&pair);
         }
     }
 
@@ -284,16 +319,19 @@ pub fn tree_greedy<E: Label>(
 }
 
 /// Select the next pair to contract from the priority queue.
+/// Also updates the cost_graph to track which pairs are in the queue.
 fn select_pair<R: Rng>(
     pq: &mut PriorityQueue<(usize, usize), Cost>,
     temperature: f64,
     rng: &mut R,
+    cost_graph: &mut HashSet<(usize, usize)>,
 ) -> Option<((usize, usize), Cost)> {
     if pq.is_empty() {
         return None;
     }
 
     let (pair1, cost1) = pq.pop()?;
+    cost_graph.remove(&pair1);
 
     if temperature <= 0.0 || pq.is_empty() {
         return Some((pair1, cost1));
@@ -301,18 +339,21 @@ fn select_pair<R: Rng>(
 
     // Boltzmann sampling: consider the second-best option
     let (pair2, cost2) = pq.pop()?;
+    cost_graph.remove(&pair2);
 
     // Probability of accepting the worse option
     let delta = cost2.0 - cost1.0;
     let prob = (-delta / temperature).exp();
 
     if rng.random::<f64>() < prob {
-        // Accept the second option
+        // Accept the second option, push first back
         pq.push(pair1, cost1);
+        cost_graph.insert(pair1);
         Some((pair2, cost2))
     } else {
-        // Keep the first option
+        // Keep the first option, push second back
         pq.push(pair2, cost2);
+        cost_graph.insert(pair2);
         Some((pair1, cost1))
     }
 }
@@ -1690,12 +1731,9 @@ mod extensive_tests {
     }
 
     #[test]
-    #[ignore = "execute_nested currently only supports simple contraction graphs; this test documents a known limitation for complex graphs and is not a blocker for hyperedge preservation"]
     fn test_cross_optimizer_3_regular_graph_small() {
         // Test on a small 3-regular graph with vertex tensors
-        // This test is ignored because execute_nested needs extension to handle
-        // more complex contraction patterns. The hyperedge fix in this PR is
-        // validated through simpler test cases.
+        // Validates that different optimizers produce numerically equivalent results.
         use crate::test_utils::{
             execute_nested, generate_ring_edges, tensors_approx_equal, NaiveContractor,
         };

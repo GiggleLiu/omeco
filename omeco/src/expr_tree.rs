@@ -289,6 +289,47 @@ pub fn contraction_output(ix1: &[usize], ix2: &[usize], final_output: &[usize]) 
     output
 }
 
+/// Compute intermediate output labels for tree mutation (Julia's abcacb logic).
+///
+/// For rule `((a,b),c) → ((a,c),b)`:
+/// - `a`, `c` are being contracted to form the new intermediate
+/// - `b` is the sibling tensor that will receive the result
+/// - `d` is the final output of the entire subtree
+///
+/// A label from `a` is included if it appears in sibling `b` OR in final output `d`.
+/// A label from `c` is included if it's NOT in `a` AND (in `b` OR in `d`).
+///
+/// This differs from `contraction_output` which uses a different criterion based
+/// on whether indices appear in both inputs.
+#[inline]
+pub fn compute_intermediate_output(
+    a: &[usize],
+    c: &[usize],
+    b: &[usize],
+    d: &[usize],
+) -> Vec<usize> {
+    let mut output = Vec::with_capacity(a.len() + c.len());
+
+    // From a: include if in sibling b OR in final output d
+    for &l in a {
+        if (slice_contains(b, l) || slice_contains(d, l)) && !slice_contains(&output, l) {
+            output.push(l);
+        }
+    }
+
+    // From c: include if NOT in a AND (in sibling b OR in final output d)
+    for &l in c {
+        if !slice_contains(a, l)
+            && (slice_contains(b, l) || slice_contains(d, l))
+            && !slice_contains(&output, l)
+        {
+            output.push(l);
+        }
+    }
+
+    output
+}
+
 /// Compute the total tree complexity (time, space, read-write).
 pub fn tree_complexity(tree: &ExprTree, log2_sizes: &[f64]) -> (f64, f64, f64) {
     // Check if we have cached complexity
@@ -429,14 +470,26 @@ pub fn rule_diff(
                             };
 
                             // New structure depends on rule
+                            // Use compute_intermediate_output matching Julia's abcacb logic
                             let new_labels = match rule {
                                 Rule::Rule1 => {
-                                    // ((a,c),b) -> ac_labels
-                                    contraction_output(a.labels(), c.labels(), d)
+                                    // ((a,b),c) → ((a,c),b): contract a with c, sibling is b
+                                    compute_intermediate_output(
+                                        a.labels(),
+                                        c.labels(),
+                                        b.labels(),
+                                        d,
+                                    )
                                 }
                                 Rule::Rule2 => {
-                                    // ((c,b),a) -> cb_labels
-                                    contraction_output(c.labels(), b.labels(), d)
+                                    // ((a,b),c) → ((c,b),a): contract c with b, sibling is a
+                                    // Julia: abcacb(b, a, ab, c, d) computes (b,c) with sibling a
+                                    compute_intermediate_output(
+                                        b.labels(),
+                                        c.labels(),
+                                        a.labels(),
+                                        d,
+                                    )
                                 }
                                 _ => unreachable!(),
                             };
@@ -515,14 +568,27 @@ pub fn rule_diff(
                             };
 
                             // New structure depends on rule
+                            // Use compute_intermediate_output matching Julia's abcacb logic
                             let new_labels = match rule {
                                 Rule::Rule3 => {
-                                    // (b,(a,c)) -> ac_labels
-                                    contraction_output(a.labels(), c.labels(), d)
+                                    // (a,(b,c)) → (b,(a,c)): contract a with c, sibling is b
+                                    // Julia: abcacb(c, b, bc, a, d) computes (c,a) with sibling b
+                                    compute_intermediate_output(
+                                        c.labels(),
+                                        a.labels(),
+                                        b.labels(),
+                                        d,
+                                    )
                                 }
                                 Rule::Rule4 => {
-                                    // (c,(b,a)) -> ba_labels
-                                    contraction_output(b.labels(), a.labels(), d)
+                                    // (a,(b,c)) → (c,(b,a)): contract b with a, sibling is c
+                                    // Julia: abcacb(b, c, bc, a, d) computes (b,a) with sibling c
+                                    compute_intermediate_output(
+                                        b.labels(),
+                                        a.labels(),
+                                        c.labels(),
+                                        d,
+                                    )
                                 }
                                 _ => unreachable!(),
                             };
@@ -588,6 +654,71 @@ pub fn rule_diff(
                         new_labels: info.out_dims.clone(),
                     })
                 }
+            }
+        }
+    }
+}
+
+/// Apply a mutation rule to a tree in place (like Julia's update_tree!).
+/// This avoids allocations by swapping references.
+pub fn apply_rule_mut(tree: &mut ExprTree, rule: Rule, new_labels: Vec<usize>) {
+    if let ExprTree::Node { left, right, .. } = tree {
+        match rule {
+            Rule::Rule1 => {
+                // ((a,b),c) → ((a,c),b)
+                if let ExprTree::Node {
+                    right: b,
+                    info: left_info,
+                    ..
+                } = left.as_mut()
+                {
+                    // Swap b and c (right)
+                    std::mem::swap(b, right);
+                    left_info.out_dims = new_labels;
+                }
+            }
+            Rule::Rule2 => {
+                // ((a,b),c) → ((c,b),a)
+                if let ExprTree::Node {
+                    left: a,
+                    info: left_info,
+                    ..
+                } = left.as_mut()
+                {
+                    // Swap a and c (right)
+                    std::mem::swap(a, right);
+                    left_info.out_dims = new_labels;
+                }
+            }
+            Rule::Rule3 => {
+                // (a,(b,c)) → (b,(a,c))
+                if let ExprTree::Node {
+                    left: b,
+                    info: right_info,
+                    ..
+                } = right.as_mut()
+                {
+                    // Swap a (left) and b
+                    std::mem::swap(left, b);
+                    right_info.out_dims = new_labels;
+                }
+            }
+            Rule::Rule4 => {
+                // (a,(b,c)) → (c,(b,a))
+                if let ExprTree::Node {
+                    right: c,
+                    info: right_info,
+                    ..
+                } = right.as_mut()
+                {
+                    // Swap a (left) and c
+                    std::mem::swap(left, c);
+                    right_info.out_dims = new_labels;
+                }
+            }
+            Rule::Rule5 => {
+                // (a,b) → (b,a)
+                std::mem::swap(left, right);
             }
         }
     }
@@ -1225,5 +1356,53 @@ mod tests {
         for (_, count) in counts {
             assert_eq!(count, 1);
         }
+    }
+
+    #[test]
+    fn test_compute_intermediate_output() {
+        // Test case from plan: a=[i,j,x], c=[k,l], b=[j,k], d=[i,l]
+        // Julia: ac = [i, j, k, l] — x excluded because x ∉ b && x ∉ d
+        // Rust should match Julia's abcacb logic
+        let a = vec![0, 1, 2]; // i, j, x
+        let c = vec![3, 4]; // k, l
+        let b = vec![1, 3]; // j, k
+        let d = vec![0, 4]; // i, l
+
+        let output = compute_intermediate_output(&a, &c, &b, &d);
+
+        // Should include: i (in d), j (in b), k (in b), l (in d)
+        // Should NOT include: x (not in b, not in d)
+        assert!(output.contains(&0)); // i
+        assert!(output.contains(&1)); // j
+        assert!(output.contains(&3)); // k
+        assert!(output.contains(&4)); // l
+        assert!(!output.contains(&2)); // x should NOT be included
+        assert_eq!(output.len(), 4);
+    }
+
+    #[test]
+    fn test_compute_intermediate_output_vs_contraction_output() {
+        // Show the difference between compute_intermediate_output and contraction_output
+        // a=[0,1,2], c=[3,4], final_output=[0,4]
+        let a = vec![0, 1, 2]; // i, j, x
+        let c = vec![3, 4]; // k, l
+        let b = vec![1, 3]; // sibling: j, k
+        let d = vec![0, 4]; // final: i, l
+
+        // contraction_output uses: external edges OR in final output
+        let contraction_out = contraction_output(&a, &c, &d);
+        // Should include: 0 (not in c), 1 (not in c), 2 (not in c), 3 (not in a), 4 (in d)
+        // = [0, 1, 2, 3, 4]
+
+        // compute_intermediate_output uses: in sibling OR in final output
+        let intermediate_out = compute_intermediate_output(&a, &c, &b, &d);
+        // From a: 0 (in d), 1 (in b), 2 (not in b, not in d - excluded)
+        // From c: 3 (in b), 4 (in d)
+        // = [0, 1, 3, 4]
+
+        // The key difference: compute_intermediate_output excludes labels that are
+        // only "external" to the contraction but not needed by sibling or final output
+        assert!(contraction_out.contains(&2)); // contraction_output includes x
+        assert!(!intermediate_out.contains(&2)); // compute_intermediate_output excludes x
     }
 }

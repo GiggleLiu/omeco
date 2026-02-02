@@ -98,6 +98,7 @@ make github-release     # 4. Create GitHub release with auto-generated notes
 - Python: tests in `omeco-python/tests/`
 - Use `criterion` for benchmarks
 - **Always compare results with Julia implementation**
+- **CRITICAL: Do NOT modify existing tests unless explicitly instructed by the user.** Tests marked "ALIGNED WITH JULIA" are verified against the Julia implementation and must not be changed.
 
 ## Project Structure
 

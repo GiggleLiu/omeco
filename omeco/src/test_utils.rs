@@ -514,12 +514,87 @@ fn execute_nested_impl<L: crate::Label>(
                 );
 
                 (result_idx, output_labels)
+            } else if child_results.len() > 2 {
+                // For >2 args, contract sequentially (left fold)
+                // This matches Julia's behavior for non-binary trees
+                let mut current_idx = child_results[0].0;
+                let mut current_labels: Vec<usize> = eins.ixs[0]
+                    .iter()
+                    .map(|l| *label_map.get(l).expect("Label should be in map"))
+                    .collect();
+
+                let final_output_labels: Vec<usize> = eins
+                    .iy
+                    .iter()
+                    .map(|l| *label_map.get(l).expect("Label should be in map"))
+                    .collect();
+
+                // Collect all labels from remaining tensors for intermediate output computation
+                let all_remaining_labels: Vec<HashSet<usize>> = (1..child_results.len())
+                    .map(|j| {
+                        eins.ixs[j]
+                            .iter()
+                            .map(|l| *label_map.get(l).expect("Label should be in map"))
+                            .collect()
+                    })
+                    .collect();
+
+                for i in 1..child_results.len() {
+                    let (right_idx, _) = child_results[i];
+                    let right_labels: Vec<usize> = eins.ixs[i]
+                        .iter()
+                        .map(|l| *label_map.get(l).expect("Label should be in map"))
+                        .collect();
+
+                    let output_labels: Vec<usize> = if i == child_results.len() - 1 {
+                        // Last contraction: use final output
+                        final_output_labels.clone()
+                    } else {
+                        // Intermediate: keep labels needed by remaining tensors or final output
+                        let remaining: HashSet<usize> = all_remaining_labels[i..]
+                            .iter()
+                            .flat_map(|s| s.iter().copied())
+                            .chain(final_output_labels.iter().copied())
+                            .collect();
+
+                        // Include all labels from current and right that are needed later
+                        let mut out = Vec::new();
+                        for &l in &current_labels {
+                            if remaining.contains(&l) && !out.contains(&l) {
+                                out.push(l);
+                            }
+                        }
+                        for &l in &right_labels {
+                            if remaining.contains(&l) && !out.contains(&l) {
+                                out.push(l);
+                            }
+                        }
+                        out
+                    };
+
+                    current_idx = contractor.contract(
+                        current_idx,
+                        right_idx,
+                        &current_labels,
+                        &right_labels,
+                        &output_labels,
+                    );
+                    current_labels = output_labels;
+                }
+
+                (current_idx, current_labels)
+            } else if child_results.len() == 1 {
+                // Single child: just pass through
+                let (idx, _) = child_results[0];
+                let output_labels: Vec<usize> = eins
+                    .iy
+                    .iter()
+                    .map(|l| *label_map.get(l).expect("Label should be in map"))
+                    .collect();
+                (idx, output_labels)
             } else {
-                // For >2 args, contract sequentially
-                panic!(
-                    "execute_nested only supports binary trees, got {} args",
-                    child_results.len()
-                );
+                // No children: this shouldn't happen for a Node
+                panic!("execute_nested: Node with no children");
             }
         }
     }
