@@ -976,4 +976,116 @@ mod tests {
         let decomp = DecompositionType::default();
         assert_eq!(decomp, DecompositionType::Tree);
     }
+
+    #[test]
+    fn test_node_sc() {
+        let log2_sizes = vec![2.0, 3.0, 4.0];
+
+        // Empty output dims
+        assert_eq!(node_sc(&[], &log2_sizes), 0.0);
+
+        // Single label
+        assert!((node_sc(&[0], &log2_sizes) - 2.0).abs() < 1e-10);
+
+        // Multiple labels
+        assert!((node_sc(&[0, 1, 2], &log2_sizes) - 9.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_local_sc_leaf() {
+        use crate::expr_tree::{ExprTree, Rule};
+
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let log2_sizes = vec![2.0, 3.0];
+
+        // local_sc on a leaf should return the node's sc
+        let sc = local_sc(&leaf, Rule::Rule1, &log2_sizes);
+        assert!((sc - 5.0).abs() < 1e-10); // 2 + 3 = 5
+    }
+
+    #[test]
+    fn test_local_sc_node_rules() {
+        use crate::expr_tree::{ExprTree, Rule};
+
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0); // sc = 2+3 = 5
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1); // sc = 3+4 = 7
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2); // sc = 4+2 = 6
+
+        let log2_sizes = vec![2.0, 3.0, 4.0, 2.0];
+
+        // Tree for Rules 1 and 2: ((0,1),2)
+        let inner = ExprTree::node(leaf0.clone(), leaf1.clone(), vec![0, 2]); // sc = 2+4 = 6
+        let tree12 = ExprTree::node(inner, leaf2.clone(), vec![0, 3]); // sc = 2+2 = 4
+
+        // Rule1/Rule2 uses left child: max(tree_sc, left_sc) = max(4, 6) = 6
+        let sc1 = local_sc(&tree12, Rule::Rule1, &log2_sizes);
+        assert!((sc1 - 6.0).abs() < 1e-10);
+
+        let sc2 = local_sc(&tree12, Rule::Rule2, &log2_sizes);
+        assert!((sc2 - 6.0).abs() < 1e-10);
+
+        // Tree for Rules 3 and 4: (0,(1,2))
+        let inner2 = ExprTree::node(leaf1, leaf2, vec![1, 3]); // sc = 3+2 = 5
+        let tree34 = ExprTree::node(leaf0, inner2, vec![0, 3]); // sc = 2+2 = 4
+
+        // Rule3/Rule4 uses right child: max(tree_sc, right_sc) = max(4, 5) = 5
+        let sc3 = local_sc(&tree34, Rule::Rule3, &log2_sizes);
+        assert!((sc3 - 5.0).abs() < 1e-10);
+
+        let sc4 = local_sc(&tree34, Rule::Rule4, &log2_sizes);
+        assert!((sc4 - 5.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_nested_to_expr_tree_conversion() {
+        use crate::greedy::optimize_greedy;
+        use crate::GreedyMethod;
+
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 8), ('l', 4)].into();
+        let original = optimize_greedy(&code, &sizes, &GreedyMethod::default()).unwrap();
+
+        // Convert to ExprTree using the full conversion path
+        let (label_map, labels) = build_label_map(&code);
+        let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+        let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+        let expr_tree = nested_to_expr_tree(&original, &int_ixs, &int_iy, &label_map);
+
+        assert!(expr_tree.is_some());
+        let tree = expr_tree.unwrap();
+        assert_eq!(tree.leaf_count(), 3);
+        assert!(!tree.is_leaf());
+
+        // Test labels vector is correct
+        assert_eq!(labels.len(), 4); // i, j, k, l
+    }
+
+    #[test]
+    fn test_optimize_treesa_with_rw_optimization() {
+        // Test with rw_weight > 0 to exercise that code path
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 4)].into();
+
+        let mut config = TreeSA::fast();
+        config.score.rw_weight = 0.5;
+        let result = optimize_treesa(&code, &sizes, &config);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_optimize_treesa_with_high_sc_target() {
+        // Test with very high sc_target (should not penalize space)
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 4)].into();
+
+        let mut config = TreeSA::fast();
+        config.score.sc_target = 1000.0;
+        let result = optimize_treesa(&code, &sizes, &config);
+
+        assert!(result.is_some());
+    }
 }
