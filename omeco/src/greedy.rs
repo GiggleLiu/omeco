@@ -372,25 +372,14 @@ fn build_nested_with_level<L: Label>(
             let output_labels = if level == 0 {
                 openedges.to_vec()
             } else {
-                // Extract vertex IDs for hypergraph lookup
                 let left_vertices = get_subtree_vertices(left);
                 let right_vertices = get_subtree_vertices(right);
-
-                // Use hypergraph-aware output computation
-                compute_contraction_output_with_hypergraph(
-                    &left_labels,
-                    &right_labels,
-                    incidence_list,
-                    &left_vertices,
-                    &right_vertices,
-                )
+                compute_contraction_output_with_hypergraph(&left_labels, &right_labels, incidence_list, &left_vertices, &right_vertices)
             };
 
             // Build children recursively with incremented level
-            let left_nested =
-                build_nested_with_level(left, leaf_labels, incidence_list, openedges, level + 1);
-            let right_nested =
-                build_nested_with_level(right, leaf_labels, incidence_list, openedges, level + 1);
+            let left_nested = build_nested_with_level(left, leaf_labels, incidence_list, openedges, level + 1);
+            let right_nested = build_nested_with_level(right, leaf_labels, incidence_list, openedges, level + 1);
 
             // Create the einsum code for this contraction
             let eins = EinCode::new(vec![left_labels, right_labels], output_labels);
