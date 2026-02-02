@@ -6,7 +6,7 @@
 
 use crate::eincode::{EinCode, NestedEinsum};
 use crate::expr_tree::{
-    apply_rule_mut, rule_diff, tree_complexity, DecompositionType, ExprTree, Rule,
+    apply_rule_mut, tree_complexity, DecompositionType, ExprTree, Rule, ScratchSpace,
 };
 use crate::greedy::{optimize_greedy, GreedyMethod};
 use crate::score::ScoreFunction;
@@ -363,6 +363,7 @@ fn init_random_recursive<R: Rng>(
 /// Run simulated annealing on a single tree.
 /// Each iteration sweeps through all nodes in the tree, attempting mutations.
 /// Matches Julia's `optimize_tree_sa!` exactly, with in-place mutation for performance.
+#[allow(clippy::too_many_arguments)]
 fn optimize_tree_sa<R: Rng>(
     mut tree: ExprTree,
     log2_sizes: &[f64],
@@ -371,6 +372,7 @@ fn optimize_tree_sa<R: Rng>(
     score: &ScoreFunction,
     decomp: DecompositionType,
     rng: &mut R,
+    nedge: usize,
 ) -> ExprTree {
     // Compute log2_rw_weight once (matches Julia: log2rw_weight = log2(score.rw_weight))
     let log2_rw_weight = if score.rw_weight > 0.0 {
@@ -378,6 +380,9 @@ fn optimize_tree_sa<R: Rng>(
     } else {
         f64::NEG_INFINITY
     };
+
+    // Create scratch space for large graphs (bitset-based O(1) lookups)
+    let mut scratch = ScratchSpace::new(nedge);
 
     for &beta in betas {
         for _ in 0..niters {
@@ -391,6 +396,7 @@ fn optimize_tree_sa<R: Rng>(
                 log2_rw_weight,
                 decomp,
                 rng,
+                &mut scratch,
             );
         }
     }
@@ -412,6 +418,7 @@ fn optimize_subtree_mut<R: Rng>(
     log2_rw_weight: f64,
     decomp: DecompositionType,
     rng: &mut R,
+    scratch: &mut ScratchSpace,
 ) {
     let rules = Rule::applicable_rules(tree, decomp);
 
@@ -425,8 +432,8 @@ fn optimize_subtree_mut<R: Rng>(
     // Check if we should optimize rw (matches Julia: optimize_rw = log2rw_weight != -Inf)
     let optimize_rw = log2_rw_weight > f64::NEG_INFINITY;
 
-    // Compute the complexity change and apply if accepted
-    if let Some(diff) = rule_diff(tree, rule, log2_sizes, optimize_rw) {
+    // Compute the complexity change using bitset-optimized scratch space
+    if let Some(diff) = scratch.rule_diff(tree, rule, log2_sizes, optimize_rw) {
         // Compute dtc (matches Julia exactly)
         let dtc = if optimize_rw {
             fast_log2sumexp2(diff.tc1, log2_rw_weight + diff.rw1)
@@ -465,6 +472,7 @@ fn optimize_subtree_mut<R: Rng>(
             log2_rw_weight,
             decomp,
             rng,
+            scratch,
         );
         optimize_subtree_mut(
             right,
@@ -475,6 +483,7 @@ fn optimize_subtree_mut<R: Rng>(
             log2_rw_weight,
             decomp,
             rng,
+            scratch,
         );
     }
 }
@@ -617,6 +626,7 @@ pub fn optimize_treesa<L: Label>(
                 &config.score,
                 config.decomposition_type,
                 &mut rng,
+                nedge,
             );
 
             // Compute final complexity

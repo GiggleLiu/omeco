@@ -5,6 +5,362 @@
 
 use crate::utils::{fast_log2sumexp2, fast_log2sumexp2_3};
 
+/// A simple bitset for O(1) membership testing on large graphs.
+///
+/// For graphs with many edges (100+), this provides significant speedup
+/// over linear scans in hot paths like `compute_intermediate_output`.
+#[derive(Clone)]
+pub struct BitSet {
+    bits: Vec<u64>,
+}
+
+impl BitSet {
+    /// Create a new bitset that can hold values in [0, capacity).
+    #[inline]
+    pub fn new(capacity: usize) -> Self {
+        let num_words = (capacity + 63) / 64;
+        Self {
+            bits: vec![0; num_words],
+        }
+    }
+
+    /// Clear all bits.
+    #[inline]
+    pub fn clear(&mut self) {
+        for word in &mut self.bits {
+            *word = 0;
+        }
+    }
+
+    /// Set a bit.
+    #[inline]
+    pub fn insert(&mut self, idx: usize) {
+        let word = idx / 64;
+        let bit = idx % 64;
+        if word < self.bits.len() {
+            self.bits[word] |= 1 << bit;
+        }
+    }
+
+    /// Check if a bit is set.
+    #[inline]
+    pub fn contains(&self, idx: usize) -> bool {
+        let word = idx / 64;
+        let bit = idx % 64;
+        word < self.bits.len() && (self.bits[word] & (1 << bit)) != 0
+    }
+
+    /// Populate from a slice, clearing first.
+    #[inline]
+    pub fn set_from_slice(&mut self, slice: &[usize]) {
+        self.clear();
+        for &idx in slice {
+            self.insert(idx);
+        }
+    }
+}
+
+/// Scratch space for rule_diff computations on large graphs.
+///
+/// Reuses bitset allocations across many calls to avoid allocation overhead.
+pub struct ScratchSpace {
+    /// Number of unique edge labels
+    pub nedge: usize,
+    // Scratch bitsets for membership testing
+    bits_a: BitSet,
+    bits_b: BitSet,
+    bits_c: BitSet,
+    bits_d: BitSet,
+}
+
+impl ScratchSpace {
+    /// Create scratch space for graphs with `nedge` unique edge labels.
+    pub fn new(nedge: usize) -> Self {
+        Self {
+            nedge,
+            bits_a: BitSet::new(nedge),
+            bits_b: BitSet::new(nedge),
+            bits_c: BitSet::new(nedge),
+            bits_d: BitSet::new(nedge),
+        }
+    }
+
+    /// Compute intermediate output using bitsets for O(1) lookups.
+    #[inline]
+    pub fn compute_intermediate_output(
+        &mut self,
+        a: &[usize],
+        c: &[usize],
+        b: &[usize],
+        d: &[usize],
+    ) -> Vec<usize> {
+        self.bits_a.set_from_slice(a);
+        self.bits_b.set_from_slice(b);
+        self.bits_d.set_from_slice(d);
+
+        let mut output = Vec::with_capacity(a.len() + c.len());
+
+        // From a: include if in sibling b OR in final output d
+        for &l in a {
+            if self.bits_b.contains(l) || self.bits_d.contains(l) {
+                output.push(l);
+            }
+        }
+
+        // From c: include if NOT in a AND (in sibling b OR in final output d)
+        for &l in c {
+            if !self.bits_a.contains(l) && (self.bits_b.contains(l) || self.bits_d.contains(l)) {
+                output.push(l);
+            }
+        }
+
+        output
+    }
+
+    /// Compute tcscrw using bitsets for O(1) lookups.
+    #[inline]
+    pub fn tcscrw(
+        &mut self,
+        ix1: &[usize],
+        ix2: &[usize],
+        iy: &[usize],
+        log2_sizes: &[f64],
+        compute_rw: bool,
+    ) -> (f64, f64, f64) {
+        self.bits_b.set_from_slice(ix2);
+        self.bits_c.set_from_slice(iy);
+
+        unsafe {
+            let sc1: f64 = if compute_rw {
+                ix1.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum()
+            } else {
+                0.0
+            };
+            let sc2: f64 = if compute_rw {
+                ix2.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum()
+            } else {
+                0.0
+            };
+            let sc: f64 = iy.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum();
+
+            let mut tc = sc;
+            for &l in ix1 {
+                if self.bits_b.contains(l) && !self.bits_c.contains(l) {
+                    tc += *log2_sizes.get_unchecked(l);
+                }
+            }
+
+            let rw = if compute_rw {
+                fast_log2sumexp2_3(sc, sc1, sc2)
+            } else {
+                0.0
+            };
+
+            (tc, sc, rw)
+        }
+    }
+
+    /// Compute rule_diff using bitsets for O(1) lookups.
+    pub fn rule_diff(
+        &mut self,
+        tree: &ExprTree,
+        rule: Rule,
+        log2_sizes: &[f64],
+        compute_rw: bool,
+    ) -> Option<RuleDiff> {
+        match tree {
+            ExprTree::Leaf(_) => None,
+            ExprTree::Node { left, right, info } => {
+                let d = &info.out_dims;
+
+                match rule {
+                    Rule::Rule1 | Rule::Rule2 => match left.as_ref() {
+                        ExprTree::Node {
+                            left: a,
+                            right: b,
+                            info: ab_info,
+                        } => {
+                            let c = right;
+                            let ab = &ab_info.out_dims;
+
+                            let (tc_ab, sc_ab, rw_ab) =
+                                self.tcscrw(a.labels(), b.labels(), ab, log2_sizes, compute_rw);
+                            let (tc_d, sc_d, rw_d) =
+                                self.tcscrw(ab, c.labels(), d, log2_sizes, compute_rw);
+                            let tc0 = fast_log2sumexp2(tc_ab, tc_d);
+                            let sc0 = sc_ab.max(sc_d);
+                            let rw0 = if compute_rw {
+                                fast_log2sumexp2(rw_ab, rw_d)
+                            } else {
+                                0.0
+                            };
+
+                            let new_labels = match rule {
+                                Rule::Rule1 => self.compute_intermediate_output(
+                                    a.labels(),
+                                    c.labels(),
+                                    b.labels(),
+                                    d,
+                                ),
+                                Rule::Rule2 => self.compute_intermediate_output(
+                                    b.labels(),
+                                    c.labels(),
+                                    a.labels(),
+                                    d,
+                                ),
+                                _ => unreachable!(),
+                            };
+
+                            let (tc_new_left, sc_new_left, rw_new_left) = match rule {
+                                Rule::Rule1 => self.tcscrw(
+                                    a.labels(),
+                                    c.labels(),
+                                    &new_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                Rule::Rule2 => self.tcscrw(
+                                    c.labels(),
+                                    b.labels(),
+                                    &new_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                _ => unreachable!(),
+                            };
+
+                            let (tc_new_d, sc_new_d, rw_new_d) = match rule {
+                                Rule::Rule1 => {
+                                    self.tcscrw(&new_labels, b.labels(), d, log2_sizes, compute_rw)
+                                }
+                                Rule::Rule2 => {
+                                    self.tcscrw(&new_labels, a.labels(), d, log2_sizes, compute_rw)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            let tc1 = fast_log2sumexp2(tc_new_left, tc_new_d);
+                            let sc1 = sc_new_left.max(sc_new_d);
+                            let rw1 = if compute_rw {
+                                fast_log2sumexp2(rw_new_left, rw_new_d)
+                            } else {
+                                0.0
+                            };
+
+                            Some(RuleDiff {
+                                tc0,
+                                tc1,
+                                dsc: sc1 - sc0,
+                                rw0,
+                                rw1,
+                                new_labels,
+                            })
+                        }
+                        _ => None,
+                    },
+                    Rule::Rule3 | Rule::Rule4 => match right.as_ref() {
+                        ExprTree::Node {
+                            left: b,
+                            right: c,
+                            info: bc_info,
+                        } => {
+                            let a = left;
+                            let bc = &bc_info.out_dims;
+
+                            let (tc_bc, sc_bc, rw_bc) =
+                                self.tcscrw(b.labels(), c.labels(), bc, log2_sizes, compute_rw);
+                            let (tc_d, sc_d, rw_d) =
+                                self.tcscrw(a.labels(), bc, d, log2_sizes, compute_rw);
+                            let tc0 = fast_log2sumexp2(tc_bc, tc_d);
+                            let sc0 = sc_bc.max(sc_d);
+                            let rw0 = if compute_rw {
+                                fast_log2sumexp2(rw_bc, rw_d)
+                            } else {
+                                0.0
+                            };
+
+                            let new_labels = match rule {
+                                Rule::Rule3 => self.compute_intermediate_output(
+                                    c.labels(),
+                                    a.labels(),
+                                    b.labels(),
+                                    d,
+                                ),
+                                Rule::Rule4 => self.compute_intermediate_output(
+                                    b.labels(),
+                                    a.labels(),
+                                    c.labels(),
+                                    d,
+                                ),
+                                _ => unreachable!(),
+                            };
+
+                            let (tc_new_right, sc_new_right, rw_new_right) = match rule {
+                                Rule::Rule3 => self.tcscrw(
+                                    a.labels(),
+                                    c.labels(),
+                                    &new_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                Rule::Rule4 => self.tcscrw(
+                                    b.labels(),
+                                    a.labels(),
+                                    &new_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                _ => unreachable!(),
+                            };
+
+                            let (tc_new_d, sc_new_d, rw_new_d) = match rule {
+                                Rule::Rule3 => {
+                                    self.tcscrw(b.labels(), &new_labels, d, log2_sizes, compute_rw)
+                                }
+                                Rule::Rule4 => {
+                                    self.tcscrw(c.labels(), &new_labels, d, log2_sizes, compute_rw)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            let tc1 = fast_log2sumexp2(tc_new_right, tc_new_d);
+                            let sc1 = sc_new_right.max(sc_new_d);
+                            let rw1 = if compute_rw {
+                                fast_log2sumexp2(rw_new_right, rw_new_d)
+                            } else {
+                                0.0
+                            };
+
+                            Some(RuleDiff {
+                                tc0,
+                                tc1,
+                                dsc: sc1 - sc0,
+                                rw0,
+                                rw1,
+                                new_labels,
+                            })
+                        }
+                        _ => None,
+                    },
+                    Rule::Rule5 => {
+                        // Rule5: swap left and right - no intermediate output change
+                        let (tc, _sc, rw) =
+                            self.tcscrw(left.labels(), right.labels(), d, log2_sizes, compute_rw);
+                        Some(RuleDiff {
+                            tc0: tc,
+                            tc1: tc,
+                            dsc: 0.0,
+                            rw0: rw,
+                            rw1: rw,
+                            new_labels: d.clone(),
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Cached complexity values for a subtree.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CachedComplexity {
