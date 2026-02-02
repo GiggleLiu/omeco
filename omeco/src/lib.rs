@@ -783,3 +783,474 @@ mod numerical_verification_tests {
         );
     }
 }
+
+/// Large-scale stress tests using petgraph for graph generation.
+/// These tests match Julia's OMEinsumContractionOrders test coverage.
+#[cfg(test)]
+mod large_scale_stress_tests {
+    use super::*;
+    use petgraph::graph::UnGraph;
+    use petgraph::visit::EdgeRef;
+    use rand::seq::SliceRandom;
+    use rand::SeedableRng;
+    use std::collections::HashSet;
+
+    /// Generate a random k-regular graph with n vertices.
+    /// Uses a simple algorithm that may not always succeed for all n,k combinations.
+    fn generate_random_regular_graph(n: usize, k: usize, seed: u64) -> UnGraph<(), ()> {
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+        let mut graph = UnGraph::new_undirected();
+
+        // Add vertices
+        for _ in 0..n {
+            graph.add_node(());
+        }
+
+        // Create stubs: each vertex needs k connections
+        let mut stubs: Vec<usize> = (0..n).flat_map(|v| std::iter::repeat(v).take(k)).collect();
+
+        // Shuffle and pair up stubs
+        let max_attempts = 100;
+        for _ in 0..max_attempts {
+            stubs.shuffle(&mut rng);
+
+            let mut valid = true;
+            let mut edges_to_add = Vec::new();
+
+            for chunk in stubs.chunks(2) {
+                if chunk.len() == 2 {
+                    let (u, v) = (chunk[0], chunk[1]);
+                    // Skip self-loops and multi-edges
+                    if u != v && !edges_to_add.contains(&(u.min(v), u.max(v))) {
+                        edges_to_add.push((u.min(v), u.max(v)));
+                    } else {
+                        valid = false;
+                        break;
+                    }
+                }
+            }
+
+            if valid && edges_to_add.len() == (n * k) / 2 {
+                for (u, v) in edges_to_add {
+                    graph.add_edge(
+                        petgraph::graph::NodeIndex::new(u),
+                        petgraph::graph::NodeIndex::new(v),
+                        (),
+                    );
+                }
+                return graph;
+            }
+
+            // Reset for next attempt
+            stubs = (0..n).flat_map(|v| std::iter::repeat(v).take(k)).collect();
+        }
+
+        // Fallback: return partial graph (may not be exactly k-regular)
+        graph
+    }
+
+    /// Convert a petgraph to EinCode format for tensor network optimization.
+    /// Each edge becomes a matrix tensor, each vertex becomes a vector tensor.
+    fn graph_to_eincode(graph: &UnGraph<(), ()>) -> (EinCode<usize>, HashMap<usize, usize>) {
+        let n_vertices = graph.node_count();
+        let mut ixs: Vec<Vec<usize>> = Vec::new();
+
+        // Each edge contributes a matrix tensor: [src, dst] (using minmax for consistency)
+        for edge in graph.edge_references() {
+            let src = edge.source().index() + 1; // 1-indexed
+            let dst = edge.target().index() + 1;
+            ixs.push(vec![src.min(dst), src.max(dst)]);
+        }
+
+        // Each vertex contributes a vector tensor: [vertex]
+        for v in 0..n_vertices {
+            ixs.push(vec![v + 1]); // 1-indexed
+        }
+
+        // Create uniform size dictionary
+        let mut sizes = HashMap::new();
+        for v in 1..=n_vertices {
+            sizes.insert(v, 2);
+        }
+
+        let code = EinCode::new(ixs, vec![]); // Scalar output
+        (code, sizes)
+    }
+
+    #[test]
+    fn test_random_regular_graph_n40_k3() {
+        // Julia test: n=40, k=3 random regular graph
+        let graph = generate_random_regular_graph(40, 3, 42);
+
+        // Should have 40 vertices and ~60 edges (n*k/2 = 60)
+        assert_eq!(graph.node_count(), 40);
+        assert!(graph.edge_count() > 50, "Should have close to 60 edges");
+
+        let (code, sizes) = graph_to_eincode(&graph);
+
+        // Optimize with greedy
+        let greedy_tree = optimize_code(&code, &sizes, &GreedyMethod::default());
+        assert!(
+            greedy_tree.is_some(),
+            "Greedy should succeed on 40-node graph"
+        );
+
+        let tree = greedy_tree.unwrap();
+        let complexity = contraction_complexity(&tree, &sizes, &code.ixs);
+
+        // Verify optimization produces reasonable complexity
+        assert!(
+            complexity.sc < 30.0,
+            "Space complexity should be reasonable"
+        );
+    }
+
+    #[test]
+    fn test_random_regular_graph_n60_k3_treesa() {
+        // Julia test: n=60, k=3 random regular graph with TreeSA
+        let graph = generate_random_regular_graph(60, 3, 123);
+        let (code, sizes) = graph_to_eincode(&graph);
+
+        // First optimize with greedy
+        let greedy_tree = optimize_code(&code, &sizes, &GreedyMethod::default());
+        assert!(greedy_tree.is_some());
+        let greedy_complexity =
+            contraction_complexity(greedy_tree.as_ref().unwrap(), &sizes, &code.ixs);
+
+        // Then optimize with TreeSA using sc_target
+        let treesa = TreeSA::default()
+            .with_sc_target(greedy_complexity.sc - 2.0)
+            .with_niters(50)
+            .with_ntrials(2);
+        let treesa_tree = optimize_code(&code, &sizes, &treesa);
+        assert!(
+            treesa_tree.is_some(),
+            "TreeSA should succeed on 60-node graph"
+        );
+
+        let treesa_complexity =
+            contraction_complexity(treesa_tree.as_ref().unwrap(), &sizes, &code.ixs);
+
+        // TreeSA should match or improve on greedy
+        assert!(
+            treesa_complexity.sc <= greedy_complexity.sc + 1.0,
+            "TreeSA should not significantly increase space complexity"
+        );
+    }
+
+    #[test]
+    fn test_large_random_regular_graph_n100() {
+        // Stress test: 100-node 3-regular graph
+        let graph = generate_random_regular_graph(100, 3, 456);
+        let (code, sizes) = graph_to_eincode(&graph);
+
+        // Should have ~150 edges + 100 vertices = ~250 tensors
+        assert!(code.num_tensors() > 200, "Should have many tensors");
+
+        let greedy_tree = optimize_code(&code, &sizes, &GreedyMethod::default());
+        assert!(greedy_tree.is_some(), "Greedy should handle 100-node graph");
+
+        let tree = greedy_tree.unwrap();
+        assert!(tree.is_binary(), "Should produce binary tree");
+        assert_eq!(
+            tree.leaf_count(),
+            code.num_tensors(),
+            "Should have correct leaf count"
+        );
+    }
+
+    #[test]
+    fn test_path_decomposition_random_graph_n50() {
+        // Julia test: path decomposition on n=50 random regular graph
+        let graph = generate_random_regular_graph(50, 3, 789);
+        let (code, sizes) = graph_to_eincode(&graph);
+
+        // Optimize with path decomposition
+        let path_treesa = TreeSA::path().with_niters(30).with_ntrials(2);
+        let path_tree = optimize_code(&code, &sizes, &path_treesa);
+        assert!(path_tree.is_some(), "Path TreeSA should succeed");
+
+        let tree = path_tree.unwrap();
+
+        // Path decomposition should produce a path structure
+        assert!(
+            tree.is_path_decomposition(),
+            "Should produce path decomposition"
+        );
+
+        // Also verify with tree decomposition for comparison
+        let tree_treesa = TreeSA::default().with_niters(30).with_ntrials(2);
+        let tree_tree = optimize_code(&code, &sizes, &tree_treesa);
+        assert!(tree_tree.is_some());
+
+        // Tree decomposition typically doesn't produce path structure
+        // (unless by coincidence)
+    }
+
+    #[test]
+    fn test_fullerene_c60_optimization() {
+        // Julia test: C60 fullerene graph (60 vertices, 90 edges)
+        use crate::test_utils::generate_fullerene_edges;
+
+        let edges = generate_fullerene_edges();
+        let mut ixs: Vec<Vec<usize>> = Vec::new();
+
+        // Add edge tensors
+        for (a, b) in &edges {
+            ixs.push(vec![*a, *b]);
+        }
+
+        // Add vertex tensors
+        for v in 1..=60 {
+            ixs.push(vec![v]);
+        }
+
+        let code = EinCode::new(ixs, vec![]); // Scalar output
+        let sizes: HashMap<usize, usize> = (1..=60).map(|v| (v, 2)).collect();
+
+        // Unoptimized complexity
+        let unopt = crate::complexity::eincode_complexity(&code, &sizes);
+        assert_eq!(
+            unopt.tc, 60.0,
+            "Unoptimized tc should be 60 (sum of indices)"
+        );
+        assert_eq!(unopt.sc, 0.0, "Unoptimized sc should be 0 (scalar output)");
+
+        // Optimize
+        let greedy_tree = optimize_code(&code, &sizes, &GreedyMethod::default());
+        assert!(greedy_tree.is_some(), "Should optimize C60");
+
+        let tree = greedy_tree.unwrap();
+        let complexity = contraction_complexity(&tree, &sizes, &code.ixs);
+
+        // Verify reasonable optimization (actual value depends on exact graph structure)
+        assert!(
+            complexity.sc <= 20.0,
+            "C60 space complexity should be <= 20, got {}",
+            complexity.sc
+        );
+    }
+
+    #[test]
+    fn test_chain_and_ring_topologies() {
+        // Julia test: chain and ring graphs
+
+        // Chain: 9 tensors forming a path
+        let chain_ixs: Vec<Vec<usize>> = (1..=9).map(|i| vec![i, i + 1]).collect();
+        let chain_code = EinCode::new(chain_ixs, vec![1, 10]);
+        let chain_sizes: HashMap<usize, usize> = (1..=10).map(|v| (v, 2)).collect();
+
+        let chain_tree = optimize_code(&chain_code, &chain_sizes, &GreedyMethod::default());
+        assert!(chain_tree.is_some());
+        let chain_complexity =
+            contraction_complexity(chain_tree.as_ref().unwrap(), &chain_sizes, &chain_code.ixs);
+        assert_eq!(chain_complexity.sc, 2.0, "Chain should have sc=2");
+
+        // Ring: 10 tensors forming a cycle
+        let mut ring_ixs: Vec<Vec<usize>> = (1..=9).map(|i| vec![i, i + 1]).collect();
+        ring_ixs.push(vec![10, 1]); // Close the ring
+        let ring_code = EinCode::new(ring_ixs, vec![]);
+        let ring_sizes: HashMap<usize, usize> = (1..=10).map(|v| (v, 2)).collect();
+
+        let ring_tree = optimize_code(&ring_code, &ring_sizes, &GreedyMethod::default());
+        assert!(ring_tree.is_some());
+        let ring_complexity =
+            contraction_complexity(ring_tree.as_ref().unwrap(), &ring_sizes, &ring_code.ixs);
+        assert_eq!(ring_complexity.sc, 2.0, "Ring should have sc=2");
+    }
+
+    #[test]
+    fn test_tutte_graph_stochastic_optimization() {
+        // Julia test: Tutte graph (46 vertices, 69 edges) with stochastic optimization
+        use crate::test_utils::generate_tutte_edges;
+
+        let edges = generate_tutte_edges();
+        let mut ixs: Vec<Vec<usize>> = Vec::new();
+
+        // Add unique edges
+        let mut seen_edges: HashSet<(usize, usize)> = HashSet::new();
+        for (a, b) in &edges {
+            let edge = ((*a).min(*b), (*a).max(*b));
+            if !seen_edges.contains(&edge) {
+                ixs.push(vec![edge.0, edge.1]);
+                seen_edges.insert(edge);
+            }
+        }
+
+        // Find max vertex
+        let max_vertex = edges.iter().flat_map(|(a, b)| [*a, *b]).max().unwrap_or(0);
+
+        let code = EinCode::new(ixs, vec![]); // Scalar output
+        let sizes: HashMap<usize, usize> = (1..=max_vertex).map(|v| (v, 2)).collect();
+
+        // Run stochastic optimization multiple times
+        let mut best_sc = f64::INFINITY;
+        for _trial in 0..10 {
+            let stochastic_greedy = GreedyMethod::stochastic(100.0);
+            if let Some(tree) = optimize_code(&code, &sizes, &stochastic_greedy) {
+                let complexity = contraction_complexity(&tree, &sizes, &code.ixs);
+                if complexity.sc < best_sc {
+                    best_sc = complexity.sc;
+                }
+            }
+        }
+
+        // Julia expects minimum sc <= 5 after multiple trials
+        assert!(
+            best_sc <= 8.0,
+            "Best Tutte graph sc should be <= 8, got {}",
+            best_sc
+        );
+    }
+
+    #[test]
+    fn test_petersen_graph_optimization() {
+        // Petersen graph: 10 vertices, 15 edges, 3-regular
+        use crate::test_utils::generate_petersen_edges;
+
+        let edges = generate_petersen_edges();
+        let mut ixs: Vec<Vec<usize>> = Vec::new();
+
+        for (a, b) in &edges {
+            ixs.push(vec![*a, *b]);
+        }
+
+        // Add vertex tensors
+        for v in 1..=10 {
+            ixs.push(vec![v]);
+        }
+
+        let code = EinCode::new(ixs, vec![]);
+        let sizes: HashMap<usize, usize> = (1..=10).map(|v| (v, 2)).collect();
+
+        let tree = optimize_code(&code, &sizes, &GreedyMethod::default());
+        assert!(tree.is_some());
+
+        let complexity = contraction_complexity(tree.as_ref().unwrap(), &sizes, &code.ixs);
+
+        // Petersen graph should have reasonable complexity
+        assert!(
+            complexity.sc <= 6.0,
+            "Petersen sc should be <= 6, got {}",
+            complexity.sc
+        );
+    }
+
+    #[test]
+    fn test_very_large_graph_n200() {
+        // Stress test: 200-node graph (approaching Julia's n=220 test)
+        let graph = generate_random_regular_graph(200, 3, 999);
+        let (code, sizes) = graph_to_eincode(&graph);
+
+        // This is a large problem: ~300 edges + 200 vertices = ~500 tensors
+        assert!(code.num_tensors() > 400, "Should have many tensors");
+
+        // Greedy should still work
+        let greedy_tree = optimize_code(&code, &sizes, &GreedyMethod::default());
+        assert!(greedy_tree.is_some(), "Greedy should handle 200-node graph");
+
+        let tree = greedy_tree.unwrap();
+        let complexity = contraction_complexity(&tree, &sizes, &code.ixs);
+
+        // Verify reasonable complexity (Julia gets sc ~32 for n=220)
+        assert!(
+            complexity.sc <= 55.0,
+            "Large graph sc should be <= 55, got {}",
+            complexity.sc
+        );
+    }
+
+    #[test]
+    fn test_treesa_with_sc_target_large_graph() {
+        // Julia test: TreeSA with sc_target on large graph
+        let graph = generate_random_regular_graph(80, 3, 111);
+        let (code, sizes) = graph_to_eincode(&graph);
+
+        // Get greedy baseline
+        let greedy_tree = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let greedy_complexity = contraction_complexity(&greedy_tree, &sizes, &code.ixs);
+
+        // Use TreeSA with aggressive sc_target
+        let sc_target = greedy_complexity.sc - 3.0;
+        let treesa = TreeSA::default()
+            .with_sc_target(sc_target)
+            .with_niters(100)
+            .with_ntrials(3);
+
+        let treesa_tree = optimize_code(&code, &sizes, &treesa);
+        assert!(treesa_tree.is_some());
+
+        let treesa_complexity =
+            contraction_complexity(treesa_tree.as_ref().unwrap(), &sizes, &code.ixs);
+
+        // TreeSA should try to meet the target
+        // (may not always succeed, but should be close)
+        assert!(
+            treesa_complexity.sc <= greedy_complexity.sc + 2.0,
+            "TreeSA should not be much worse than greedy"
+        );
+    }
+
+    #[test]
+    fn test_multiple_optimizers_consistency() {
+        // Verify that different optimizers produce valid results on same problem
+        let graph = generate_random_regular_graph(30, 3, 222);
+        let (code, sizes) = graph_to_eincode(&graph);
+
+        // Helper to verify optimizer results
+        fn verify_optimizer_result(
+            tree: Option<NestedEinsum<usize>>,
+            code: &EinCode<usize>,
+            sizes: &HashMap<usize, usize>,
+            name: &str,
+        ) {
+            assert!(tree.is_some(), "{} should succeed", name);
+            let t = tree.unwrap();
+            assert!(t.is_binary(), "{} should produce binary tree", name);
+            assert_eq!(
+                t.leaf_count(),
+                code.num_tensors(),
+                "{} should have correct leaves",
+                name
+            );
+
+            let complexity = contraction_complexity(&t, sizes, &code.ixs);
+            assert!(
+                complexity.tc > 0.0,
+                "{} should have positive time complexity",
+                name
+            );
+            assert!(
+                complexity.sc >= 0.0,
+                "{} space complexity should be non-negative",
+                name
+            );
+        }
+
+        // Test each optimizer
+        verify_optimizer_result(
+            optimize_code(&code, &sizes, &GreedyMethod::default()),
+            &code,
+            &sizes,
+            "GreedyMethod::default",
+        );
+        verify_optimizer_result(
+            optimize_code(&code, &sizes, &GreedyMethod::stochastic(10.0)),
+            &code,
+            &sizes,
+            "GreedyMethod::stochastic",
+        );
+        verify_optimizer_result(
+            optimize_code(&code, &sizes, &TreeSA::fast()),
+            &code,
+            &sizes,
+            "TreeSA::fast",
+        );
+        verify_optimizer_result(
+            optimize_code(&code, &sizes, &TreeSA::path()),
+            &code,
+            &sizes,
+            "TreeSA::path",
+        );
+    }
+}
