@@ -801,4 +801,134 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_tensors_approx_equal() {
+        let a = ArrayD::from_shape_vec(IxDyn(&[2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        let b = ArrayD::from_shape_vec(IxDyn(&[2, 2]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+
+        assert!(tensors_approx_equal(&a, &b, 1e-5, 1e-8));
+
+        // Slightly different
+        let c = ArrayD::from_shape_vec(IxDyn(&[2, 2]), vec![1.0, 2.0, 3.0, 4.0001]).unwrap();
+        assert!(tensors_approx_equal(&a, &c, 1e-3, 1e-8));
+        assert!(!tensors_approx_equal(&a, &c, 1e-6, 1e-10));
+
+        // Different shapes
+        let d = ArrayD::from_shape_vec(IxDyn(&[4]), vec![1.0, 2.0, 3.0, 4.0]).unwrap();
+        assert!(!tensors_approx_equal(&a, &d, 1e-5, 1e-8));
+    }
+
+    #[test]
+    fn test_execute_nested_single_contraction() {
+        use crate::greedy::optimize_greedy;
+        use crate::{EinCode, GreedyMethod};
+
+        // Simple matrix multiplication: A[i,j] * B[j,k] -> C[i,k]
+        let code = EinCode::new(vec![vec![1usize, 2], vec![2, 3]], vec![1, 3]);
+        let sizes: HashMap<usize, usize> = [(1, 2), (2, 3), (3, 2)].into();
+        let tree = optimize_greedy(&code, &sizes, &GreedyMethod::default()).unwrap();
+
+        // Set up contractor
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2, 3]); // A: 2x3
+        contractor.add_tensor(1, vec![3, 2]); // B: 3x2
+
+        // Build label map
+        let label_map: HashMap<usize, usize> = [(1, 1), (2, 2), (3, 3)].into();
+
+        let result_idx = execute_nested(&tree, &mut contractor, &label_map);
+
+        let result_shape = contractor.get_shape(result_idx).unwrap();
+        assert_eq!(result_shape, vec![2, 2]);
+    }
+
+    #[test]
+    fn test_execute_nested_chain() {
+        use crate::greedy::optimize_greedy;
+        use crate::{EinCode, GreedyMethod};
+
+        // Chain: A[i,j] * B[j,k] * C[k,l] -> D[i,l]
+        let code = EinCode::new(vec![vec![1usize, 2], vec![2, 3], vec![3, 4]], vec![1, 4]);
+        let sizes: HashMap<usize, usize> = [(1, 2), (2, 3), (3, 4), (4, 2)].into();
+        let tree = optimize_greedy(&code, &sizes, &GreedyMethod::default()).unwrap();
+
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2, 3]); // A: 2x3
+        contractor.add_tensor(1, vec![3, 4]); // B: 3x4
+        contractor.add_tensor(2, vec![4, 2]); // C: 4x2
+
+        let label_map: HashMap<usize, usize> = [(1, 1), (2, 2), (3, 3), (4, 4)].into();
+
+        let result_idx = execute_nested(&tree, &mut contractor, &label_map);
+        let result_shape = contractor.get_shape(result_idx).unwrap();
+        assert_eq!(result_shape, vec![2, 2]); // i x l
+    }
+
+    #[test]
+    fn test_execute_nested_scalar_result() {
+        use crate::greedy::optimize_greedy;
+        use crate::{EinCode, GreedyMethod};
+
+        // Trace-like: A[i,j] * B[j,i] -> scalar
+        let code = EinCode::new(vec![vec![1usize, 2], vec![2, 1]], vec![]);
+        let sizes: HashMap<usize, usize> = [(1, 2), (2, 3)].into();
+        let tree = optimize_greedy(&code, &sizes, &GreedyMethod::default()).unwrap();
+
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2, 3]);
+        contractor.add_tensor(1, vec![3, 2]);
+
+        let label_map: HashMap<usize, usize> = [(1, 1), (2, 2)].into();
+
+        let result_idx = execute_nested(&tree, &mut contractor, &label_map);
+        let result_tensor = contractor.get_tensor(result_idx).unwrap();
+        assert_eq!(result_tensor.ndim(), 0); // Scalar
+    }
+
+    #[test]
+    fn test_naive_contractor_get_tensor() {
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2, 3]);
+
+        let tensor = contractor.get_tensor(0);
+        assert!(tensor.is_some());
+        assert_eq!(tensor.unwrap().shape(), &[2, 3]);
+
+        // Non-existent tensor
+        let missing = contractor.get_tensor(99);
+        assert!(missing.is_none());
+    }
+
+    #[test]
+    fn test_naive_contractor_get_shape() {
+        let mut contractor = NaiveContractor::new();
+        contractor.add_tensor(0, vec![2, 3, 4]);
+
+        let shape = contractor.get_shape(0);
+        assert_eq!(shape, Some(vec![2, 3, 4]));
+
+        // Non-existent tensor
+        let missing = contractor.get_shape(99);
+        assert!(missing.is_none());
+    }
+
+    #[test]
+    fn test_generate_random_eincode_determinism() {
+        // Run multiple times and check basic properties hold
+        for _ in 0..5 {
+            let (ixs, output) = generate_random_eincode(4, 6, false, false);
+            assert_eq!(ixs.len(), 4);
+
+            // Each tensor should have 1-4 indices
+            for ix in &ixs {
+                assert!(!ix.is_empty());
+                assert!(ix.len() <= 5); // 1-4 base + possibly 1 duplicate
+            }
+
+            // Output should have no duplicates
+            let output_set: HashSet<_> = output.iter().collect();
+            assert_eq!(output_set.len(), output.len());
+        }
+    }
 }

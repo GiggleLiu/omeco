@@ -1774,4 +1774,199 @@ mod tests {
         assert!(contraction_out.contains(&2)); // contraction_output includes x
         assert!(!intermediate_out.contains(&2)); // compute_intermediate_output excludes x
     }
+
+    #[test]
+    fn test_bitset_basic_operations() {
+        let mut bs = BitSet::new(100);
+
+        // Initially empty
+        assert!(!bs.contains(0));
+        assert!(!bs.contains(50));
+        assert!(!bs.contains(99));
+
+        // Insert and check
+        bs.insert(0);
+        bs.insert(50);
+        bs.insert(99);
+
+        assert!(bs.contains(0));
+        assert!(bs.contains(50));
+        assert!(bs.contains(99));
+        assert!(!bs.contains(1));
+        assert!(!bs.contains(51));
+
+        // Clear
+        bs.clear();
+        assert!(!bs.contains(0));
+        assert!(!bs.contains(50));
+        assert!(!bs.contains(99));
+    }
+
+    #[test]
+    fn test_bitset_set_from_slice() {
+        let mut bs = BitSet::new(100);
+
+        bs.set_from_slice(&[10, 20, 30, 40]);
+
+        assert!(bs.contains(10));
+        assert!(bs.contains(20));
+        assert!(bs.contains(30));
+        assert!(bs.contains(40));
+        assert!(!bs.contains(0));
+        assert!(!bs.contains(15));
+        assert!(!bs.contains(50));
+
+        // Set from different slice (should clear old values)
+        bs.set_from_slice(&[5, 15]);
+
+        assert!(bs.contains(5));
+        assert!(bs.contains(15));
+        assert!(!bs.contains(10)); // Old value should be cleared
+    }
+
+    #[test]
+    fn test_bitset_boundary_conditions() {
+        let mut bs = BitSet::new(64); // Exactly one word
+
+        bs.insert(0);
+        bs.insert(63);
+
+        assert!(bs.contains(0));
+        assert!(bs.contains(63));
+
+        // Test with larger capacity
+        let mut bs2 = BitSet::new(128);
+        bs2.insert(64); // First bit of second word
+        bs2.insert(127);
+
+        assert!(bs2.contains(64));
+        assert!(bs2.contains(127));
+        assert!(!bs2.contains(63));
+    }
+
+    #[test]
+    fn test_bitset_out_of_bounds() {
+        let mut bs = BitSet::new(50);
+
+        // Insert beyond capacity should not panic (it's a no-op)
+        bs.insert(100);
+        assert!(!bs.contains(100));
+    }
+
+    #[test]
+    fn test_scratch_space_compute_intermediate_output() {
+        let mut scratch = ScratchSpace::new(10);
+
+        let a = vec![0, 1, 2]; // i, j, x
+        let c = vec![3, 4]; // k, l
+        let b = vec![1, 3]; // sibling: j, k
+        let d = vec![0, 4]; // final: i, l
+
+        let output = scratch.compute_intermediate_output(&a, &c, &b, &d);
+
+        assert!(output.contains(&0)); // i
+        assert!(output.contains(&1)); // j
+        assert!(output.contains(&3)); // k
+        assert!(output.contains(&4)); // l
+        assert!(!output.contains(&2)); // x
+    }
+
+    #[test]
+    fn test_scratch_space_tcscrw() {
+        let mut scratch = ScratchSpace::new(5);
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0, 2.0];
+
+        // Contract [i,j] with [j,k] -> [i,k]
+        let (tc, sc, rw) = scratch.tcscrw(&[0, 1], &[1, 2], &[0, 2], &log2_sizes, true);
+
+        // tc = output + contracted = (i+k) + j = 2+3+3 = 8
+        assert!((tc - 8.0).abs() < 1e-10);
+        // sc = i + k = 2 + 3 = 5
+        assert!((sc - 5.0).abs() < 1e-10);
+        // rw should be computed
+        assert!(rw > 0.0);
+    }
+
+    #[test]
+    fn test_scratch_space_tcscrw_no_rw() {
+        let mut scratch = ScratchSpace::new(5);
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0, 2.0];
+
+        let (tc, sc, rw) = scratch.tcscrw(&[0, 1], &[1, 2], &[0, 2], &log2_sizes, false);
+
+        assert!((tc - 8.0).abs() < 1e-10);
+        assert!((sc - 5.0).abs() < 1e-10);
+        assert_eq!(rw, 0.0); // Should be 0 when compute_rw is false
+    }
+
+    #[test]
+    fn test_scratch_space_rule_diff() {
+        let mut scratch = ScratchSpace::new(5);
+
+        let tree = simple_tree();
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+
+        let diff = scratch.rule_diff(&tree, Rule::Rule1, &log2_sizes, true);
+        assert!(diff.is_some());
+
+        let diff = diff.unwrap();
+        assert!(diff.tc0 > 0.0);
+        assert!(diff.tc1 > 0.0);
+    }
+
+    #[test]
+    fn test_scratch_space_rule_diff_leaf() {
+        let mut scratch = ScratchSpace::new(5);
+
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let log2_sizes = vec![2.0, 3.0];
+
+        // Rule diff on a leaf should return None
+        let diff = scratch.rule_diff(&leaf, Rule::Rule1, &log2_sizes, true);
+        assert!(diff.is_none());
+    }
+
+    #[test]
+    fn test_scratch_space_all_rules() {
+        let mut scratch = ScratchSpace::new(10);
+
+        // Create trees for different rule patterns
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let leaf3 = ExprTree::leaf(vec![3, 4], 3);
+
+        let log2_sizes = vec![2.0, 3.0, 3.0, 3.0, 2.0];
+
+        // Tree for Rules 1 and 2: ((0,1),2)
+        let inner1 = ExprTree::node(leaf0.clone(), leaf1.clone(), vec![0, 2]);
+        let tree12 = ExprTree::node(inner1, leaf2.clone(), vec![0, 3]);
+
+        assert!(scratch
+            .rule_diff(&tree12, Rule::Rule1, &log2_sizes, true)
+            .is_some());
+        assert!(scratch
+            .rule_diff(&tree12, Rule::Rule2, &log2_sizes, true)
+            .is_some());
+
+        // Tree for Rules 3 and 4: (0,(1,2))
+        let inner2 = ExprTree::node(leaf1.clone(), leaf2.clone(), vec![1, 3]);
+        let tree34 = ExprTree::node(leaf0.clone(), inner2, vec![0, 3]);
+
+        assert!(scratch
+            .rule_diff(&tree34, Rule::Rule3, &log2_sizes, true)
+            .is_some());
+        assert!(scratch
+            .rule_diff(&tree34, Rule::Rule4, &log2_sizes, true)
+            .is_some());
+
+        // Tree for Rule 5: ((0,1),(2,3))
+        let left = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+        let right = ExprTree::node(leaf2, leaf3, vec![2, 4]);
+        let tree5 = ExprTree::node(left, right, vec![0, 4]);
+
+        assert!(scratch
+            .rule_diff(&tree5, Rule::Rule5, &log2_sizes, true)
+            .is_some());
+    }
 }
