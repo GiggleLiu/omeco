@@ -404,6 +404,45 @@ pub fn generate_ring_edges(n: usize) -> Vec<(usize, usize)> {
     edges
 }
 
+/// Generate a chain (path) graph
+///
+/// Creates a path graph with the specified number of vertices.
+/// Each vertex connects to its next neighbor in a line.
+/// Returns n-1 edges for n vertices.
+pub fn generate_chain_edges(n: usize) -> Vec<(usize, usize)> {
+    (1..n).map(|i| (i, i + 1)).collect()
+}
+
+/// Generate Petersen graph edges
+///
+/// Creates the Petersen graph with 10 vertices and 15 edges.
+/// The Petersen graph is a 3-regular graph consisting of:
+/// - An outer pentagon (vertices 1-5)
+/// - An inner pentagram (vertices 6-10)
+/// - Spokes connecting outer to inner vertices
+pub fn generate_petersen_edges() -> Vec<(usize, usize)> {
+    let mut edges = Vec::new();
+
+    // Outer pentagon (vertices 1-5)
+    for i in 1..=5 {
+        edges.push((i, (i % 5) + 1));
+    }
+
+    // Inner pentagram (vertices 6-10) - connect with skip of 2
+    for i in 0..5 {
+        let from = 6 + i;
+        let to = 6 + (i + 2) % 5;
+        edges.push((from, to));
+    }
+
+    // Spokes connecting outer to inner
+    for i in 1..=5 {
+        edges.push((i, i + 5));
+    }
+
+    edges
+}
+
 /// Execute a NestedEinsum contraction tree using NaiveContractor
 ///
 /// This recursively executes the contraction tree and returns the final result tensor.
@@ -477,7 +516,10 @@ fn execute_nested_impl<L: crate::Label>(
                 (result_idx, output_labels)
             } else {
                 // For >2 args, contract sequentially
-                panic!("execute_nested only supports binary trees, got {} args", child_results.len());
+                panic!(
+                    "execute_nested only supports binary trees, got {} args",
+                    child_results.len()
+                );
             }
         }
     }
@@ -609,10 +651,7 @@ mod tests {
     #[test]
     fn test_generate_fullerene_edges() {
         let edges = generate_fullerene_edges();
-        assert!(
-            !edges.is_empty(),
-            "Fullerene graph should have edges"
-        );
+        assert!(!edges.is_empty(), "Fullerene graph should have edges");
 
         // Check all edges are 1-indexed
         for &(a, b) in &edges {
@@ -625,10 +664,7 @@ mod tests {
     #[test]
     fn test_generate_tutte_edges() {
         let edges = generate_tutte_edges();
-        assert!(
-            !edges.is_empty(),
-            "Tutte graph should have edges"
-        );
+        assert!(!edges.is_empty(), "Tutte graph should have edges");
 
         // Check all edges are 1-indexed
         for &(a, b) in &edges {
@@ -643,5 +679,51 @@ mod tests {
         // Test Default trait implementation
         let contractor = NaiveContractor::default();
         assert_eq!(contractor.tensors.len(), 0, "Default should be empty");
+    }
+
+    #[test]
+    fn test_generate_chain_edges() {
+        let edges = generate_chain_edges(5);
+        assert_eq!(edges.len(), 4, "Chain with 5 vertices should have 4 edges");
+
+        // Check edges form a path
+        assert_eq!(edges[0], (1, 2));
+        assert_eq!(edges[1], (2, 3));
+        assert_eq!(edges[2], (3, 4));
+        assert_eq!(edges[3], (4, 5));
+    }
+
+    #[test]
+    fn test_generate_chain_edges_small() {
+        let edges = generate_chain_edges(2);
+        assert_eq!(edges.len(), 1, "Chain with 2 vertices should have 1 edge");
+        assert_eq!(edges[0], (1, 2));
+    }
+
+    #[test]
+    fn test_generate_petersen_edges() {
+        let edges = generate_petersen_edges();
+        assert_eq!(edges.len(), 15, "Petersen graph should have 15 edges");
+
+        // Check all edges are valid (vertices 1-10)
+        for &(a, b) in &edges {
+            assert!((1..=10).contains(&a), "Vertices should be 1-10");
+            assert!((1..=10).contains(&b), "Vertices should be 1-10");
+            assert_ne!(a, b, "No self-loops");
+        }
+
+        // Check it's 3-regular: each vertex should appear exactly 3 times
+        let mut degree = [0; 11];
+        for &(a, b) in &edges {
+            degree[a] += 1;
+            degree[b] += 1;
+        }
+        for (v, &d) in degree.iter().enumerate().take(11).skip(1) {
+            assert_eq!(
+                d, 3,
+                "Petersen graph is 3-regular, vertex {} has degree {}",
+                v, d
+            );
+        }
     }
 }

@@ -354,14 +354,19 @@ fn expr_tree_to_nested<L: Label>(
     match tree {
         ExprTree::Leaf(info) => NestedEinsum::leaf(info.tensor_id.unwrap_or(0)),
         ExprTree::Node { left, right, info } => {
-            let left_nested = expr_tree_to_nested(left, original_ixs, inverse_map, openedges, level + 1);
-            let right_nested = expr_tree_to_nested(right, original_ixs, inverse_map, openedges, level + 1);
+            let left_nested =
+                expr_tree_to_nested(left, original_ixs, inverse_map, openedges, level + 1);
+            let right_nested =
+                expr_tree_to_nested(right, original_ixs, inverse_map, openedges, level + 1);
 
             // At level 0 (root), use openedges; otherwise use computed output
             let iy: Vec<L> = if level == 0 {
                 openedges.to_vec()
             } else {
-                info.out_dims.iter().map(|&i| inverse_map[i].clone()).collect()
+                info.out_dims
+                    .iter()
+                    .map(|&i| inverse_map[i].clone())
+                    .collect()
             };
 
             // Get input labels from children
@@ -450,7 +455,9 @@ pub fn optimize_treesa<L: Label>(
         .min_by(|(_, s1, _, _, _), (_, s2, _, _, _)| s1.partial_cmp(s2).unwrap())?;
 
     // Convert back to NestedEinsum with openedges for correct root output (issue #13)
-    Some(expr_tree_to_nested(&best_tree, &code.ixs, &labels, &code.iy, 0))
+    Some(expr_tree_to_nested(
+        &best_tree, &code.ixs, &labels, &code.iy, 0,
+    ))
 }
 
 #[cfg(test)]
