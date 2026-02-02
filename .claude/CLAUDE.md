@@ -12,10 +12,7 @@
 When making changes:
 1. **Check Julia implementation first** at `~/.julia/dev/OMEinsumContractionOrders/`
 2. **Match algorithm behavior** - TreeSA, GreedyMethod, and complexity calculations must produce equivalent results
-3. **Run comparative benchmarks** to verify alignment:
-   ```bash
-   make benchmark-all      # Run Rust, Python, and Julia benchmarks
-   ```
+3. **Run comparative benchmarks** to verify alignment
 4. **Key files to compare:**
    - `treesa.jl` ↔ `omeco/src/treesa.rs`
    - `greedy.jl` ↔ `omeco/src/greedy.rs`
@@ -52,19 +49,6 @@ make clean              # Clean build artifacts
 make python-dev         # Build and install Python package locally (for testing)
 make python-build       # Build Python wheel for distribution
 make python-test        # Run Python tests with pytest
-```
-
-### Benchmarks
-```bash
-# Generate benchmark graphs (shared across all implementations)
-python benchmarks/generate_graphs.py
-
-# Run individual benchmarks
-cargo run --release --example benchmark -p omeco     # Rust benchmark
-python benchmarks/benchmark_python.py                 # Python benchmark
-julia --project=benchmarks benchmarks/benchmark_julia.jl  # Julia benchmark
-
-# Results are saved to benchmarks/results/
 ```
 
 ### Documentation
@@ -150,6 +134,38 @@ examples/           # Usage examples
 - Clippy with no warnings
 - Proper formatting
 - **Benchmark tc values must match Julia within tolerance**
+
+## Benchmarks
+
+### Running Benchmarks
+```bash
+# Run Rust benchmark
+cargo run --release --example benchmark -p omeco
+
+# Run Python benchmark
+python benchmarks/benchmark_python.py
+
+# Run Julia benchmark
+julia --project=benchmarks benchmarks/benchmark_julia.jl
+
+# Compare all results
+python benchmarks/compare_results.py
+
+# Run all benchmarks
+./benchmarks/run_benchmarks.sh
+```
+
+### Benchmark Graphs
+Shared graphs in `benchmarks/graphs/`:
+- `chain_10.json`, `chain_20.json` - Matrix chains
+- `grid_4x4.json`, `grid_5x5.json`, `grid_6x6.json` - 2D grids
+- `petersen.json` - Petersen graph (10 vertices, 15 edges)
+- `reg3_50.json`, `reg3_100.json`, `reg3_250.json` - Random 3-regular graphs
+
+### Expected Results
+TreeSA tc values should match Julia within stochastic variation:
+- Chain/grid graphs: exact match expected
+- Random graphs: within ~5% due to stochastic optimization
 
 ## Debugging Performance Issues
 

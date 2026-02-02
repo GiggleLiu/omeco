@@ -14,11 +14,12 @@
 //! let sizes: HashMap<char, usize> = [('i', 2), ('j', 3), ('k', 2)].into();
 //! let tree = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
 //!
-//! // Write to file
-//! writejson("/tmp/test.json", &tree).unwrap();
+//! // Write to file (using temp directory for cross-platform compatibility)
+//! let path = std::env::temp_dir().join("omeco_test.json");
+//! writejson(&path, &tree).unwrap();
 //!
 //! // Read back
-//! let loaded: omeco::json::ContractionOrder<char> = readjson("/tmp/test.json").unwrap();
+//! let loaded: omeco::json::ContractionOrder<char> = readjson(&path).unwrap();
 //! ```
 
 use crate::eincode::{EinCode, NestedEinsum, SlicedEinsum};
