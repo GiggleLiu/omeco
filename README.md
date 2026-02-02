@@ -317,21 +317,20 @@ We benchmark TreeSA performance by comparing the Rust implementation against the
 
 | Problem | Tensors | Indices | Rust tc | Julia tc | Rust (ms) | Julia (ms) |
 |---------|---------|---------|---------|----------|-----------|------------|
-| chain_10 | 10 | 11 | 23.10 | 23.10 | 19.3 | 40.6 |
-| chain_20 | 20 | 21 | 24.18 | 24.18 | 42.5 | 61.2 |
-| grid_4x4 | 16 | 24 | 9.18 | 9.18 | 132.7 | 144.6 |
-| grid_5x5 | 25 | 40 | 10.96 | 10.96 | 279.0 | 292.6 |
-| grid_6x6 | 36 | 60 | 12.15 | 12.15 | 469.0 | 471.7 |
-| petersen | 10 | 15 | 8.49 | 8.49 | 33.3 | 37.0 |
-| reg3_50 | 50 | 74 | 13.03 | 12.96 | 600.5 | 608.5 |
-| reg3_100 | 100 | 148 | 17.21 | 17.24 | 1517.3 | 1471.9 |
-| reg3_250 | 250 | 372 | 45.20 | 48.01 | 5660.5 | 5148.0 |
+| chain_10 | 10 | 11 | 23.10 | 23.10 | 17.5 | 40.6 |
+| chain_20 | 20 | 21 | 24.18 | 24.18 | 38.1 | 61.2 |
+| grid_4x4 | 16 | 24 | 9.18 | 9.18 | 116.1 | 144.6 |
+| grid_5x5 | 25 | 40 | 10.96 | 10.96 | 238.6 | 292.6 |
+| grid_6x6 | 36 | 60 | 12.15 | 12.15 | 393.2 | 471.7 |
+| petersen | 10 | 15 | 8.49 | 8.49 | 30.0 | 37.0 |
+| reg3_50 | 50 | 74 | 13.03 | 12.96 | 521.5 | 608.5 |
+| reg3_100 | 100 | 148 | 17.23 | 17.24 | 1303.3 | 1471.9 |
+| reg3_250 | 250 | 372 | 50.01 | 48.01 | 4572.5 | 5148.0 |
 
 **Key observations:**
 - Rust TreeSA produces **equivalent tc values** as Julia on all tested problems (within stochastic variation)
-- Rust is **faster for small/medium problems** (up to 50% faster on chain graphs)
-- Performance is **comparable** for large problems
-- The `reg3_250` benchmark shows TreeSA reduces tc from ~68 (greedy) to ~45, a **34% improvement**
+- Rust is **faster than Julia on all benchmarks** (10-60% faster)
+- The `reg3_250` benchmark shows TreeSA reduces tc from ~70 (greedy) to ~50, a **29% improvement**
 
 To run the benchmarks yourself:
 
