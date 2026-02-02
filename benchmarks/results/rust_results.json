@@ -1,0 +1,222 @@
+{
+  "backend": "omeco (native Rust)",
+  "language": "rust",
+  "results": {
+    "chain_10": {
+      "description": "Matrix chain of 10 matrices",
+      "greedy": {
+        "avg_ms": 0.1167341,
+        "runs": 10,
+        "rwc": 18.042599881712917,
+        "sc": 13.287712379549449,
+        "tc": 23.101493570766486,
+        "total_ms": 1.167341
+      },
+      "indices": 11,
+      "name": "chain_10",
+      "tensors": 10,
+      "treesa": {
+        "avg_ms": 21.03143,
+        "niters": 50,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 18.042599881712917,
+        "sc": 13.287712379549449,
+        "tc": 23.101493570766486,
+        "total_ms": 63.09429
+      }
+    },
+    "chain_20": {
+      "description": "Matrix chain of 20 matrices",
+      "greedy": {
+        "avg_ms": 0.1498641,
+        "runs": 10,
+        "rwc": 19.120602393714194,
+        "sc": 13.287712379549449,
+        "tc": 24.179496082767763,
+        "total_ms": 1.498641
+      },
+      "indices": 21,
+      "name": "chain_20",
+      "tensors": 20,
+      "treesa": {
+        "avg_ms": 46.10219866666667,
+        "niters": 50,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 19.12060239371419,
+        "sc": 13.287712379549449,
+        "tc": 24.17949608276776,
+        "total_ms": 138.306596
+      }
+    },
+    "grid_4x4": {
+      "description": "4x4 grid tensor network",
+      "greedy": {
+        "avg_ms": 0.1993023,
+        "runs": 10,
+        "rwc": 10.109830654278793,
+        "sc": 6.0,
+        "tc": 10.807354922057604,
+        "total_ms": 1.993023
+      },
+      "indices": 24,
+      "name": "grid_4x4",
+      "tensors": 16,
+      "treesa": {
+        "avg_ms": 170.39300933333334,
+        "niters": 100,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 8.980139577639159,
+        "sc": 4.0,
+        "tc": 9.179909090014934,
+        "total_ms": 511.179028
+      }
+    },
+    "grid_5x5": {
+      "description": "5x5 grid tensor network",
+      "greedy": {
+        "avg_ms": 0.6792928,
+        "runs": 10,
+        "rwc": 10.755722153642282,
+        "sc": 6.0,
+        "tc": 11.375039431346925,
+        "total_ms": 6.792928
+      },
+      "indices": 40,
+      "name": "grid_5x5",
+      "tensors": 25,
+      "treesa": {
+        "avg_ms": 208.07766733333332,
+        "niters": 100,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 10.401946123976536,
+        "sc": 6.0,
+        "tc": 10.957102041562283,
+        "total_ms": 624.2330019999999
+      }
+    },
+    "grid_6x6": {
+      "description": "6x6 grid tensor network",
+      "greedy": {
+        "avg_ms": 0.6267736,
+        "runs": 10,
+        "rwc": 12.017156386383112,
+        "sc": 8.0,
+        "tc": 13.04984854945056,
+        "total_ms": 6.267736
+      },
+      "indices": 60,
+      "name": "grid_6x6",
+      "tensors": 36,
+      "treesa": {
+        "avg_ms": 457.825537,
+        "niters": 100,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 11.371232128369622,
+        "sc": 6.0,
+        "tc": 12.151016538892247,
+        "total_ms": 1373.476611
+      }
+    },
+    "petersen": {
+      "description": "Petersen graph (10 vertices, 15 edges)",
+      "greedy": {
+        "avg_ms": 0.1667665,
+        "runs": 10,
+        "rwc": 8.396604781181859,
+        "sc": 4.0,
+        "tc": 8.523561956057012,
+        "total_ms": 1.667665
+      },
+      "indices": 15,
+      "name": "petersen",
+      "tensors": 10,
+      "treesa": {
+        "avg_ms": 41.06614666666667,
+        "niters": 50,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 8.326429487122303,
+        "sc": 4.0,
+        "tc": 8.491853096329674,
+        "total_ms": 123.19844
+      }
+    },
+    "reg3_100": {
+      "description": "Random 3-regular graph with 100 vertices",
+      "greedy": {
+        "avg_ms": 3.1098822,
+        "runs": 10,
+        "rwc": 20.533555021735097,
+        "sc": 18.0,
+        "tc": 26.374136053165724,
+        "total_ms": 31.098822000000002
+      },
+      "indices": 148,
+      "name": "reg3_100",
+      "tensors": 100,
+      "treesa": {
+        "avg_ms": 1214.6851843333334,
+        "niters": 100,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 15.314760242525026,
+        "sc": 11.0,
+        "tc": 17.230508358900096,
+        "total_ms": 3644.0555529999997
+      }
+    },
+    "reg3_250": {
+      "description": "Random 3-regular graph with 250 vertices",
+      "greedy": {
+        "avg_ms": 10.9254968,
+        "runs": 10,
+        "rwc": 54.007295725044415,
+        "sc": 53.0,
+        "tc": 69.32194795123047,
+        "total_ms": 109.25496799999999
+      },
+      "indices": 372,
+      "name": "reg3_250",
+      "tensors": 250,
+      "treesa": {
+        "avg_ms": 3702.234813666667,
+        "niters": 100,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 36.194540232963334,
+        "sc": 33.0,
+        "tc": 46.03071502212161,
+        "total_ms": 11106.704441
+      }
+    },
+    "reg3_50": {
+      "description": "Random 3-regular graph with 50 vertices",
+      "greedy": {
+        "avg_ms": 1.2421663,
+        "runs": 10,
+        "rwc": 13.256650984287088,
+        "sc": 10.0,
+        "tc": 15.185804615108458,
+        "total_ms": 12.421662999999999
+      },
+      "indices": 74,
+      "name": "reg3_50",
+      "tensors": 50,
+      "treesa": {
+        "avg_ms": 529.314194,
+        "niters": 100,
+        "ntrials": 1,
+        "runs": 3,
+        "rwc": 11.989749275462133,
+        "sc": 8.0,
+        "tc": 12.970824901362615,
+        "total_ms": 1587.9425820000001
+      }
+    }
+  }
+}
