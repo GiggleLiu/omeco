@@ -321,16 +321,19 @@ fn select_pair<R: Rng>(
 ///
 /// Uses the hypergraph information in `incidence_list` to determine which
 /// indices are external (in final output or connecting to other tensors).
+/// The `openedges` parameter specifies the final output indices for the root node.
 pub fn tree_to_nested_einsum<L: Label>(
     tree: &ContractionTree,
     incidence_list: &IncidenceList<usize, L>,
+    openedges: &[L],
 ) -> NestedEinsum<L> {
     // First, collect all leaf indices to build the mapping from the incidence list
     let mut leaf_labels: HashMap<usize, Vec<L>> = HashMap::new();
     collect_leaf_labels(tree, incidence_list, &mut leaf_labels);
 
-    // Then recursively build the nested einsum
-    build_nested(tree, &leaf_labels, incidence_list)
+    // Then recursively build the nested einsum with level tracking
+    // At level 0 (root), use openedges; at level > 0, compute intermediate output
+    build_nested_with_level(tree, &leaf_labels, incidence_list, openedges, 0)
 }
 
 fn collect_leaf_labels<L: Label>(
@@ -351,10 +354,12 @@ fn collect_leaf_labels<L: Label>(
     }
 }
 
-fn build_nested<L: Label>(
+fn build_nested_with_level<L: Label>(
     tree: &ContractionTree,
     leaf_labels: &HashMap<usize, Vec<L>>,
     incidence_list: &IncidenceList<usize, L>,
+    openedges: &[L],
+    level: usize,
 ) -> NestedEinsum<L> {
     match tree {
         ContractionTree::Leaf(idx) => NestedEinsum::leaf(*idx),
@@ -363,22 +368,29 @@ fn build_nested<L: Label>(
             let left_labels = get_subtree_labels(left, leaf_labels, incidence_list);
             let right_labels = get_subtree_labels(right, leaf_labels, incidence_list);
 
-            // Extract vertex IDs for hypergraph lookup
-            let left_vertices = get_subtree_vertices(left);
-            let right_vertices = get_subtree_vertices(right);
+            // At level 0 (root), use openedges; otherwise compute intermediate output
+            let output_labels = if level == 0 {
+                openedges.to_vec()
+            } else {
+                // Extract vertex IDs for hypergraph lookup
+                let left_vertices = get_subtree_vertices(left);
+                let right_vertices = get_subtree_vertices(right);
 
-            // Use hypergraph-aware output computation
-            let output_labels = compute_contraction_output_with_hypergraph(
-                &left_labels,
-                &right_labels,
-                incidence_list,
-                &left_vertices,
-                &right_vertices,
-            );
+                // Use hypergraph-aware output computation
+                compute_contraction_output_with_hypergraph(
+                    &left_labels,
+                    &right_labels,
+                    incidence_list,
+                    &left_vertices,
+                    &right_vertices,
+                )
+            };
 
-            // Build children
-            let left_nested = build_nested(left, leaf_labels, incidence_list);
-            let right_nested = build_nested(right, leaf_labels, incidence_list);
+            // Build children recursively with incremented level
+            let left_nested =
+                build_nested_with_level(left, leaf_labels, incidence_list, openedges, level + 1);
+            let right_nested =
+                build_nested_with_level(right, leaf_labels, incidence_list, openedges, level + 1);
 
             // Create the einsum code for this contraction
             let eins = EinCode::new(vec![left_labels, right_labels], output_labels);
@@ -497,7 +509,12 @@ pub fn optimize_greedy<L: Label>(
     let log2_sizes = log2_size_dict(size_dict);
 
     let result = tree_greedy(&il, &log2_sizes, config.alpha, config.temperature)?;
-    Some(tree_to_nested_einsum(&result.tree, result.incidence_list()))
+    // Pass openedges (code.iy) to ensure root output matches requested output (issue #13)
+    Some(tree_to_nested_einsum(
+        &result.tree,
+        result.incidence_list(),
+        &code.iy,
+    ))
 }
 
 #[cfg(test)]
@@ -753,7 +770,7 @@ mod tests {
         let iy = vec!['i', 'k'];
         let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
 
-        let nested = tree_to_nested_einsum(&tree, &il);
+        let nested = tree_to_nested_einsum(&tree, &il, &iy);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 2);
     }
@@ -767,7 +784,7 @@ mod tests {
         let iy = vec!['i', 'l'];
         let il = IncidenceList::<usize, char>::from_eincode(&ixs, &iy);
 
-        let nested = tree_to_nested_einsum(&tree, &il);
+        let nested = tree_to_nested_einsum(&tree, &il, &iy);
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 3);
     }

@@ -343,23 +343,31 @@ fn try_mutate_node<R: Rng>(
 }
 
 /// Convert an ExprTree back to a NestedEinsum.
+/// The `openedges` parameter specifies the final output indices for the root node.
 fn expr_tree_to_nested<L: Label>(
     tree: &ExprTree,
     original_ixs: &[Vec<L>],
     inverse_map: &[L],
+    openedges: &[L],
+    level: usize,
 ) -> NestedEinsum<L> {
     match tree {
         ExprTree::Leaf(info) => NestedEinsum::leaf(info.tensor_id.unwrap_or(0)),
         ExprTree::Node { left, right, info } => {
-            let left_nested = expr_tree_to_nested(left, original_ixs, inverse_map);
-            let right_nested = expr_tree_to_nested(right, original_ixs, inverse_map);
+            let left_nested =
+                expr_tree_to_nested(left, original_ixs, inverse_map, openedges, level + 1);
+            let right_nested =
+                expr_tree_to_nested(right, original_ixs, inverse_map, openedges, level + 1);
 
-            // Convert output dims back to labels
-            let iy: Vec<L> = info
-                .out_dims
-                .iter()
-                .map(|&i| inverse_map[i].clone())
-                .collect();
+            // At level 0 (root), use openedges; otherwise use computed output
+            let iy: Vec<L> = if level == 0 {
+                openedges.to_vec()
+            } else {
+                info.out_dims
+                    .iter()
+                    .map(|&i| inverse_map[i].clone())
+                    .collect()
+            };
 
             // Get input labels from children
             let left_labels = get_child_labels(&left_nested, original_ixs);
@@ -446,8 +454,14 @@ pub fn optimize_treesa<L: Label>(
         .into_iter()
         .min_by(|(_, s1, _, _, _), (_, s2, _, _, _)| s1.partial_cmp(s2).unwrap())?;
 
-    // Convert back to NestedEinsum
-    Some(expr_tree_to_nested(&best_tree, &code.ixs, &labels))
+    // Convert back to NestedEinsum with openedges for correct root output (issue #13)
+    Some(expr_tree_to_nested(
+        &best_tree,
+        &code.ixs,
+        &labels,
+        &code.iy,
+        0,
+    ))
 }
 
 #[cfg(test)]

@@ -392,3 +392,105 @@ mod tests {
         assert!(nested.is_binary() || nested.is_leaf());
     }
 }
+
+#[cfg(test)]
+mod issue_13_tests {
+    use super::*;
+
+    #[test]
+    fn test_issue_13_greedy_scalar_output() {
+        // Issue #13: optimize_code ignores final output indices (iy) in NestedEinsum
+        // A[i,j] @ B[j,k] -> scalar (empty iy)
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1usize, 2]], vec![]);
+
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 2), (2, 2)].into();
+        let optimizer = GreedyMethod::default();
+
+        let tree = optimize_code(&code, &sizes, &optimizer).expect("should optimize");
+
+        match &tree {
+            NestedEinsum::Node { eins, .. } => {
+                assert_eq!(
+                    eins.iy, code.iy,
+                    "Root node's iy should match requested output. Got {:?}, expected {:?}",
+                    eins.iy, code.iy
+                );
+            }
+            NestedEinsum::Leaf { .. } => {
+                panic!("Multi-tensor operation should not return Leaf");
+            }
+        }
+    }
+
+    #[test]
+    fn test_issue_13_greedy_partial_output() {
+        // A[i,j] @ B[j,k] -> [i] (only keep first index)
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1usize, 2]], vec![0usize]);
+
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 2), (2, 2)].into();
+        let optimizer = GreedyMethod::default();
+
+        let tree = optimize_code(&code, &sizes, &optimizer).expect("should optimize");
+
+        match &tree {
+            NestedEinsum::Node { eins, .. } => {
+                assert_eq!(
+                    eins.iy, code.iy,
+                    "Root node's iy should match requested output. Got {:?}, expected {:?}",
+                    eins.iy, code.iy
+                );
+            }
+            NestedEinsum::Leaf { .. } => {
+                panic!("Multi-tensor operation should not return Leaf");
+            }
+        }
+    }
+
+    #[test]
+    fn test_issue_13_treesa_scalar_output() {
+        // Issue #13: TreeSA should also respect final output indices
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1usize, 2]], vec![]);
+
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 2), (2, 2)].into();
+        let optimizer = TreeSA::fast();
+
+        let tree = optimize_code(&code, &sizes, &optimizer).expect("should optimize");
+
+        match &tree {
+            NestedEinsum::Node { eins, .. } => {
+                assert_eq!(
+                    eins.iy, code.iy,
+                    "TreeSA root node's iy should match requested output. Got {:?}, expected {:?}",
+                    eins.iy, code.iy
+                );
+            }
+            NestedEinsum::Leaf { .. } => {
+                panic!("Multi-tensor operation should not return Leaf");
+            }
+        }
+    }
+
+    #[test]
+    fn test_issue_13_treesa_partial_output() {
+        // A[i,j] @ B[j,k] -> [k] (only keep last index)
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1usize, 2]], vec![2usize]);
+
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 2), (2, 2)].into();
+        let optimizer = TreeSA::fast();
+
+        let tree = optimize_code(&code, &sizes, &optimizer).expect("should optimize");
+
+        match &tree {
+            NestedEinsum::Node { eins, .. } => {
+                assert_eq!(
+                    eins.iy, code.iy,
+                    "TreeSA root node's iy should match requested output. Got {:?}, expected {:?}",
+                    eins.iy, code.iy
+                );
+            }
+            NestedEinsum::Leaf { .. } => {
+                panic!("Multi-tensor operation should not return Leaf");
+            }
+        }
+    }
+}
