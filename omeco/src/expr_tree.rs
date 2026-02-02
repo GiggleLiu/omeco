@@ -5,6 +5,362 @@
 
 use crate::utils::{fast_log2sumexp2, fast_log2sumexp2_3};
 
+/// A simple bitset for O(1) membership testing on large graphs.
+///
+/// For graphs with many edges (100+), this provides significant speedup
+/// over linear scans in hot paths like `compute_intermediate_output`.
+#[derive(Clone)]
+pub struct BitSet {
+    bits: Vec<u64>,
+}
+
+impl BitSet {
+    /// Create a new bitset that can hold values in [0, capacity).
+    #[inline]
+    pub fn new(capacity: usize) -> Self {
+        let num_words = (capacity + 63) / 64;
+        Self {
+            bits: vec![0; num_words],
+        }
+    }
+
+    /// Clear all bits.
+    #[inline]
+    pub fn clear(&mut self) {
+        for word in &mut self.bits {
+            *word = 0;
+        }
+    }
+
+    /// Set a bit.
+    #[inline]
+    pub fn insert(&mut self, idx: usize) {
+        let word = idx / 64;
+        let bit = idx % 64;
+        if word < self.bits.len() {
+            self.bits[word] |= 1 << bit;
+        }
+    }
+
+    /// Check if a bit is set.
+    #[inline]
+    pub fn contains(&self, idx: usize) -> bool {
+        let word = idx / 64;
+        let bit = idx % 64;
+        word < self.bits.len() && (self.bits[word] & (1 << bit)) != 0
+    }
+
+    /// Populate from a slice, clearing first.
+    #[inline]
+    pub fn set_from_slice(&mut self, slice: &[usize]) {
+        self.clear();
+        for &idx in slice {
+            self.insert(idx);
+        }
+    }
+}
+
+/// Scratch space for rule_diff computations on large graphs.
+///
+/// Reuses bitset allocations across many calls to avoid allocation overhead.
+pub struct ScratchSpace {
+    /// Number of unique edge labels
+    pub nedge: usize,
+    // Scratch bitsets for membership testing
+    bits_a: BitSet,
+    bits_b: BitSet,
+    bits_c: BitSet,
+    bits_d: BitSet,
+}
+
+impl ScratchSpace {
+    /// Create scratch space for graphs with `nedge` unique edge labels.
+    pub fn new(nedge: usize) -> Self {
+        Self {
+            nedge,
+            bits_a: BitSet::new(nedge),
+            bits_b: BitSet::new(nedge),
+            bits_c: BitSet::new(nedge),
+            bits_d: BitSet::new(nedge),
+        }
+    }
+
+    /// Compute intermediate output using bitsets for O(1) lookups.
+    #[inline]
+    pub fn compute_intermediate_output(
+        &mut self,
+        a: &[usize],
+        c: &[usize],
+        b: &[usize],
+        d: &[usize],
+    ) -> Vec<usize> {
+        self.bits_a.set_from_slice(a);
+        self.bits_b.set_from_slice(b);
+        self.bits_d.set_from_slice(d);
+
+        let mut output = Vec::with_capacity(a.len() + c.len());
+
+        // From a: include if in sibling b OR in final output d
+        for &l in a {
+            if self.bits_b.contains(l) || self.bits_d.contains(l) {
+                output.push(l);
+            }
+        }
+
+        // From c: include if NOT in a AND (in sibling b OR in final output d)
+        for &l in c {
+            if !self.bits_a.contains(l) && (self.bits_b.contains(l) || self.bits_d.contains(l)) {
+                output.push(l);
+            }
+        }
+
+        output
+    }
+
+    /// Compute tcscrw using bitsets for O(1) lookups.
+    #[inline]
+    pub fn tcscrw(
+        &mut self,
+        ix1: &[usize],
+        ix2: &[usize],
+        iy: &[usize],
+        log2_sizes: &[f64],
+        compute_rw: bool,
+    ) -> (f64, f64, f64) {
+        self.bits_b.set_from_slice(ix2);
+        self.bits_c.set_from_slice(iy);
+
+        unsafe {
+            let sc1: f64 = if compute_rw {
+                ix1.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum()
+            } else {
+                0.0
+            };
+            let sc2: f64 = if compute_rw {
+                ix2.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum()
+            } else {
+                0.0
+            };
+            let sc: f64 = iy.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum();
+
+            let mut tc = sc;
+            for &l in ix1 {
+                if self.bits_b.contains(l) && !self.bits_c.contains(l) {
+                    tc += *log2_sizes.get_unchecked(l);
+                }
+            }
+
+            let rw = if compute_rw {
+                fast_log2sumexp2_3(sc, sc1, sc2)
+            } else {
+                0.0
+            };
+
+            (tc, sc, rw)
+        }
+    }
+
+    /// Compute rule_diff using bitsets for O(1) lookups.
+    pub fn rule_diff(
+        &mut self,
+        tree: &ExprTree,
+        rule: Rule,
+        log2_sizes: &[f64],
+        compute_rw: bool,
+    ) -> Option<RuleDiff> {
+        match tree {
+            ExprTree::Leaf(_) => None,
+            ExprTree::Node { left, right, info } => {
+                let d = &info.out_dims;
+
+                match rule {
+                    Rule::Rule1 | Rule::Rule2 => match left.as_ref() {
+                        ExprTree::Node {
+                            left: a,
+                            right: b,
+                            info: ab_info,
+                        } => {
+                            let c = right;
+                            let ab = &ab_info.out_dims;
+
+                            let (tc_ab, sc_ab, rw_ab) =
+                                self.tcscrw(a.labels(), b.labels(), ab, log2_sizes, compute_rw);
+                            let (tc_d, sc_d, rw_d) =
+                                self.tcscrw(ab, c.labels(), d, log2_sizes, compute_rw);
+                            let tc0 = fast_log2sumexp2(tc_ab, tc_d);
+                            let sc0 = sc_ab.max(sc_d);
+                            let rw0 = if compute_rw {
+                                fast_log2sumexp2(rw_ab, rw_d)
+                            } else {
+                                0.0
+                            };
+
+                            let new_labels = match rule {
+                                Rule::Rule1 => self.compute_intermediate_output(
+                                    a.labels(),
+                                    c.labels(),
+                                    b.labels(),
+                                    d,
+                                ),
+                                Rule::Rule2 => self.compute_intermediate_output(
+                                    b.labels(),
+                                    c.labels(),
+                                    a.labels(),
+                                    d,
+                                ),
+                                _ => unreachable!(),
+                            };
+
+                            let (tc_new_left, sc_new_left, rw_new_left) = match rule {
+                                Rule::Rule1 => self.tcscrw(
+                                    a.labels(),
+                                    c.labels(),
+                                    &new_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                Rule::Rule2 => self.tcscrw(
+                                    c.labels(),
+                                    b.labels(),
+                                    &new_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                _ => unreachable!(),
+                            };
+
+                            let (tc_new_d, sc_new_d, rw_new_d) = match rule {
+                                Rule::Rule1 => {
+                                    self.tcscrw(&new_labels, b.labels(), d, log2_sizes, compute_rw)
+                                }
+                                Rule::Rule2 => {
+                                    self.tcscrw(&new_labels, a.labels(), d, log2_sizes, compute_rw)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            let tc1 = fast_log2sumexp2(tc_new_left, tc_new_d);
+                            let sc1 = sc_new_left.max(sc_new_d);
+                            let rw1 = if compute_rw {
+                                fast_log2sumexp2(rw_new_left, rw_new_d)
+                            } else {
+                                0.0
+                            };
+
+                            Some(RuleDiff {
+                                tc0,
+                                tc1,
+                                dsc: sc1 - sc0,
+                                rw0,
+                                rw1,
+                                new_labels,
+                            })
+                        }
+                        _ => None,
+                    },
+                    Rule::Rule3 | Rule::Rule4 => match right.as_ref() {
+                        ExprTree::Node {
+                            left: b,
+                            right: c,
+                            info: bc_info,
+                        } => {
+                            let a = left;
+                            let bc = &bc_info.out_dims;
+
+                            let (tc_bc, sc_bc, rw_bc) =
+                                self.tcscrw(b.labels(), c.labels(), bc, log2_sizes, compute_rw);
+                            let (tc_d, sc_d, rw_d) =
+                                self.tcscrw(a.labels(), bc, d, log2_sizes, compute_rw);
+                            let tc0 = fast_log2sumexp2(tc_bc, tc_d);
+                            let sc0 = sc_bc.max(sc_d);
+                            let rw0 = if compute_rw {
+                                fast_log2sumexp2(rw_bc, rw_d)
+                            } else {
+                                0.0
+                            };
+
+                            let new_labels = match rule {
+                                Rule::Rule3 => self.compute_intermediate_output(
+                                    c.labels(),
+                                    a.labels(),
+                                    b.labels(),
+                                    d,
+                                ),
+                                Rule::Rule4 => self.compute_intermediate_output(
+                                    b.labels(),
+                                    a.labels(),
+                                    c.labels(),
+                                    d,
+                                ),
+                                _ => unreachable!(),
+                            };
+
+                            let (tc_new_right, sc_new_right, rw_new_right) = match rule {
+                                Rule::Rule3 => self.tcscrw(
+                                    a.labels(),
+                                    c.labels(),
+                                    &new_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                Rule::Rule4 => self.tcscrw(
+                                    b.labels(),
+                                    a.labels(),
+                                    &new_labels,
+                                    log2_sizes,
+                                    compute_rw,
+                                ),
+                                _ => unreachable!(),
+                            };
+
+                            let (tc_new_d, sc_new_d, rw_new_d) = match rule {
+                                Rule::Rule3 => {
+                                    self.tcscrw(b.labels(), &new_labels, d, log2_sizes, compute_rw)
+                                }
+                                Rule::Rule4 => {
+                                    self.tcscrw(c.labels(), &new_labels, d, log2_sizes, compute_rw)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            let tc1 = fast_log2sumexp2(tc_new_right, tc_new_d);
+                            let sc1 = sc_new_right.max(sc_new_d);
+                            let rw1 = if compute_rw {
+                                fast_log2sumexp2(rw_new_right, rw_new_d)
+                            } else {
+                                0.0
+                            };
+
+                            Some(RuleDiff {
+                                tc0,
+                                tc1,
+                                dsc: sc1 - sc0,
+                                rw0,
+                                rw1,
+                                new_labels,
+                            })
+                        }
+                        _ => None,
+                    },
+                    Rule::Rule5 => {
+                        // Rule5: swap left and right - no intermediate output change
+                        let (tc, _sc, rw) =
+                            self.tcscrw(left.labels(), right.labels(), d, log2_sizes, compute_rw);
+                        Some(RuleDiff {
+                            tc0: tc,
+                            tc1: tc,
+                            dsc: 0.0,
+                            rw0: rw,
+                            rw1: rw,
+                            new_labels: d.clone(),
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Cached complexity values for a subtree.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CachedComplexity {
@@ -226,7 +582,11 @@ fn slice_contains(slice: &[usize], elem: usize) -> bool {
 /// - rw: log2 of total read-write operations
 ///
 /// Uses linear search instead of HashSet for small index arrays (typical tensor dimensions).
-#[inline]
+/// Uses unchecked array access for performance (like Julia's @inbounds).
+///
+/// # Safety
+/// Callers must ensure all label indices in ix1, ix2, iy are < log2_sizes.len()
+#[inline(always)]
 pub fn tcscrw(
     ix1: &[usize],
     ix2: &[usize],
@@ -234,30 +594,41 @@ pub fn tcscrw(
     log2_sizes: &[f64],
     compute_rw: bool,
 ) -> (f64, f64, f64) {
-    // Size of input 1
-    let sc1: f64 = ix1.iter().map(|&l| log2_sizes[l]).sum();
-    // Size of input 2
-    let sc2: f64 = ix2.iter().map(|&l| log2_sizes[l]).sum();
-    // Size of output
-    let sc: f64 = iy.iter().map(|&l| log2_sizes[l]).sum();
+    // SAFETY: Labels are guaranteed to be valid indices into log2_sizes
+    // This matches Julia's @inbounds for performance
+    unsafe {
+        // Size of input 1
+        let sc1: f64 = if compute_rw {
+            ix1.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum()
+        } else {
+            0.0
+        };
+        // Size of input 2
+        let sc2: f64 = if compute_rw {
+            ix2.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum()
+        } else {
+            0.0
+        };
+        // Size of output
+        let sc: f64 = iy.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum();
 
-    // Time complexity = output size + contracted indices
-    // Use linear search (faster for typical small tensor dimensions < 20)
-    let mut tc = sc;
-    for &l in ix1 {
-        if slice_contains(ix2, l) && !slice_contains(iy, l) {
-            tc += log2_sizes[l];
+        // Time complexity = output size + contracted indices
+        let mut tc = sc;
+        for &l in ix1 {
+            if slice_contains(ix2, l) && !slice_contains(iy, l) {
+                tc += *log2_sizes.get_unchecked(l);
+            }
         }
+
+        // Read-write complexity
+        let rw = if compute_rw {
+            fast_log2sumexp2_3(sc, sc1, sc2)
+        } else {
+            0.0
+        };
+
+        (tc, sc, rw)
     }
-
-    // Read-write complexity
-    let rw = if compute_rw {
-        fast_log2sumexp2_3(sc, sc1, sc2)
-    } else {
-        0.0
-    };
-
-    (tc, sc, rw)
 }
 
 /// Compute the output labels for a contraction of two tensors.
@@ -282,6 +653,45 @@ pub fn contraction_output(ix1: &[usize], ix2: &[usize], final_output: &[usize]) 
         if (!slice_contains(ix1, l) || slice_contains(final_output, l))
             && !slice_contains(&output, l)
         {
+            output.push(l);
+        }
+    }
+
+    output
+}
+
+/// Compute intermediate output labels for tree mutation (Julia's abcacb logic).
+///
+/// For rule `((a,b),c) → ((a,c),b)`:
+/// - `a`, `c` are being contracted to form the new intermediate
+/// - `b` is the sibling tensor that will receive the result
+/// - `d` is the final output of the entire subtree
+///
+/// A label from `a` is included if it appears in sibling `b` OR in final output `d`.
+/// A label from `c` is included if it's NOT in `a` AND (in `b` OR in `d`).
+///
+/// This matches Julia's abcacb function exactly, assuming no repeated indices
+/// within each tensor (standard for tensor networks).
+#[inline(always)]
+pub fn compute_intermediate_output(
+    a: &[usize],
+    c: &[usize],
+    b: &[usize],
+    d: &[usize],
+) -> Vec<usize> {
+    let mut output = Vec::with_capacity(a.len() + c.len());
+
+    // From a: include if in sibling b OR in final output d
+    // Julia: "suppose no repeated indices" - skip output dedup check
+    for &l in a {
+        if slice_contains(b, l) || slice_contains(d, l) {
+            output.push(l);
+        }
+    }
+
+    // From c: include if NOT in a AND (in sibling b OR in final output d)
+    for &l in c {
+        if !slice_contains(a, l) && (slice_contains(b, l) || slice_contains(d, l)) {
             output.push(l);
         }
     }
@@ -429,14 +839,26 @@ pub fn rule_diff(
                             };
 
                             // New structure depends on rule
+                            // Use compute_intermediate_output matching Julia's abcacb logic
                             let new_labels = match rule {
                                 Rule::Rule1 => {
-                                    // ((a,c),b) -> ac_labels
-                                    contraction_output(a.labels(), c.labels(), d)
+                                    // ((a,b),c) → ((a,c),b): contract a with c, sibling is b
+                                    compute_intermediate_output(
+                                        a.labels(),
+                                        c.labels(),
+                                        b.labels(),
+                                        d,
+                                    )
                                 }
                                 Rule::Rule2 => {
-                                    // ((c,b),a) -> cb_labels
-                                    contraction_output(c.labels(), b.labels(), d)
+                                    // ((a,b),c) → ((c,b),a): contract c with b, sibling is a
+                                    // Julia: abcacb(b, a, ab, c, d) computes (b,c) with sibling a
+                                    compute_intermediate_output(
+                                        b.labels(),
+                                        c.labels(),
+                                        a.labels(),
+                                        d,
+                                    )
                                 }
                                 _ => unreachable!(),
                             };
@@ -515,14 +937,27 @@ pub fn rule_diff(
                             };
 
                             // New structure depends on rule
+                            // Use compute_intermediate_output matching Julia's abcacb logic
                             let new_labels = match rule {
                                 Rule::Rule3 => {
-                                    // (b,(a,c)) -> ac_labels
-                                    contraction_output(a.labels(), c.labels(), d)
+                                    // (a,(b,c)) → (b,(a,c)): contract a with c, sibling is b
+                                    // Julia: abcacb(c, b, bc, a, d) computes (c,a) with sibling b
+                                    compute_intermediate_output(
+                                        c.labels(),
+                                        a.labels(),
+                                        b.labels(),
+                                        d,
+                                    )
                                 }
                                 Rule::Rule4 => {
-                                    // (c,(b,a)) -> ba_labels
-                                    contraction_output(b.labels(), a.labels(), d)
+                                    // (a,(b,c)) → (c,(b,a)): contract b with a, sibling is c
+                                    // Julia: abcacb(b, c, bc, a, d) computes (b,a) with sibling c
+                                    compute_intermediate_output(
+                                        b.labels(),
+                                        a.labels(),
+                                        c.labels(),
+                                        d,
+                                    )
                                 }
                                 _ => unreachable!(),
                             };
@@ -588,6 +1023,71 @@ pub fn rule_diff(
                         new_labels: info.out_dims.clone(),
                     })
                 }
+            }
+        }
+    }
+}
+
+/// Apply a mutation rule to a tree in place (like Julia's update_tree!).
+/// This avoids allocations by swapping references.
+pub fn apply_rule_mut(tree: &mut ExprTree, rule: Rule, new_labels: Vec<usize>) {
+    if let ExprTree::Node { left, right, .. } = tree {
+        match rule {
+            Rule::Rule1 => {
+                // ((a,b),c) → ((a,c),b)
+                if let ExprTree::Node {
+                    right: b,
+                    info: left_info,
+                    ..
+                } = left.as_mut()
+                {
+                    // Swap b and c (right)
+                    std::mem::swap(b, right);
+                    left_info.out_dims = new_labels;
+                }
+            }
+            Rule::Rule2 => {
+                // ((a,b),c) → ((c,b),a)
+                if let ExprTree::Node {
+                    left: a,
+                    info: left_info,
+                    ..
+                } = left.as_mut()
+                {
+                    // Swap a and c (right)
+                    std::mem::swap(a, right);
+                    left_info.out_dims = new_labels;
+                }
+            }
+            Rule::Rule3 => {
+                // (a,(b,c)) → (b,(a,c))
+                if let ExprTree::Node {
+                    left: b,
+                    info: right_info,
+                    ..
+                } = right.as_mut()
+                {
+                    // Swap a (left) and b
+                    std::mem::swap(left, b);
+                    right_info.out_dims = new_labels;
+                }
+            }
+            Rule::Rule4 => {
+                // (a,(b,c)) → (c,(b,a))
+                if let ExprTree::Node {
+                    right: c,
+                    info: right_info,
+                    ..
+                } = right.as_mut()
+                {
+                    // Swap a (left) and c
+                    std::mem::swap(left, c);
+                    right_info.out_dims = new_labels;
+                }
+            }
+            Rule::Rule5 => {
+                // (a,b) → (b,a)
+                std::mem::swap(left, right);
             }
         }
     }
@@ -1225,5 +1725,248 @@ mod tests {
         for (_, count) in counts {
             assert_eq!(count, 1);
         }
+    }
+
+    #[test]
+    fn test_compute_intermediate_output() {
+        // Test case from plan: a=[i,j,x], c=[k,l], b=[j,k], d=[i,l]
+        // Julia: ac = [i, j, k, l] — x excluded because x ∉ b && x ∉ d
+        // Rust should match Julia's abcacb logic
+        let a = vec![0, 1, 2]; // i, j, x
+        let c = vec![3, 4]; // k, l
+        let b = vec![1, 3]; // j, k
+        let d = vec![0, 4]; // i, l
+
+        let output = compute_intermediate_output(&a, &c, &b, &d);
+
+        // Should include: i (in d), j (in b), k (in b), l (in d)
+        // Should NOT include: x (not in b, not in d)
+        assert!(output.contains(&0)); // i
+        assert!(output.contains(&1)); // j
+        assert!(output.contains(&3)); // k
+        assert!(output.contains(&4)); // l
+        assert!(!output.contains(&2)); // x should NOT be included
+        assert_eq!(output.len(), 4);
+    }
+
+    #[test]
+    fn test_compute_intermediate_output_vs_contraction_output() {
+        // Show the difference between compute_intermediate_output and contraction_output
+        // a=[0,1,2], c=[3,4], final_output=[0,4]
+        let a = vec![0, 1, 2]; // i, j, x
+        let c = vec![3, 4]; // k, l
+        let b = vec![1, 3]; // sibling: j, k
+        let d = vec![0, 4]; // final: i, l
+
+        // contraction_output uses: external edges OR in final output
+        let contraction_out = contraction_output(&a, &c, &d);
+        // Should include: 0 (not in c), 1 (not in c), 2 (not in c), 3 (not in a), 4 (in d)
+        // = [0, 1, 2, 3, 4]
+
+        // compute_intermediate_output uses: in sibling OR in final output
+        let intermediate_out = compute_intermediate_output(&a, &c, &b, &d);
+        // From a: 0 (in d), 1 (in b), 2 (not in b, not in d - excluded)
+        // From c: 3 (in b), 4 (in d)
+        // = [0, 1, 3, 4]
+
+        // The key difference: compute_intermediate_output excludes labels that are
+        // only "external" to the contraction but not needed by sibling or final output
+        assert!(contraction_out.contains(&2)); // contraction_output includes x
+        assert!(!intermediate_out.contains(&2)); // compute_intermediate_output excludes x
+    }
+
+    #[test]
+    fn test_bitset_basic_operations() {
+        let mut bs = BitSet::new(100);
+
+        // Initially empty
+        assert!(!bs.contains(0));
+        assert!(!bs.contains(50));
+        assert!(!bs.contains(99));
+
+        // Insert and check
+        bs.insert(0);
+        bs.insert(50);
+        bs.insert(99);
+
+        assert!(bs.contains(0));
+        assert!(bs.contains(50));
+        assert!(bs.contains(99));
+        assert!(!bs.contains(1));
+        assert!(!bs.contains(51));
+
+        // Clear
+        bs.clear();
+        assert!(!bs.contains(0));
+        assert!(!bs.contains(50));
+        assert!(!bs.contains(99));
+    }
+
+    #[test]
+    fn test_bitset_set_from_slice() {
+        let mut bs = BitSet::new(100);
+
+        bs.set_from_slice(&[10, 20, 30, 40]);
+
+        assert!(bs.contains(10));
+        assert!(bs.contains(20));
+        assert!(bs.contains(30));
+        assert!(bs.contains(40));
+        assert!(!bs.contains(0));
+        assert!(!bs.contains(15));
+        assert!(!bs.contains(50));
+
+        // Set from different slice (should clear old values)
+        bs.set_from_slice(&[5, 15]);
+
+        assert!(bs.contains(5));
+        assert!(bs.contains(15));
+        assert!(!bs.contains(10)); // Old value should be cleared
+    }
+
+    #[test]
+    fn test_bitset_boundary_conditions() {
+        let mut bs = BitSet::new(64); // Exactly one word
+
+        bs.insert(0);
+        bs.insert(63);
+
+        assert!(bs.contains(0));
+        assert!(bs.contains(63));
+
+        // Test with larger capacity
+        let mut bs2 = BitSet::new(128);
+        bs2.insert(64); // First bit of second word
+        bs2.insert(127);
+
+        assert!(bs2.contains(64));
+        assert!(bs2.contains(127));
+        assert!(!bs2.contains(63));
+    }
+
+    #[test]
+    fn test_bitset_out_of_bounds() {
+        let mut bs = BitSet::new(50);
+
+        // Insert beyond capacity should not panic (it's a no-op)
+        bs.insert(100);
+        assert!(!bs.contains(100));
+    }
+
+    #[test]
+    fn test_scratch_space_compute_intermediate_output() {
+        let mut scratch = ScratchSpace::new(10);
+
+        let a = vec![0, 1, 2]; // i, j, x
+        let c = vec![3, 4]; // k, l
+        let b = vec![1, 3]; // sibling: j, k
+        let d = vec![0, 4]; // final: i, l
+
+        let output = scratch.compute_intermediate_output(&a, &c, &b, &d);
+
+        assert!(output.contains(&0)); // i
+        assert!(output.contains(&1)); // j
+        assert!(output.contains(&3)); // k
+        assert!(output.contains(&4)); // l
+        assert!(!output.contains(&2)); // x
+    }
+
+    #[test]
+    fn test_scratch_space_tcscrw() {
+        let mut scratch = ScratchSpace::new(5);
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0, 2.0];
+
+        // Contract [i,j] with [j,k] -> [i,k]
+        let (tc, sc, rw) = scratch.tcscrw(&[0, 1], &[1, 2], &[0, 2], &log2_sizes, true);
+
+        // tc = output + contracted = (i+k) + j = 2+3+3 = 8
+        assert!((tc - 8.0).abs() < 1e-10);
+        // sc = i + k = 2 + 3 = 5
+        assert!((sc - 5.0).abs() < 1e-10);
+        // rw should be computed
+        assert!(rw > 0.0);
+    }
+
+    #[test]
+    fn test_scratch_space_tcscrw_no_rw() {
+        let mut scratch = ScratchSpace::new(5);
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0, 2.0];
+
+        let (tc, sc, rw) = scratch.tcscrw(&[0, 1], &[1, 2], &[0, 2], &log2_sizes, false);
+
+        assert!((tc - 8.0).abs() < 1e-10);
+        assert!((sc - 5.0).abs() < 1e-10);
+        assert_eq!(rw, 0.0); // Should be 0 when compute_rw is false
+    }
+
+    #[test]
+    fn test_scratch_space_rule_diff() {
+        let mut scratch = ScratchSpace::new(5);
+
+        let tree = simple_tree();
+        let log2_sizes = vec![2.0, 3.0, 3.0, 2.0];
+
+        let diff = scratch.rule_diff(&tree, Rule::Rule1, &log2_sizes, true);
+        assert!(diff.is_some());
+
+        let diff = diff.unwrap();
+        assert!(diff.tc0 > 0.0);
+        assert!(diff.tc1 > 0.0);
+    }
+
+    #[test]
+    fn test_scratch_space_rule_diff_leaf() {
+        let mut scratch = ScratchSpace::new(5);
+
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let log2_sizes = vec![2.0, 3.0];
+
+        // Rule diff on a leaf should return None
+        let diff = scratch.rule_diff(&leaf, Rule::Rule1, &log2_sizes, true);
+        assert!(diff.is_none());
+    }
+
+    #[test]
+    fn test_scratch_space_all_rules() {
+        let mut scratch = ScratchSpace::new(10);
+
+        // Create trees for different rule patterns
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let leaf3 = ExprTree::leaf(vec![3, 4], 3);
+
+        let log2_sizes = vec![2.0, 3.0, 3.0, 3.0, 2.0];
+
+        // Tree for Rules 1 and 2: ((0,1),2)
+        let inner1 = ExprTree::node(leaf0.clone(), leaf1.clone(), vec![0, 2]);
+        let tree12 = ExprTree::node(inner1, leaf2.clone(), vec![0, 3]);
+
+        assert!(scratch
+            .rule_diff(&tree12, Rule::Rule1, &log2_sizes, true)
+            .is_some());
+        assert!(scratch
+            .rule_diff(&tree12, Rule::Rule2, &log2_sizes, true)
+            .is_some());
+
+        // Tree for Rules 3 and 4: (0,(1,2))
+        let inner2 = ExprTree::node(leaf1.clone(), leaf2.clone(), vec![1, 3]);
+        let tree34 = ExprTree::node(leaf0.clone(), inner2, vec![0, 3]);
+
+        assert!(scratch
+            .rule_diff(&tree34, Rule::Rule3, &log2_sizes, true)
+            .is_some());
+        assert!(scratch
+            .rule_diff(&tree34, Rule::Rule4, &log2_sizes, true)
+            .is_some());
+
+        // Tree for Rule 5: ((0,1),(2,3))
+        let left = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+        let right = ExprTree::node(leaf2, leaf3, vec![2, 4]);
+        let tree5 = ExprTree::node(left, right, vec![0, 4]);
+
+        assert!(scratch
+            .rule_diff(&tree5, Rule::Rule5, &log2_sizes, true)
+            .is_some());
     }
 }

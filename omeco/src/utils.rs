@@ -257,4 +257,38 @@ mod tests {
         let expected = -100.0 + 3_f64.log2();
         assert!((result - expected).abs() < 1e-10);
     }
+
+    #[test]
+    fn test_log2sumexp2_large_values() {
+        // Test with very large values near f64 limits
+        // log2(2^500 + 2^500) = log2(2 * 2^500) = 501
+        let result = log2sumexp2(&[500.0, 500.0]);
+        assert!((result - 501.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_log2sumexp2_mixed_magnitudes() {
+        // Test with values of very different magnitudes
+        // 2^-10 + 2^10 ≈ 2^10 (since 2^-10 ≈ 0.001 is negligible vs 2^10 = 1024)
+        let result = log2sumexp2(&[-10.0, 10.0]);
+        // The exact value is log2(2^-10 + 2^10) = log2(1024.0009765625) ≈ 10.0000014
+        assert!((result - 10.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_log2sumexp2_consistency_with_fast() {
+        // Verify that log2sumexp2 with 2 elements matches fast_log2sumexp2
+        let values = [5.0, 10.0];
+        let result_vec = log2sumexp2(&values);
+        let result_fast = fast_log2sumexp2(5.0, 10.0);
+        assert!((result_vec - result_fast).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_log2sumexp2_many_small_values() {
+        // Many small values can still contribute
+        // log2(8 * 2^10) = log2(2^3 * 2^10) = 13
+        let result = log2sumexp2(&[10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]);
+        assert!((result - 13.0).abs() < 1e-10);
+    }
 }

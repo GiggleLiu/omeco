@@ -1168,10 +1168,7 @@ mod tests {
     #[test]
     fn test_add_nested_labels() {
         let eins = EinCode::new(vec![vec!['a', 'b'], vec!['b', 'c']], vec!['a', 'c']);
-        let nested = NestedEinsum::node(
-            vec![NestedEinsum::leaf(0), NestedEinsum::leaf(1)],
-            eins,
-        );
+        let nested = NestedEinsum::node(vec![NestedEinsum::leaf(0), NestedEinsum::leaf(1)], eins);
 
         let mut labels: Vec<char> = Vec::new();
         add_nested_labels(&nested, &mut labels);

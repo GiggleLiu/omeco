@@ -141,11 +141,7 @@ fn format_tree_recursive(
         }
         NestedEinsum::Node { args, eins } => {
             // Format the einsum operation
-            let ixs_str: Vec<String> = eins
-                .ixs
-                .iter()
-                .map(|ix| indices_to_letters(ix))
-                .collect();
+            let ixs_str: Vec<String> = eins.ixs.iter().map(|ix| indices_to_letters(ix)).collect();
             let iy_str = indices_to_letters(&eins.iy);
             let einsum_notation = if iy_str.is_empty() {
                 ixs_str.join(", ")
@@ -167,11 +163,7 @@ fn format_tree_recursive(
                 let child_prefix = if is_root {
                     String::new()
                 } else {
-                    format!(
-                        "{}{}",
-                        prefix,
-                        if is_last { "   " } else { "│  " }
-                    )
+                    format!("{}{}", prefix, if is_last { "   " } else { "│  " })
                 };
 
                 format_tree_recursive(child, output, &child_prefix, child_is_last, false);

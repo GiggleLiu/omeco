@@ -285,12 +285,7 @@ impl<L: Label> NestedEinsum<L> {
         // Collect the labels for each input tensor
         let ixs: Vec<Vec<L>> = tensor_indices
             .iter()
-            .map(|&idx| {
-                input_labels
-                    .get(idx)
-                    .cloned()
-                    .unwrap_or_default()
-            })
+            .map(|&idx| input_labels.get(idx).cloned().unwrap_or_default())
             .collect();
 
         // Get the final output labels
@@ -815,7 +810,11 @@ mod tests {
 
         // All original tensors should appear in the flattened version
         for original_ix in &original_ixs {
-            assert!(flat.ixs.contains(original_ix), "Missing tensor {:?}", original_ix);
+            assert!(
+                flat.ixs.contains(original_ix),
+                "Missing tensor {:?}",
+                original_ix
+            );
         }
     }
 
@@ -896,9 +895,9 @@ mod tests {
     #[test]
     fn test_is_path_decomposition_greedy_vs_treesa_path() {
         // Test that greedy doesn't guarantee path decomposition, but TreeSA with PathDecomp does
-        use crate::greedy::{optimize_greedy, GreedyMethod};
-        use crate::treesa::{optimize_treesa, TreeSA, Initializer};
         use crate::expr_tree::DecompositionType;
+        use crate::greedy::{optimize_greedy, GreedyMethod};
+        use crate::treesa::{optimize_treesa, Initializer, TreeSA};
         use crate::uniform_size_dict;
 
         let code = EinCode::new(

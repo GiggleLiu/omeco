@@ -9,7 +9,7 @@ use crate::Label;
 use priority_queue::PriorityQueue;
 use rand::prelude::*;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A binary contraction tree built during greedy optimization.
 #[derive(Debug, Clone)]
@@ -162,6 +162,11 @@ where
 }
 
 /// Run the greedy contraction algorithm.
+///
+/// This implementation strictly follows the Julia OMEinsumContractionOrders logic:
+/// 1. Initialize priority queue with ONLY neighbor pairs (connected tensors)
+/// 2. Update costs for ONLY neighbors of the merged vertex
+/// 3. Fall back to arbitrary outer product when no more connected pairs
 pub fn tree_greedy<E: Label>(
     il: &IncidenceList<usize, E>,
     log2_sizes: &HashMap<E, f64>,
@@ -197,17 +202,21 @@ pub fn tree_greedy<E: Label>(
         .map(|&v| (v, ContractionTree::leaf(v)))
         .collect();
 
-    // Initialize priority queue with all pairs (including disconnected tensors for outer products)
+    // Initialize priority queue with ONLY neighbor pairs (Julia: evaluate_costs)
+    // This matches Julia's behavior: only consider connected tensors initially
     let mut pq = PriorityQueue::new();
+    let mut cost_graph: HashSet<(usize, usize)> = HashSet::new();
     let vertices: Vec<usize> = il.vertices().cloned().collect();
 
-    for (i, &vi) in vertices.iter().enumerate() {
-        for &vj in &vertices[i + 1..] {
-            // Include ALL pairs, not just neighbors - this handles outer products
-            // where tensors have no shared indices (issue #11)
-            let dims = ContractionDims::compute(&il, log2_sizes, &vi, &vj);
-            let loss = greedy_loss(&dims, alpha);
-            pq.push((vi.min(vj), vi.max(vj)), Cost(loss));
+    for &vi in &vertices {
+        for vj in il.neighbors(&vi) {
+            if vj > vi {
+                let pair = (vi, vj);
+                let dims = ContractionDims::compute(&il, log2_sizes, &vi, &vj);
+                let loss = greedy_loss(&dims, alpha);
+                pq.push(pair, Cost(loss));
+                cost_graph.insert(pair);
+            }
         }
     }
 
@@ -215,10 +224,19 @@ pub fn tree_greedy<E: Label>(
     let mut next_vertex = vertices.iter().max().copied().unwrap_or(0) + 1;
 
     // Main greedy loop
-    while il.nv() > 1 && !pq.is_empty() {
-        // Select pair to contract
-        let (pair, _) = select_pair(&mut pq, temperature, &mut rng)?;
-        let (vi, vj) = pair;
+    while il.nv() > 1 {
+        // Julia: if cost_values is empty, fall back to arbitrary outer product
+        let (vi, vj) = if pq.is_empty() {
+            let vpool: Vec<usize> = il.vertices().cloned().collect();
+            if vpool.len() < 2 {
+                break;
+            }
+            (vpool[0].min(vpool[1]), vpool[0].max(vpool[1]))
+        } else {
+            // Select pair to contract using temperature sampling
+            let (pair, _) = select_pair(&mut pq, temperature, &mut rng, &mut cost_graph)?;
+            pair
+        };
 
         // Check if both vertices still exist
         if il.edges(&vi).is_none() || il.edges(&vj).is_none() {
@@ -242,6 +260,7 @@ pub fn tree_greedy<E: Label>(
         next_vertex += 1;
 
         // Set edges for the new vertex (output edges of the contraction)
+        // Note: vi keeps its identity in Julia, but we use new_v for clarity
         il.set_edges(new_v, dims.edges_out.clone());
 
         // Remove contracted edges
@@ -254,15 +273,31 @@ pub fn tree_greedy<E: Label>(
         // Store the new tree
         trees.insert(new_v, new_tree);
 
-        // Update costs for ALL remaining vertices (not just neighbors)
-        // This handles outer products where tensors have no shared indices
-        for &other_v in il.vertices() {
-            if other_v != new_v {
-                let pair_key = (new_v.min(other_v), new_v.max(other_v));
-                let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &other_v);
-                let loss = greedy_loss(&new_dims, alpha);
+        // Julia: update_costs! - only update for neighbors of the new vertex
+        for other_v in il.neighbors(&new_v) {
+            let pair_key = (new_v.min(other_v), new_v.max(other_v));
+            let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &other_v);
+            let loss = greedy_loss(&new_dims, alpha);
+
+            if cost_graph.contains(&pair_key) {
+                // Update existing entry
+                pq.change_priority(&pair_key, Cost(loss));
+            } else {
+                // Add new entry
                 pq.push(pair_key, Cost(loss));
+                cost_graph.insert(pair_key);
             }
+        }
+
+        // Julia: remove edges to deleted vertex vj from cost_graph
+        let pairs_to_remove: Vec<_> = cost_graph
+            .iter()
+            .filter(|(a, b)| *a == vj || *b == vj || *a == vi || *b == vi)
+            .cloned()
+            .collect();
+        for pair in pairs_to_remove {
+            pq.remove(&pair);
+            cost_graph.remove(&pair);
         }
     }
 
@@ -284,16 +319,19 @@ pub fn tree_greedy<E: Label>(
 }
 
 /// Select the next pair to contract from the priority queue.
+/// Also updates the cost_graph to track which pairs are in the queue.
 fn select_pair<R: Rng>(
     pq: &mut PriorityQueue<(usize, usize), Cost>,
     temperature: f64,
     rng: &mut R,
+    cost_graph: &mut HashSet<(usize, usize)>,
 ) -> Option<((usize, usize), Cost)> {
     if pq.is_empty() {
         return None;
     }
 
     let (pair1, cost1) = pq.pop()?;
+    cost_graph.remove(&pair1);
 
     if temperature <= 0.0 || pq.is_empty() {
         return Some((pair1, cost1));
@@ -301,18 +339,21 @@ fn select_pair<R: Rng>(
 
     // Boltzmann sampling: consider the second-best option
     let (pair2, cost2) = pq.pop()?;
+    cost_graph.remove(&pair2);
 
     // Probability of accepting the worse option
     let delta = cost2.0 - cost1.0;
     let prob = (-delta / temperature).exp();
 
     if rng.random::<f64>() < prob {
-        // Accept the second option
+        // Accept the second option, push first back
         pq.push(pair1, cost1);
+        cost_graph.insert(pair1);
         Some((pair2, cost2))
     } else {
-        // Keep the first option
+        // Keep the first option, push second back
         pq.push(pair2, cost2);
+        cost_graph.insert(pair2);
         Some((pair1, cost1))
     }
 }
@@ -374,12 +415,20 @@ fn build_nested_with_level<L: Label>(
             } else {
                 let left_vertices = get_subtree_vertices(left);
                 let right_vertices = get_subtree_vertices(right);
-                compute_contraction_output_with_hypergraph(&left_labels, &right_labels, incidence_list, &left_vertices, &right_vertices)
+                compute_contraction_output_with_hypergraph(
+                    &left_labels,
+                    &right_labels,
+                    incidence_list,
+                    &left_vertices,
+                    &right_vertices,
+                )
             };
 
             // Build children recursively with incremented level
-            let left_nested = build_nested_with_level(left, leaf_labels, incidence_list, openedges, level + 1);
-            let right_nested = build_nested_with_level(right, leaf_labels, incidence_list, openedges, level + 1);
+            let left_nested =
+                build_nested_with_level(left, leaf_labels, incidence_list, openedges, level + 1);
+            let right_nested =
+                build_nested_with_level(right, leaf_labels, incidence_list, openedges, level + 1);
 
             // Create the einsum code for this contraction
             let eins = EinCode::new(vec![left_labels, right_labels], output_labels);
@@ -595,24 +644,18 @@ mod tests {
     #[test]
     fn test_contraction_tree_display_deep_nesting() {
         // Create: Node { Node { Leaf(0), Leaf(1) }, Node { Leaf(2), Leaf(3) } }
-        let left_tree = ContractionTree::node(
-            ContractionTree::leaf(0),
-            ContractionTree::leaf(1),
-        );
-        let right_tree = ContractionTree::node(
-            ContractionTree::leaf(2),
-            ContractionTree::leaf(3),
-        );
+        let left_tree = ContractionTree::node(ContractionTree::leaf(0), ContractionTree::leaf(1));
+        let right_tree = ContractionTree::node(ContractionTree::leaf(2), ContractionTree::leaf(3));
         let root = ContractionTree::node(left_tree, right_tree);
 
         let output = format!("{}", root);
 
         // Verify three levels of indentation exist
-        assert!(output.contains("Node {"));             // Level 0
-        assert!(output.contains("  left:   Node {"));   // Level 1
+        assert!(output.contains("Node {")); // Level 0
+        assert!(output.contains("  left:   Node {")); // Level 1
         assert!(output.contains("    left:     Leaf(0)")); // Level 2
         assert!(output.contains("    right:     Leaf(1)"));
-        assert!(output.contains("  right:   Node {"));  // Level 1
+        assert!(output.contains("  right:   Node {")); // Level 1
         assert!(output.contains("    left:     Leaf(2)")); // Level 2
         assert!(output.contains("    right:     Leaf(3)"));
 
@@ -822,7 +865,10 @@ mod tests {
 
         let result = optimize_greedy(&code, &size_dict, &optimizer);
 
-        assert!(result.is_some(), "Should return Some for multi-tensor einsum");
+        assert!(
+            result.is_some(),
+            "Should return Some for multi-tensor einsum"
+        );
         let nested = result.unwrap();
 
         // For a 2-tensor operation, we should get a Node, not a Leaf
@@ -856,7 +902,10 @@ mod tests {
         assert!(result.is_some());
         let nested = result.unwrap();
 
-        assert!(!nested.is_leaf(), "3-tensor operation should not return Leaf");
+        assert!(
+            !nested.is_leaf(),
+            "3-tensor operation should not return Leaf"
+        );
         assert_eq!(nested.leaf_count(), 3);
         assert!(nested.is_binary());
     }
@@ -871,7 +920,7 @@ mod tests {
             vec!['a', 'c', 'd'],
             vec!['b', 'c', 'e'],
             vec!['e'],
-            vec!['f'],  // disconnected tensor
+            vec!['f'], // disconnected tensor
         ];
         let iy = vec!['a', 'f'];
         let code = EinCode::new(ixs, iy);
@@ -883,11 +932,18 @@ mod tests {
 
         let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
 
-        assert!(result.is_some(), "Disconnected contraction tree should be optimizable");
+        assert!(
+            result.is_some(),
+            "Disconnected contraction tree should be optimizable"
+        );
         let nested = result.unwrap();
 
         // Should include all 5 tensors
-        assert_eq!(nested.leaf_count(), 5, "Should have 5 leaves for 5 input tensors");
+        assert_eq!(
+            nested.leaf_count(),
+            5,
+            "Should have 5 leaves for 5 input tensors"
+        );
         assert!(nested.is_binary(), "Should produce a binary tree");
     }
 
@@ -1214,7 +1270,11 @@ mod tests {
         );
 
         // Expected: [] (all indices contract to scalar)
-        assert_eq!(output.len(), 0, "All indices should contract to produce scalar");
+        assert_eq!(
+            output.len(),
+            0,
+            "All indices should contract to produce scalar"
+        );
     }
 }
 
@@ -1262,7 +1322,11 @@ mod extensive_tests {
         let result_shape = contractor.get_shape(result_idx).unwrap();
 
         // Verify correct output shape [i, k]
-        assert_eq!(*result_shape, vec![2, 2], "Result should be 2x2 for indices i,k");
+        assert_eq!(
+            *result_shape,
+            vec![2, 2],
+            "Result should be 2x2 for indices i,k"
+        );
     }
 
     #[test]
@@ -1304,7 +1368,11 @@ mod extensive_tests {
         let result_tensor = contractor.get_tensor(result_idx).unwrap();
 
         // Grid contraction should produce a scalar (all indices contracted)
-        assert_eq!(result_tensor.ndim(), 0, "Grid contraction should produce scalar");
+        assert_eq!(
+            result_tensor.ndim(),
+            0,
+            "Grid contraction should produce scalar"
+        );
     }
 
     #[test]
@@ -1312,9 +1380,7 @@ mod extensive_tests {
         // Ring: 10 indices in a cycle (simple hyperedge test)
         // Each tensor shares an index with the next, forming a ring
         let n = 10;
-        let ixs: Vec<Vec<usize>> = (0..n)
-            .map(|i| vec![i + 1, ((i + 1) % n) + 1])
-            .collect();
+        let ixs: Vec<Vec<usize>> = (0..n).map(|i| vec![i + 1, ((i + 1) % n) + 1]).collect();
 
         let code = EinCode::new(ixs.clone(), vec![]);
         let size_dict: HashMap<usize, usize> = (1..=n).map(|i| (i, 2)).collect();
@@ -1322,7 +1388,10 @@ mod extensive_tests {
         let nested = optimize_greedy(&code, &size_dict, &GreedyMethod::default()).unwrap();
 
         // Should successfully optimize without panicking
-        assert!(nested.is_binary(), "Ring optimization should produce binary tree");
+        assert!(
+            nested.is_binary(),
+            "Ring optimization should produce binary tree"
+        );
     }
 
     #[test]
@@ -1347,7 +1416,11 @@ mod extensive_tests {
         let result_tensor = contractor.get_tensor(result_idx).unwrap();
 
         // Chain contraction with output [1,5] should produce 2x2 matrix
-        assert_eq!(result_tensor.shape(), &[2, 2], "Chain contraction should produce 2x2 matrix for output [1,5]");
+        assert_eq!(
+            result_tensor.shape(),
+            &[2, 2],
+            "Chain contraction should produce 2x2 matrix for output [1,5]"
+        );
     }
 
     #[test]
@@ -1522,10 +1595,10 @@ mod extensive_tests {
 
         // Define the eincode
         let ixs = vec![
-            vec!['i', 'i'], // tensor 0: ii (trace)
-            vec!['i', 'k'], // tensor 1: ik
+            vec!['i', 'i'],      // tensor 0: ii (trace)
+            vec!['i', 'k'],      // tensor 1: ik
             vec!['i', 'k', 'l'], // tensor 2: ikl
-            vec!['k', 'k'], // tensor 3: kk (trace)
+            vec!['k', 'k'],      // tensor 3: kk (trace)
         ];
         let output = vec!['k', 'i', 'i', 'm']; // kiim - note 'm' not in any input!
 
@@ -1619,9 +1692,8 @@ mod extensive_tests {
         sizes.insert('k', 3);
 
         // Create label map for contractor
-        let label_map: HashMap<char, usize> = vec![('i', 1), ('j', 2), ('k', 3)]
-            .into_iter()
-            .collect();
+        let label_map: HashMap<char, usize> =
+            vec![('i', 1), ('j', 2), ('k', 3)].into_iter().collect();
 
         // Setup tensors
         let mut contractor1 = NaiveContractor::new();
@@ -1645,8 +1717,12 @@ mod extensive_tests {
         let treesa_idx = execute_nested(&treesa_result, &mut contractor2, &label_map);
 
         // Compare results
-        let greedy_tensor = contractor1.get_tensor(greedy_idx).expect("Result should exist");
-        let treesa_tensor = contractor2.get_tensor(treesa_idx).expect("Result should exist");
+        let greedy_tensor = contractor1
+            .get_tensor(greedy_idx)
+            .expect("Result should exist");
+        let treesa_tensor = contractor2
+            .get_tensor(treesa_idx)
+            .expect("Result should exist");
 
         assert!(
             tensors_approx_equal(greedy_tensor, treesa_tensor, 1e-5, 1e-8),
@@ -1655,13 +1731,12 @@ mod extensive_tests {
     }
 
     #[test]
-    #[ignore = "execute_nested currently only supports simple contraction graphs; this test documents a known limitation for complex graphs and is not a blocker for hyperedge preservation"]
     fn test_cross_optimizer_3_regular_graph_small() {
         // Test on a small 3-regular graph with vertex tensors
-        // This test is ignored because execute_nested needs extension to handle
-        // more complex contraction patterns. The hyperedge fix in this PR is
-        // validated through simpler test cases.
-        use crate::test_utils::{execute_nested, generate_ring_edges, tensors_approx_equal, NaiveContractor};
+        // Validates that different optimizers produce numerically equivalent results.
+        use crate::test_utils::{
+            execute_nested, generate_ring_edges, tensors_approx_equal, NaiveContractor,
+        };
         use crate::treesa::TreeSA;
         use crate::CodeOptimizer;
 
@@ -1670,10 +1745,7 @@ mod extensive_tests {
         let edges = generate_ring_edges(n);
 
         // Create eincode: edges + vertices
-        let mut ixs: Vec<Vec<usize>> = edges
-            .iter()
-            .map(|&(i, j)| vec![i, j])
-            .collect();
+        let mut ixs: Vec<Vec<usize>> = edges.iter().map(|&(i, j)| vec![i, j]).collect();
 
         // Add vertex tensors (single index)
         for i in 1..=n {
@@ -1711,8 +1783,12 @@ mod extensive_tests {
         let treesa_idx = execute_nested(&treesa_result, &mut contractor2, &label_map);
 
         // Compare results
-        let greedy_tensor = contractor1.get_tensor(greedy_idx).expect("Greedy result should exist");
-        let treesa_tensor = contractor2.get_tensor(treesa_idx).expect("TreeSA result should exist");
+        let greedy_tensor = contractor1
+            .get_tensor(greedy_idx)
+            .expect("Greedy result should exist");
+        let treesa_tensor = contractor2
+            .get_tensor(treesa_idx)
+            .expect("TreeSA result should exist");
 
         eprintln!("Greedy tensor shape: {:?}", greedy_tensor.shape());
         eprintln!("TreeSA tensor shape: {:?}", treesa_tensor.shape());
@@ -1733,17 +1809,12 @@ mod extensive_tests {
         use crate::treesa::TreeSA;
         use crate::CodeOptimizer;
 
-        let code = EinCode::new(
-            vec![vec!['i', 'i'], vec!['i', 'j']],
-            vec!['j'],
-        );
+        let code = EinCode::new(vec![vec!['i', 'i'], vec!['i', 'j']], vec!['j']);
         let mut sizes = HashMap::new();
         sizes.insert('i', 3);
         sizes.insert('j', 4);
 
-        let label_map: HashMap<char, usize> = vec![('i', 1), ('j', 2)]
-            .into_iter()
-            .collect();
+        let label_map: HashMap<char, usize> = vec![('i', 1), ('j', 2)].into_iter().collect();
 
         // Setup tensors
         let mut contractor1 = NaiveContractor::new();
@@ -1766,12 +1837,161 @@ mod extensive_tests {
         let treesa_idx = execute_nested(&treesa_result, &mut contractor2, &label_map);
 
         // Compare
-        let greedy_tensor = contractor1.get_tensor(greedy_idx).expect("Result should exist");
-        let treesa_tensor = contractor2.get_tensor(treesa_idx).expect("Result should exist");
+        let greedy_tensor = contractor1
+            .get_tensor(greedy_idx)
+            .expect("Result should exist");
+        let treesa_tensor = contractor2
+            .get_tensor(treesa_idx)
+            .expect("Result should exist");
 
         assert!(
             tensors_approx_equal(greedy_tensor, treesa_tensor, 1e-5, 1e-8),
             "Greedy and TreeSA should produce same result with trace"
         );
+    }
+
+    // ==================== GRAPH-BASED OPTIMIZER TESTS ====================
+
+    #[test]
+    fn test_optimize_petersen_graph() {
+        // Test optimization on the Petersen graph (10 vertices, 15 edges)
+        // The Petersen graph is 3-regular, making it a good test for hyperedges
+        use crate::complexity::nested_complexity;
+        use crate::test_utils::generate_petersen_edges;
+
+        let edges = generate_petersen_edges();
+        assert_eq!(edges.len(), 15, "Petersen graph should have 15 edges");
+
+        // Create eincode: each edge is a tensor with 2 indices
+        let ixs: Vec<Vec<usize>> = edges.iter().map(|&(a, b)| vec![a, b]).collect();
+        let code = EinCode::new(ixs, vec![]); // Contract to scalar
+
+        // All indices have size 2
+        let size_dict: HashMap<usize, usize> = (1..=10).map(|i| (i, 2)).collect();
+
+        // Optimize
+        let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
+        assert!(result.is_some(), "Should optimize Petersen graph");
+
+        let nested = result.unwrap();
+        assert!(nested.is_binary(), "Result should be binary tree");
+        assert_eq!(
+            nested.leaf_count(),
+            15,
+            "Should have 15 leaves (one per edge)"
+        );
+
+        // Check complexity - Petersen graph should have reasonable space complexity
+        let cc = nested_complexity(&nested, &size_dict, &code.ixs);
+        // Space complexity for Petersen graph with bond dim 2 should be achievable at ~5
+        assert!(
+            cc.sc <= 6.0,
+            "Space complexity should be reasonable, got {}",
+            cc.sc
+        );
+    }
+
+    #[test]
+    fn test_optimize_fullerene_c60() {
+        // Test optimization on the C60 fullerene graph (60 vertices, ~90 edges)
+        use crate::complexity::nested_complexity;
+        use crate::test_utils::generate_fullerene_edges;
+
+        let edges = generate_fullerene_edges();
+        assert!(!edges.is_empty(), "Fullerene should have edges");
+
+        // Create eincode: each edge is a tensor
+        let ixs: Vec<Vec<usize>> = edges.iter().map(|&(a, b)| vec![a, b]).collect();
+        let code = EinCode::new(ixs.clone(), vec![]); // Contract to scalar
+
+        // All indices have size 2
+        let max_vertex = edges
+            .iter()
+            .flat_map(|&(a, b)| vec![a, b])
+            .max()
+            .unwrap_or(60);
+        let size_dict: HashMap<usize, usize> = (1..=max_vertex).map(|i| (i, 2)).collect();
+
+        // Optimize - this is a large problem, so just verify it completes
+        let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
+        assert!(result.is_some(), "Should optimize fullerene graph");
+
+        let nested = result.unwrap();
+        assert!(nested.is_binary(), "Result should be binary tree");
+        assert_eq!(
+            nested.leaf_count(),
+            ixs.len(),
+            "Should have correct number of leaves"
+        );
+
+        // Check that complexity is computed without error
+        let cc = nested_complexity(&nested, &size_dict, &code.ixs);
+        assert!(cc.sc.is_finite(), "Space complexity should be finite");
+        assert!(cc.tc.is_finite(), "Time complexity should be finite");
+    }
+
+    #[test]
+    fn test_optimize_chain_with_complexity() {
+        // Test chain optimization and verify space complexity is optimal (sc = 2 for dim 2)
+        use crate::complexity::nested_complexity;
+        use crate::test_utils::generate_chain_edges;
+
+        for n in [5, 10, 15] {
+            let edges = generate_chain_edges(n);
+
+            // Create eincode: each edge connects consecutive vertices
+            let ixs: Vec<Vec<usize>> = edges.iter().map(|&(a, b)| vec![a, b]).collect();
+            // Keep endpoints open
+            let code = EinCode::new(ixs.clone(), vec![1, n]);
+
+            // All indices have size 4
+            let size_dict: HashMap<usize, usize> = (1..=n).map(|i| (i, 4)).collect();
+
+            let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
+            assert!(result.is_some(), "Should optimize chain of length {}", n);
+
+            let nested = result.unwrap();
+
+            // For a chain, optimal space complexity is log2(bond_dim^2) = 2 * log2(4) = 4
+            let cc = nested_complexity(&nested, &size_dict, &code.ixs);
+            assert!(
+                cc.sc <= 5.0,
+                "Chain sc should be ~4, got {} for n={}",
+                cc.sc,
+                n
+            );
+        }
+    }
+
+    #[test]
+    fn test_optimize_ring_with_complexity() {
+        // Test ring optimization and verify complexity
+        use crate::complexity::nested_complexity;
+        use crate::test_utils::generate_ring_edges;
+
+        for n in [5, 10, 15] {
+            let edges = generate_ring_edges(n);
+
+            // Create eincode: ring contracts to scalar
+            let ixs: Vec<Vec<usize>> = edges.iter().map(|&(a, b)| vec![a, b]).collect();
+            let code = EinCode::new(ixs.clone(), vec![]);
+
+            // All indices have size 2
+            let size_dict: HashMap<usize, usize> = (1..=n).map(|i| (i, 2)).collect();
+
+            let result = optimize_greedy(&code, &size_dict, &GreedyMethod::default());
+            assert!(result.is_some(), "Should optimize ring of size {}", n);
+
+            let nested = result.unwrap();
+
+            // Ring should have reasonable space complexity
+            let cc = nested_complexity(&nested, &size_dict, &code.ixs);
+            assert!(
+                cc.sc <= 4.0,
+                "Ring sc should be low, got {} for n={}",
+                cc.sc,
+                n
+            );
+        }
     }
 }

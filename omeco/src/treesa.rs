@@ -6,10 +6,11 @@
 
 use crate::eincode::{EinCode, NestedEinsum};
 use crate::expr_tree::{
-    apply_rule, contraction_output, rule_diff, tree_complexity, DecompositionType, ExprTree, Rule,
+    apply_rule_mut, tree_complexity, DecompositionType, ExprTree, Rule, ScratchSpace,
 };
 use crate::greedy::{optimize_greedy, GreedyMethod};
 use crate::score::ScoreFunction;
+use crate::utils::fast_log2sumexp2;
 use crate::Label;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -44,8 +45,8 @@ pub enum Initializer {
 
 impl Default for TreeSA {
     fn default() -> Self {
-        // Default schedule: β from 0.01 to 15.0 in steps of 0.05
-        let betas: Vec<f64> = (1..=300).map(|i| 0.01 + 0.05 * i as f64).collect();
+        // Default schedule: β from 0.01 to ~15.0 in steps of 0.05 (matching Julia's 0.01:0.05:15)
+        let betas: Vec<f64> = (0..300).map(|i| 0.01 + 0.05 * i as f64).collect();
         Self {
             betas,
             ntrials: 10,
@@ -156,33 +157,80 @@ fn init_greedy<L: Label>(
 }
 
 /// Convert a NestedEinsum to an ExprTree.
+/// Matches Julia's `_exprtree` function exactly.
 fn nested_to_expr_tree<L: Label>(
     nested: &NestedEinsum<L>,
-    int_ixs: &[Vec<usize>],
+    _int_ixs: &[Vec<usize>],
     _int_iy: &[usize],
     label_map: &HashMap<L, usize>,
 ) -> Option<ExprTree> {
+    // Julia: _exprtree(code::NestedEinsum, labels)
+    // For leaf nodes, Julia uses the parent's einsum input indices.
+    // For non-leaf nodes, Julia recursively processes children.
+    // We need to handle this differently - process at the Node level.
+    nested_to_expr_tree_inner(nested, label_map)
+}
+
+/// Inner conversion function that matches Julia's _exprtree exactly.
+/// Julia processes leaves using the parent's einsum.ixs[i], not original tensor indices.
+fn nested_to_expr_tree_inner<L: Label>(
+    nested: &NestedEinsum<L>,
+    label_map: &HashMap<L, usize>,
+) -> Option<ExprTree> {
     match nested {
-        NestedEinsum::Leaf { tensor_index } => {
-            let out_dims = int_ixs.get(*tensor_index)?.clone();
-            Some(ExprTree::leaf(out_dims, *tensor_index))
+        NestedEinsum::Leaf { .. } => {
+            // This case shouldn't happen at top level for binary trees
+            // Julia asserts length(code.args) == 2 at entry
+            None
         }
         NestedEinsum::Node { args, eins } => {
             if args.len() != 2 {
                 return None;
             }
-            let left = nested_to_expr_tree(&args[0], int_ixs, &[], label_map)?;
-            let right = nested_to_expr_tree(&args[1], int_ixs, &[], label_map)?;
+
+            // Julia: map(enumerate(code.args)) do (i,arg)
+            //   if isleaf(arg)
+            //     ExprTree(ExprInfo(getindex.(Ref(labels), getixsv(code.eins)[i]), arg.tensorindex))
+            //   else
+            //     _exprtree(arg, labels)
+            //   end
+            // end
+
+            // Process left child (index 0)
+            let left = match &args[0] {
+                NestedEinsum::Leaf { tensor_index } => {
+                    // Julia: getixsv(code.eins)[1] = eins.ixs[0]
+                    let out_dims: Vec<usize> = eins.ixs[0].iter().map(|l| label_map[l]).collect();
+                    ExprTree::leaf(out_dims, *tensor_index)
+                }
+                NestedEinsum::Node { .. } => nested_to_expr_tree_inner(&args[0], label_map)?,
+            };
+
+            // Process right child (index 1)
+            let right = match &args[1] {
+                NestedEinsum::Leaf { tensor_index } => {
+                    // Julia: getixsv(code.eins)[2] = eins.ixs[1]
+                    let out_dims: Vec<usize> = eins.ixs[1].iter().map(|l| label_map[l]).collect();
+                    ExprTree::leaf(out_dims, *tensor_index)
+                }
+                NestedEinsum::Node { .. } => nested_to_expr_tree_inner(&args[1], label_map)?,
+            };
+
+            // Julia: ExprInfo(Int[labels[i] for i=getiyv(code.eins)])
             let out_dims: Vec<usize> = eins.iy.iter().map(|l| label_map[l]).collect();
             Some(ExprTree::node(left, right, out_dims))
         }
     }
 }
 
-/// Initialize a random ExprTree.
+/// Initialize a random ExprTree using Julia's recursive partitioning algorithm.
+///
+/// This matches Julia's `random_exprtree` which uses outercount/allcount tracking
+/// to correctly compute intermediate outputs.
 fn init_random<R: Rng>(
     int_ixs: &[Vec<usize>],
     int_iy: &[usize],
+    nedge: usize,
     decomp: DecompositionType,
     rng: &mut R,
 ) -> ExprTree {
@@ -194,48 +242,128 @@ fn init_random<R: Rng>(
         return ExprTree::leaf(int_ixs[0].clone(), 0);
     }
 
-    // Create leaf nodes
-    let mut tensors: Vec<ExprTree> = int_ixs
-        .iter()
-        .enumerate()
-        .map(|(i, ix)| ExprTree::leaf(ix.clone(), i))
-        .collect();
+    // Initialize counts like Julia
+    let mut outercount = vec![0usize; nedge];
+    let mut allcount = vec![0usize; nedge];
 
-    // Shuffle for randomness
-    tensors.shuffle(rng);
+    // Count output indices
+    for &l in int_iy {
+        outercount[l] += 1;
+        allcount[l] += 1;
+    }
 
-    // Build tree by pairing tensors
-    while tensors.len() > 1 {
-        match decomp {
-            DecompositionType::Tree => {
-                // Random pairing
-                let mut new_tensors = Vec::new();
-                while tensors.len() >= 2 {
-                    let left = tensors.pop().unwrap();
-                    let right = tensors.pop().unwrap();
-                    let out_dims = contraction_output(left.labels(), right.labels(), int_iy);
-                    new_tensors.push(ExprTree::node(left, right, out_dims));
-                }
-                if let Some(remaining) = tensors.pop() {
-                    new_tensors.push(remaining);
-                }
-                tensors = new_tensors;
-            }
-            DecompositionType::Path => {
-                // Linear chain: always contract first two
-                let left = tensors.remove(0);
-                let right = tensors.remove(0);
-                let out_dims = contraction_output(left.labels(), right.labels(), int_iy);
-                tensors.insert(0, ExprTree::node(left, right, out_dims));
-            }
+    // Count all indices in inputs
+    for ix in int_ixs {
+        for &l in ix {
+            allcount[l] += 1;
         }
     }
 
-    tensors.pop().unwrap()
+    let xindices: Vec<usize> = (0..n).collect();
+    init_random_recursive(
+        int_ixs, &xindices, outercount, &allcount, nedge, decomp, rng,
+    )
+}
+
+/// Recursive helper for random tree initialization (matches Julia's _random_exprtree).
+fn init_random_recursive<R: Rng>(
+    ixs: &[Vec<usize>],
+    xindices: &[usize],
+    outercount: Vec<usize>,
+    allcount: &[usize],
+    nedge: usize,
+    decomp: DecompositionType,
+    rng: &mut R,
+) -> ExprTree {
+    let n = ixs.len();
+    if n == 1 {
+        return ExprTree::leaf(ixs[0].clone(), xindices[0]);
+    }
+
+    // Create partition mask
+    let mask: Vec<bool> = match decomp {
+        DecompositionType::Tree => {
+            let mut mask: Vec<bool> = (0..n).map(|_| rng.random()).collect();
+            // Prevent invalid partitions (all true or all false)
+            if mask.iter().all(|&b| b) || mask.iter().all(|&b| !b) {
+                let i = rng.random_range(0..n);
+                mask[i] = !mask[i];
+            }
+            mask
+        }
+        DecompositionType::Path => {
+            // For path decomposition, last tensor goes to right tree
+            let mut mask = vec![true; n];
+            mask[n - 1] = false;
+            mask
+        }
+    };
+
+    // Compute output dimensions: indices where outercount != allcount AND outercount != 0
+    // This matches Julia's: Int[i for i=1:length(outercount) if outercount[i]!=allcount[i] && outercount[i]!=0]
+    let out_dims: Vec<usize> = (0..nedge)
+        .filter(|&i| outercount[i] != allcount[i] && outercount[i] != 0)
+        .collect();
+
+    // Split inputs and update counts for each subtree
+    let mut outercount1 = outercount.clone();
+    let mut outercount2 = outercount.clone();
+
+    // Julia: for i=1:n; counter = mask[i] ? outercount2 : outercount1; for l in ixs[i]; counter[l] += 1; end; end
+    for (i, ix) in ixs.iter().enumerate() {
+        let counter = if mask[i] {
+            &mut outercount2
+        } else {
+            &mut outercount1
+        };
+        for &l in ix {
+            counter[l] += 1;
+        }
+    }
+
+    // Partition ixs and xindices based on mask
+    let (ixs_left, xindices_left): (Vec<_>, Vec<_>) = ixs
+        .iter()
+        .zip(xindices.iter())
+        .zip(mask.iter())
+        .filter(|((_, _), &m)| m)
+        .map(|((ix, &xi), _)| (ix.clone(), xi))
+        .unzip();
+
+    let (ixs_right, xindices_right): (Vec<_>, Vec<_>) = ixs
+        .iter()
+        .zip(xindices.iter())
+        .zip(mask.iter())
+        .filter(|((_, _), &m)| !m)
+        .map(|((ix, &xi), _)| (ix.clone(), xi))
+        .unzip();
+
+    let left = init_random_recursive(
+        &ixs_left,
+        &xindices_left,
+        outercount1,
+        allcount,
+        nedge,
+        decomp,
+        rng,
+    );
+    let right = init_random_recursive(
+        &ixs_right,
+        &xindices_right,
+        outercount2,
+        allcount,
+        nedge,
+        decomp,
+        rng,
+    );
+
+    ExprTree::node(left, right, out_dims)
 }
 
 /// Run simulated annealing on a single tree.
 /// Each iteration sweeps through all nodes in the tree, attempting mutations.
+/// Matches Julia's `optimize_tree_sa!` exactly, with in-place mutation for performance.
+#[allow(clippy::too_many_arguments)]
 fn optimize_tree_sa<R: Rng>(
     mut tree: ExprTree,
     log2_sizes: &[f64],
@@ -244,102 +372,150 @@ fn optimize_tree_sa<R: Rng>(
     score: &ScoreFunction,
     decomp: DecompositionType,
     rng: &mut R,
+    nedge: usize,
 ) -> ExprTree {
-    // Track global space complexity (updated periodically)
-    let (_, mut global_sc, _) = tree_complexity(&tree, log2_sizes);
+    // Compute log2_rw_weight once (matches Julia: log2rw_weight = log2(score.rw_weight))
+    let log2_rw_weight = if score.rw_weight > 0.0 {
+        score.rw_weight.log2()
+    } else {
+        f64::NEG_INFINITY
+    };
+
+    // Create scratch space for large graphs (bitset-based O(1) lookups)
+    let mut scratch = ScratchSpace::new(nedge);
 
     for &beta in betas {
         for _ in 0..niters {
-            // Sweep through all nodes, trying mutations at each
-            tree = sweep_mutate(tree, beta, log2_sizes, score, decomp, global_sc, rng);
+            // Single sweep through all nodes (in-place mutation)
+            optimize_subtree_mut(
+                &mut tree,
+                beta,
+                log2_sizes,
+                score.sc_target,
+                score.sc_weight,
+                log2_rw_weight,
+                decomp,
+                rng,
+                &mut scratch,
+            );
         }
-        // Update global SC at each temperature level
-        let (_, sc, _) = tree_complexity(&tree, log2_sizes);
-        global_sc = sc;
     }
     tree
 }
 
-/// Sweep through all nodes in the tree, attempting a mutation at each.
-/// This visits every internal node once per call.
+/// Optimize a subtree recursively using simulated annealing (in-place mutation).
+/// Matches Julia's `optimize_subtree!` exactly:
+/// 1. Try mutation at current node first
+/// 2. Then recurse to children (post-order)
 #[inline]
-fn sweep_mutate<R: Rng>(
-    tree: ExprTree,
+#[allow(clippy::too_many_arguments)]
+fn optimize_subtree_mut<R: Rng>(
+    tree: &mut ExprTree,
     beta: f64,
     log2_sizes: &[f64],
-    score: &ScoreFunction,
+    sc_target: f64,
+    sc_weight: f64,
+    log2_rw_weight: f64,
     decomp: DecompositionType,
-    global_sc: f64,
     rng: &mut R,
-) -> ExprTree {
-    match tree {
-        ExprTree::Leaf(_) => tree,
-        ExprTree::Node { left, right, info } => {
-            // First, recursively process children
-            let new_left = sweep_mutate(*left, beta, log2_sizes, score, decomp, global_sc, rng);
-            let new_right = sweep_mutate(*right, beta, log2_sizes, score, decomp, global_sc, rng);
-
-            // Then try to mutate at this node
-            let tree = ExprTree::Node {
-                left: Box::new(new_left),
-                right: Box::new(new_right),
-                info,
-            };
-
-            try_mutate_node(tree, beta, log2_sizes, score, decomp, global_sc, rng)
-        }
-    }
-}
-
-/// Try to apply a mutation rule at the given node using Metropolis criterion.
-#[inline]
-fn try_mutate_node<R: Rng>(
-    tree: ExprTree,
-    beta: f64,
-    log2_sizes: &[f64],
-    score: &ScoreFunction,
-    decomp: DecompositionType,
-    global_sc: f64,
-    rng: &mut R,
-) -> ExprTree {
-    let rules = Rule::applicable_rules(&tree, decomp);
+    scratch: &mut ScratchSpace,
+) {
+    let rules = Rule::applicable_rules(tree, decomp);
 
     if rules.is_empty() {
-        return tree;
+        return;
     }
 
-    // Select a random rule
+    // Select a random rule (matches Julia: rule = rand(rst))
     let rule = rules[rng.random_range(0..rules.len())];
 
-    // Compute the complexity change
-    if let Some(diff) = rule_diff(&tree, rule, log2_sizes, score.rw_weight > 0.0) {
-        // Compute energy change (time complexity difference)
-        let dtc = diff.tc1 - diff.tc0;
+    // Check if we should optimize rw (matches Julia: optimize_rw = log2rw_weight != -Inf)
+    let optimize_rw = log2_rw_weight > f64::NEG_INFINITY;
 
-        // Use global SC for space penalty check (approximation that works well)
-        let sc_new = global_sc.max(global_sc + diff.dsc);
-
-        // Energy change calculation with space penalty
-        let sc_penalty = if sc_new > score.sc_target {
-            score.sc_weight
+    // Compute the complexity change using bitset-optimized scratch space
+    if let Some(diff) = scratch.rule_diff(tree, rule, log2_sizes, optimize_rw) {
+        // Compute dtc (matches Julia exactly)
+        let dtc = if optimize_rw {
+            fast_log2sumexp2(diff.tc1, log2_rw_weight + diff.rw1)
+                - fast_log2sumexp2(diff.tc0, log2_rw_weight + diff.rw0)
         } else {
-            0.0
+            diff.tc1 - diff.tc0
         };
-        let d_energy = sc_penalty * diff.dsc + dtc;
 
-        // Metropolis acceptance criterion
-        let accept = if d_energy <= 0.0 {
-            true
+        // Compute local sc at this node
+        let sc = local_sc(tree, rule, log2_sizes);
+
+        // Energy change (matches Julia exactly)
+        let sc_after = sc.max(sc + diff.dsc);
+        let d_energy = if sc_after > sc_target {
+            sc_weight * diff.dsc + dtc
         } else {
-            rng.random::<f64>() < (-beta * d_energy).exp()
+            dtc
         };
+
+        // Metropolis acceptance (matches Julia: rand() < exp(-β*dE))
+        let accept = rng.random::<f64>() < (-beta * d_energy).exp();
 
         if accept {
-            return apply_rule(tree, rule, diff.new_labels);
+            apply_rule_mut(tree, rule, diff.new_labels);
         }
     }
 
-    tree
+    // Recurse to children AFTER trying mutation (matches Julia: for subtree in siblings(tree))
+    if let ExprTree::Node { left, right, .. } = tree {
+        optimize_subtree_mut(
+            left,
+            beta,
+            log2_sizes,
+            sc_target,
+            sc_weight,
+            log2_rw_weight,
+            decomp,
+            rng,
+            scratch,
+        );
+        optimize_subtree_mut(
+            right,
+            beta,
+            log2_sizes,
+            sc_target,
+            sc_weight,
+            log2_rw_weight,
+            decomp,
+            rng,
+            scratch,
+        );
+    }
+}
+
+/// Compute local space complexity at a node for the given rule.
+/// Matches Julia's `_sc(tree, rule, log2_sizes)`:
+/// - For Rule1/Rule2: max(sc(tree), sc(tree.left))
+/// - For Rule3/Rule4/Rule5: max(sc(tree), sc(tree.right))
+#[inline]
+fn local_sc(tree: &ExprTree, rule: Rule, log2_sizes: &[f64]) -> f64 {
+    match tree {
+        ExprTree::Leaf(info) => node_sc(&info.out_dims, log2_sizes),
+        ExprTree::Node { left, right, info } => {
+            let tree_sc = node_sc(&info.out_dims, log2_sizes);
+            let child_sc = match rule {
+                Rule::Rule1 | Rule::Rule2 => node_sc(left.labels(), log2_sizes),
+                Rule::Rule3 | Rule::Rule4 | Rule::Rule5 => node_sc(right.labels(), log2_sizes),
+            };
+            tree_sc.max(child_sc)
+        }
+    }
+}
+
+/// Compute space complexity for a single node's output dimensions.
+/// Matches Julia's `__sc(tree, log2_sizes)`.
+#[inline]
+fn node_sc(out_dims: &[usize], log2_sizes: &[f64]) -> f64 {
+    if out_dims.is_empty() {
+        0.0
+    } else {
+        out_dims.iter().map(|&l| log2_sizes[l]).sum()
+    }
 }
 
 /// Convert an ExprTree back to a NestedEinsum.
@@ -354,14 +530,19 @@ fn expr_tree_to_nested<L: Label>(
     match tree {
         ExprTree::Leaf(info) => NestedEinsum::leaf(info.tensor_id.unwrap_or(0)),
         ExprTree::Node { left, right, info } => {
-            let left_nested = expr_tree_to_nested(left, original_ixs, inverse_map, openedges, level + 1);
-            let right_nested = expr_tree_to_nested(right, original_ixs, inverse_map, openedges, level + 1);
+            let left_nested =
+                expr_tree_to_nested(left, original_ixs, inverse_map, openedges, level + 1);
+            let right_nested =
+                expr_tree_to_nested(right, original_ixs, inverse_map, openedges, level + 1);
 
             // At level 0 (root), use openedges; otherwise use computed output
             let iy: Vec<L> = if level == 0 {
                 openedges.to_vec()
             } else {
-                info.out_dims.iter().map(|&i| inverse_map[i].clone()).collect()
+                info.out_dims
+                    .iter()
+                    .map(|&i| inverse_map[i].clone())
+                    .collect()
             };
 
             // Get input labels from children
@@ -399,6 +580,7 @@ pub fn optimize_treesa<L: Label>(
 
     // Build label mapping
     let (label_map, labels) = build_label_map(code);
+    let nedge = labels.len(); // Number of unique edge labels
     let log2_sizes: Vec<f64> = labels
         .iter()
         .map(|l| (size_dict[l] as f64).log2())
@@ -418,11 +600,21 @@ pub fn optimize_treesa<L: Label>(
             let tree = match config.initializer {
                 Initializer::Greedy => init_greedy(code, size_dict, &label_map, &int_ixs, &int_iy)
                     .unwrap_or_else(|| {
-                        init_random(&int_ixs, &int_iy, config.decomposition_type, &mut rng)
+                        init_random(
+                            &int_ixs,
+                            &int_iy,
+                            nedge,
+                            config.decomposition_type,
+                            &mut rng,
+                        )
                     }),
-                Initializer::Random => {
-                    init_random(&int_ixs, &int_iy, config.decomposition_type, &mut rng)
-                }
+                Initializer::Random => init_random(
+                    &int_ixs,
+                    &int_iy,
+                    nedge,
+                    config.decomposition_type,
+                    &mut rng,
+                ),
             };
 
             // Optimize
@@ -434,6 +626,7 @@ pub fn optimize_treesa<L: Label>(
                 &config.score,
                 config.decomposition_type,
                 &mut rng,
+                nedge,
             );
 
             // Compute final complexity
@@ -450,7 +643,9 @@ pub fn optimize_treesa<L: Label>(
         .min_by(|(_, s1, _, _, _), (_, s2, _, _, _)| s1.partial_cmp(s2).unwrap())?;
 
     // Convert back to NestedEinsum with openedges for correct root output (issue #13)
-    Some(expr_tree_to_nested(&best_tree, &code.ixs, &labels, &code.iy, 0))
+    Some(expr_tree_to_nested(
+        &best_tree, &code.ixs, &labels, &code.iy, 0,
+    ))
 }
 
 #[cfg(test)]
@@ -514,9 +709,10 @@ mod tests {
     fn test_init_random() {
         let int_ixs = vec![vec![0, 1], vec![1, 2], vec![2, 3]];
         let int_iy = vec![0, 3];
+        let nedge = 4; // Labels 0, 1, 2, 3
         let mut rng = rand::rng();
 
-        let tree = init_random(&int_ixs, &int_iy, DecompositionType::Tree, &mut rng);
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Tree, &mut rng);
         assert_eq!(tree.leaf_count(), 3);
     }
 
@@ -627,9 +823,10 @@ mod tests {
     fn test_init_random_path_decomp() {
         let int_ixs = vec![vec![0, 1], vec![1, 2], vec![2, 3]];
         let int_iy = vec![0, 3];
+        let nedge = 4; // Labels 0, 1, 2, 3
         let mut rng = rand::rng();
 
-        let tree = init_random(&int_ixs, &int_iy, DecompositionType::Path, &mut rng);
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Path, &mut rng);
         assert_eq!(tree.leaf_count(), 3);
     }
 
@@ -690,9 +887,10 @@ mod tests {
     fn test_init_random_single_tensor() {
         let int_ixs = vec![vec![0, 1]];
         let int_iy = vec![0, 1];
+        let nedge = 2; // Labels 0, 1
         let mut rng = rand::rng();
 
-        let tree = init_random(&int_ixs, &int_iy, DecompositionType::Tree, &mut rng);
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Tree, &mut rng);
         assert!(tree.is_leaf());
         assert_eq!(tree.leaf_count(), 1);
     }
@@ -702,9 +900,10 @@ mod tests {
         // Test with odd number of tensors for tree decomposition
         let int_ixs = vec![vec![0, 1], vec![1, 2], vec![2, 3], vec![3, 4], vec![4, 0]];
         let int_iy = vec![];
+        let nedge = 5; // Labels 0, 1, 2, 3, 4
         let mut rng = rand::rng();
 
-        let tree = init_random(&int_ixs, &int_iy, DecompositionType::Tree, &mut rng);
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Tree, &mut rng);
         assert_eq!(tree.leaf_count(), 5);
     }
 
@@ -776,5 +975,309 @@ mod tests {
     fn test_decomposition_type_default() {
         let decomp = DecompositionType::default();
         assert_eq!(decomp, DecompositionType::Tree);
+    }
+
+    #[test]
+    fn test_node_sc() {
+        let log2_sizes = vec![2.0, 3.0, 4.0];
+
+        // Empty output dims
+        assert_eq!(node_sc(&[], &log2_sizes), 0.0);
+
+        // Single label
+        assert!((node_sc(&[0], &log2_sizes) - 2.0).abs() < 1e-10);
+
+        // Multiple labels
+        assert!((node_sc(&[0, 1, 2], &log2_sizes) - 9.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_local_sc_leaf() {
+        use crate::expr_tree::{ExprTree, Rule};
+
+        let leaf = ExprTree::leaf(vec![0, 1], 0);
+        let log2_sizes = vec![2.0, 3.0];
+
+        // local_sc on a leaf should return the node's sc
+        let sc = local_sc(&leaf, Rule::Rule1, &log2_sizes);
+        assert!((sc - 5.0).abs() < 1e-10); // 2 + 3 = 5
+    }
+
+    #[test]
+    fn test_local_sc_node_rules() {
+        use crate::expr_tree::{ExprTree, Rule};
+
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0); // sc = 2+3 = 5
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1); // sc = 3+4 = 7
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2); // sc = 4+2 = 6
+
+        let log2_sizes = vec![2.0, 3.0, 4.0, 2.0];
+
+        // Tree for Rules 1 and 2: ((0,1),2)
+        let inner = ExprTree::node(leaf0.clone(), leaf1.clone(), vec![0, 2]); // sc = 2+4 = 6
+        let tree12 = ExprTree::node(inner, leaf2.clone(), vec![0, 3]); // sc = 2+2 = 4
+
+        // Rule1/Rule2 uses left child: max(tree_sc, left_sc) = max(4, 6) = 6
+        let sc1 = local_sc(&tree12, Rule::Rule1, &log2_sizes);
+        assert!((sc1 - 6.0).abs() < 1e-10);
+
+        let sc2 = local_sc(&tree12, Rule::Rule2, &log2_sizes);
+        assert!((sc2 - 6.0).abs() < 1e-10);
+
+        // Tree for Rules 3 and 4: (0,(1,2))
+        let inner2 = ExprTree::node(leaf1, leaf2, vec![1, 3]); // sc = 3+2 = 5
+        let tree34 = ExprTree::node(leaf0, inner2, vec![0, 3]); // sc = 2+2 = 4
+
+        // Rule3/Rule4 uses right child: max(tree_sc, right_sc) = max(4, 5) = 5
+        let sc3 = local_sc(&tree34, Rule::Rule3, &log2_sizes);
+        assert!((sc3 - 5.0).abs() < 1e-10);
+
+        let sc4 = local_sc(&tree34, Rule::Rule4, &log2_sizes);
+        assert!((sc4 - 5.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_nested_to_expr_tree_conversion() {
+        use crate::greedy::optimize_greedy;
+        use crate::GreedyMethod;
+
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 8), ('l', 4)].into();
+        let original = optimize_greedy(&code, &sizes, &GreedyMethod::default()).unwrap();
+
+        // Convert to ExprTree using the full conversion path
+        let (label_map, labels) = build_label_map(&code);
+        let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+        let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+        let expr_tree = nested_to_expr_tree(&original, &int_ixs, &int_iy, &label_map);
+
+        assert!(expr_tree.is_some());
+        let tree = expr_tree.unwrap();
+        assert_eq!(tree.leaf_count(), 3);
+        assert!(!tree.is_leaf());
+
+        // Test labels vector is correct
+        assert_eq!(labels.len(), 4); // i, j, k, l
+    }
+
+    #[test]
+    fn test_optimize_treesa_with_rw_optimization() {
+        // Test with rw_weight > 0 to exercise that code path
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 4)].into();
+
+        let mut config = TreeSA::fast();
+        config.score.rw_weight = 0.5;
+        let result = optimize_treesa(&code, &sizes, &config);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_optimize_treesa_with_high_sc_target() {
+        // Test with very high sc_target (should not penalize space)
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 4)].into();
+
+        let mut config = TreeSA::fast();
+        config.score.sc_target = 1000.0;
+        let result = optimize_treesa(&code, &sizes, &config);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_expr_tree_to_nested() {
+        use crate::expr_tree::ExprTree;
+
+        // Create a simple binary tree
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let inverse_map = vec!['i', 'j', 'k'];
+        let openedges = vec!['i', 'k'];
+
+        let nested = expr_tree_to_nested(&tree, &original_ixs, &inverse_map, &openedges, 0);
+
+        assert!(nested.is_binary());
+        assert_eq!(nested.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_expr_tree_to_nested_deep() {
+        use crate::expr_tree::ExprTree;
+
+        // Create a deeper tree: ((0,1),2)
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let inner = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+        let tree = ExprTree::node(inner, leaf2, vec![0, 3]);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']];
+        let inverse_map = vec!['i', 'j', 'k', 'l'];
+        let openedges = vec!['i', 'l'];
+
+        let nested = expr_tree_to_nested(&tree, &original_ixs, &inverse_map, &openedges, 0);
+
+        assert!(nested.is_binary());
+        assert_eq!(nested.leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_get_child_labels_leaf() {
+        let nested: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+
+        let labels = get_child_labels(&nested, &original_ixs);
+        assert_eq!(labels, vec!['i', 'j']);
+    }
+
+    #[test]
+    fn test_get_child_labels_node() {
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+
+        let labels = get_child_labels(&nested, &original_ixs);
+        assert_eq!(labels, vec!['i', 'k']); // Output labels of the node
+    }
+
+    #[test]
+    fn test_get_child_labels_out_of_bounds() {
+        // Test when tensor_index is out of bounds
+        let nested: NestedEinsum<char> = NestedEinsum::leaf(99);
+        let original_ixs = vec![vec!['i', 'j']];
+
+        let labels = get_child_labels(&nested, &original_ixs);
+        assert!(labels.is_empty()); // Should return default empty vec
+    }
+
+    #[test]
+    fn test_optimize_treesa_multiple_trials() {
+        // Test with multiple trials to ensure parallel execution works
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 8), ('l', 4)].into();
+
+        let mut config = TreeSA::fast();
+        config.ntrials = 3; // Multiple trials
+
+        let result = optimize_treesa(&code, &sizes, &config);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_init_random_two_tensors() {
+        // Test with exactly 2 tensors
+        let int_ixs = vec![vec![0, 1], vec![1, 2]];
+        let int_iy = vec![0, 2];
+        let nedge = 3;
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Tree, &mut rng);
+        assert_eq!(tree.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_init_random_many_tensors() {
+        // Test with many tensors to exercise recursive partitioning
+        let int_ixs = vec![
+            vec![0, 1],
+            vec![1, 2],
+            vec![2, 3],
+            vec![3, 4],
+            vec![4, 5],
+            vec![5, 6],
+        ];
+        let int_iy = vec![0, 6];
+        let nedge = 7;
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Tree, &mut rng);
+        assert_eq!(tree.leaf_count(), 6);
+    }
+
+    #[test]
+    fn test_init_random_path_two_tensors() {
+        let int_ixs = vec![vec![0, 1], vec![1, 2]];
+        let int_iy = vec![0, 2];
+        let nedge = 3;
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Path, &mut rng);
+        assert_eq!(tree.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_init_greedy_success() {
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 4)].into();
+
+        let (label_map, _labels) = build_label_map(&code);
+        let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+        let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+
+        let tree = init_greedy(&code, &sizes, &label_map, &int_ixs, &int_iy);
+        assert!(tree.is_some());
+        assert_eq!(tree.unwrap().leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_optimize_treesa_scalar_output() {
+        // Test with scalar output (empty iy)
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'i']], vec![]);
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8)].into();
+
+        let config = TreeSA::fast();
+        let result = optimize_treesa(&code, &sizes, &config);
+
+        assert!(result.is_some());
+        let nested = result.unwrap();
+        assert_eq!(nested.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_optimize_treesa_with_different_decomp() {
+        // Test tree vs path decomposition
+        let code = EinCode::new(
+            vec![vec!['a', 'b'], vec!['b', 'c'], vec!['c', 'd']],
+            vec!['a', 'd'],
+        );
+        let sizes: HashMap<char, usize> = [('a', 2), ('b', 4), ('c', 4), ('d', 2)].into();
+
+        // Tree decomposition
+        let mut config_tree = TreeSA::fast();
+        config_tree.decomposition_type = DecompositionType::Tree;
+        let result_tree = optimize_treesa(&code, &sizes, &config_tree);
+        assert!(result_tree.is_some());
+
+        // Path decomposition
+        let mut config_path = TreeSA::fast();
+        config_path.decomposition_type = DecompositionType::Path;
+        config_path.initializer = Initializer::Random;
+        let result_path = optimize_treesa(&code, &sizes, &config_path);
+        assert!(result_path.is_some());
+    }
+
+    #[test]
+    fn test_nested_to_expr_tree_inner_leaf() {
+        // Test the inner function with a leaf (edge case - should return None)
+        let nested: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let label_map: HashMap<char, usize> = [('i', 0), ('j', 1)].into();
+
+        let result = nested_to_expr_tree_inner(&nested, &label_map);
+        assert!(result.is_none());
     }
 }
