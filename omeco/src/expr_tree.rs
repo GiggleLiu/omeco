@@ -226,7 +226,11 @@ fn slice_contains(slice: &[usize], elem: usize) -> bool {
 /// - rw: log2 of total read-write operations
 ///
 /// Uses linear search instead of HashSet for small index arrays (typical tensor dimensions).
-#[inline]
+/// Uses unchecked array access for performance (like Julia's @inbounds).
+///
+/// # Safety
+/// Callers must ensure all label indices in ix1, ix2, iy are < log2_sizes.len()
+#[inline(always)]
 pub fn tcscrw(
     ix1: &[usize],
     ix2: &[usize],
@@ -234,30 +238,41 @@ pub fn tcscrw(
     log2_sizes: &[f64],
     compute_rw: bool,
 ) -> (f64, f64, f64) {
-    // Size of input 1
-    let sc1: f64 = ix1.iter().map(|&l| log2_sizes[l]).sum();
-    // Size of input 2
-    let sc2: f64 = ix2.iter().map(|&l| log2_sizes[l]).sum();
-    // Size of output
-    let sc: f64 = iy.iter().map(|&l| log2_sizes[l]).sum();
+    // SAFETY: Labels are guaranteed to be valid indices into log2_sizes
+    // This matches Julia's @inbounds for performance
+    unsafe {
+        // Size of input 1
+        let sc1: f64 = if compute_rw {
+            ix1.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum()
+        } else {
+            0.0
+        };
+        // Size of input 2
+        let sc2: f64 = if compute_rw {
+            ix2.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum()
+        } else {
+            0.0
+        };
+        // Size of output
+        let sc: f64 = iy.iter().map(|&l| *log2_sizes.get_unchecked(l)).sum();
 
-    // Time complexity = output size + contracted indices
-    // Use linear search (faster for typical small tensor dimensions < 20)
-    let mut tc = sc;
-    for &l in ix1 {
-        if slice_contains(ix2, l) && !slice_contains(iy, l) {
-            tc += log2_sizes[l];
+        // Time complexity = output size + contracted indices
+        let mut tc = sc;
+        for &l in ix1 {
+            if slice_contains(ix2, l) && !slice_contains(iy, l) {
+                tc += *log2_sizes.get_unchecked(l);
+            }
         }
+
+        // Read-write complexity
+        let rw = if compute_rw {
+            fast_log2sumexp2_3(sc, sc1, sc2)
+        } else {
+            0.0
+        };
+
+        (tc, sc, rw)
     }
-
-    // Read-write complexity
-    let rw = if compute_rw {
-        fast_log2sumexp2_3(sc, sc1, sc2)
-    } else {
-        0.0
-    };
-
-    (tc, sc, rw)
 }
 
 /// Compute the output labels for a contraction of two tensors.
@@ -299,9 +314,9 @@ pub fn contraction_output(ix1: &[usize], ix2: &[usize], final_output: &[usize]) 
 /// A label from `a` is included if it appears in sibling `b` OR in final output `d`.
 /// A label from `c` is included if it's NOT in `a` AND (in `b` OR in `d`).
 ///
-/// This differs from `contraction_output` which uses a different criterion based
-/// on whether indices appear in both inputs.
-#[inline]
+/// This matches Julia's abcacb function exactly, assuming no repeated indices
+/// within each tensor (standard for tensor networks).
+#[inline(always)]
 pub fn compute_intermediate_output(
     a: &[usize],
     c: &[usize],
@@ -311,18 +326,16 @@ pub fn compute_intermediate_output(
     let mut output = Vec::with_capacity(a.len() + c.len());
 
     // From a: include if in sibling b OR in final output d
+    // Julia: "suppose no repeated indices" - skip output dedup check
     for &l in a {
-        if (slice_contains(b, l) || slice_contains(d, l)) && !slice_contains(&output, l) {
+        if slice_contains(b, l) || slice_contains(d, l) {
             output.push(l);
         }
     }
 
     // From c: include if NOT in a AND (in sibling b OR in final output d)
     for &l in c {
-        if !slice_contains(a, l)
-            && (slice_contains(b, l) || slice_contains(d, l))
-            && !slice_contains(&output, l)
-        {
+        if !slice_contains(a, l) && (slice_contains(b, l) || slice_contains(d, l)) {
             output.push(l);
         }
     }
