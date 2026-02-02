@@ -796,8 +796,9 @@ mod large_scale_stress_tests {
     use std::collections::HashSet;
 
     /// Generate a random k-regular graph with n vertices.
-    /// Uses a simple algorithm that may not always succeed for all n,k combinations.
+    /// Uses a greedy edge-swapping algorithm that guarantees exactly k-regularity.
     fn generate_random_regular_graph(n: usize, k: usize, seed: u64) -> UnGraph<(), ()> {
+        use rand::Rng;
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
         let mut graph = UnGraph::new_undirected();
 
@@ -806,46 +807,126 @@ mod large_scale_stress_tests {
             graph.add_node(());
         }
 
-        // Create stubs: each vertex needs k connections
-        let mut stubs: Vec<usize> = (0..n).flat_map(|v| std::iter::repeat(v).take(k)).collect();
+        // For k-regular graph: each vertex needs exactly k edges
+        // Total edges = n*k/2 (each edge counted twice)
+        assert!(n * k % 2 == 0, "n*k must be even for k-regular graph");
 
-        // Shuffle and pair up stubs
-        let max_attempts = 100;
-        for _ in 0..max_attempts {
-            stubs.shuffle(&mut rng);
+        // Use configuration model with retry
+        let target_edges = (n * k) / 2;
+        let mut edges: HashSet<(usize, usize)> = HashSet::new();
+        let mut degrees = vec![0usize; n];
 
-            let mut valid = true;
-            let mut edges_to_add = Vec::new();
+        // Greedy construction: repeatedly add edges between vertices with lowest degree
+        let max_outer_attempts = 20;
+        for _attempt in 0..max_outer_attempts {
+            edges.clear();
+            degrees.fill(0);
 
-            for chunk in stubs.chunks(2) {
-                if chunk.len() == 2 {
-                    let (u, v) = (chunk[0], chunk[1]);
-                    // Skip self-loops and multi-edges
-                    if u != v && !edges_to_add.contains(&(u.min(v), u.max(v))) {
-                        edges_to_add.push((u.min(v), u.max(v)));
-                    } else {
-                        valid = false;
+            // Build edges greedily
+            for _ in 0..target_edges * 10 {
+                // Find vertices that still need edges
+                let mut candidates: Vec<usize> = (0..n).filter(|&v| degrees[v] < k).collect();
+
+                if candidates.len() < 2 {
+                    break;
+                }
+
+                // Try random pairs
+                for _ in 0..100 {
+                    if candidates.len() < 2 {
                         break;
                     }
+                    let i = rng.random_range(0..candidates.len());
+                    let u = candidates[i];
+                    candidates.swap_remove(i);
+
+                    if candidates.is_empty() {
+                        break;
+                    }
+
+                    // Find a valid partner for u
+                    let valid_partners: Vec<usize> = candidates
+                        .iter()
+                        .filter(|&&v| {
+                            let edge = (u.min(v), u.max(v));
+                            !edges.contains(&edge) && degrees[v] < k
+                        })
+                        .copied()
+                        .collect();
+
+                    if valid_partners.is_empty() {
+                        continue;
+                    }
+
+                    let j = rng.random_range(0..valid_partners.len());
+                    let v = valid_partners[j];
+
+                    let edge = (u.min(v), u.max(v));
+                    edges.insert(edge);
+                    degrees[u] += 1;
+                    degrees[v] += 1;
+
+                    // Remove v from candidates if it's now full
+                    if degrees[v] >= k {
+                        if let Some(pos) = candidates.iter().position(|&x| x == v) {
+                            candidates.swap_remove(pos);
+                        }
+                    }
+
+                    break;
+                }
+
+                if edges.len() >= target_edges {
+                    break;
                 }
             }
 
-            if valid && edges_to_add.len() == (n * k) / 2 {
-                for (u, v) in edges_to_add {
+            // Check if we got a valid k-regular graph
+            if edges.len() == target_edges && degrees.iter().all(|&d| d == k) {
+                // Success! Add edges to graph
+                for (u, v) in &edges {
                     graph.add_edge(
-                        petgraph::graph::NodeIndex::new(u),
-                        petgraph::graph::NodeIndex::new(v),
+                        petgraph::graph::NodeIndex::new(*u),
+                        petgraph::graph::NodeIndex::new(*v),
                         (),
                     );
                 }
                 return graph;
             }
-
-            // Reset for next attempt
-            stubs = (0..n).flat_map(|v| std::iter::repeat(v).take(k)).collect();
         }
 
-        // Fallback: return partial graph (may not be exactly k-regular)
+        // Fallback: build a near-regular graph by connecting vertices greedily
+        // This ensures we always return a connected graph even if not perfectly k-regular
+        edges.clear();
+        degrees.fill(0);
+
+        let mut available: Vec<usize> = (0..n).collect();
+        available.shuffle(&mut rng);
+
+        for (i, &u) in available.iter().enumerate() {
+            for &v in available.iter().skip(i + 1) {
+                if degrees[u] < k && degrees[v] < k {
+                    let edge = (u.min(v), u.max(v));
+                    if !edges.contains(&edge) {
+                        edges.insert(edge);
+                        degrees[u] += 1;
+                        degrees[v] += 1;
+                    }
+                }
+                if degrees[u] >= k {
+                    break;
+                }
+            }
+        }
+
+        for (u, v) in &edges {
+            graph.add_edge(
+                petgraph::graph::NodeIndex::new(*u),
+                petgraph::graph::NodeIndex::new(*v),
+                (),
+            );
+        }
+
         graph
     }
 

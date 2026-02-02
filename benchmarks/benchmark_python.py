@@ -1,257 +1,221 @@
 #!/usr/bin/env python3
 """
 Benchmark TreeSA contraction order optimization in Python.
-Uses omeco (Rust via PyO3)
+Uses omeco (Rust via PyO3) with shared graph files.
 """
 
 import json
 import time
-import random
-from typing import Dict, List, Tuple
+from pathlib import Path
 
 
-def chain_network(n: int, d: int) -> Tuple[List[List[int]], List[int], Dict[int, int]]:
-    """Matrix chain of n matrices."""
-    labels = list(range(n + 1))
-    ixs = [[labels[i], labels[i + 1]] for i in range(n)]
-    iy = [labels[0], labels[-1]]
-    sizes = {l: d for l in labels}
-    return ixs, iy, sizes
+GRAPHS_DIR = Path(__file__).parent / "graphs"
+RESULTS_DIR = Path(__file__).parent / "results"
 
 
-def grid_network(rows: int, cols: int, d: int) -> Tuple[List[List[int]], List[int], Dict[int, int]]:
-    """2D grid tensor network (like PEPS)."""
-    # Count edges
-    h_edges = rows * (cols - 1)  # horizontal edges
-    v_edges = (rows - 1) * cols  # vertical edges
-    
-    # Assign integer labels to edges
-    label = 0
-    h_edge_map = {}  # horizontal edge from (r, c) to (r, c+1)
-    v_edge_map = {}  # vertical edge from (r, c) to (r+1, c)
-    
-    for r in range(rows):
-        for c in range(cols - 1):
-            h_edge_map[(r, c)] = label
-            label += 1
-    
-    for r in range(rows - 1):
-        for c in range(cols):
-            v_edge_map[(r, c)] = label
-            label += 1
-    
-    ixs = []
-    sizes = {}
-    
-    for r in range(rows):
-        for c in range(cols):
-            tensor_ixs = []
-            # Left edge
-            if c > 0:
-                e = h_edge_map[(r, c - 1)]
-                tensor_ixs.append(e)
-                sizes[e] = d
-            # Right edge
-            if c < cols - 1:
-                e = h_edge_map[(r, c)]
-                tensor_ixs.append(e)
-                sizes[e] = d
-            # Top edge
-            if r > 0:
-                e = v_edge_map[(r - 1, c)]
-                tensor_ixs.append(e)
-                sizes[e] = d
-            # Bottom edge
-            if r < rows - 1:
-                e = v_edge_map[(r, c)]
-                tensor_ixs.append(e)
-                sizes[e] = d
-            if tensor_ixs:
-                ixs.append(tensor_ixs)
-    
-    iy = []  # scalar output
-    return ixs, iy, sizes
+def load_graph(name: str):
+    """Load a graph from the graphs directory."""
+    path = GRAPHS_DIR / f"{name}.json"
+    with open(path) as f:
+        data = json.load(f)
+
+    ixs = data["ixs"]
+    iy = data["iy"]
+    sizes = {int(k): v for k, v in data["sizes"].items()}
+    return ixs, iy, sizes, data.get("description", name)
 
 
-def random_regular_graph(n: int, degree: int, d: int, seed: int = 42) -> Tuple[List[List[int]], List[int], Dict[int, int]]:
-    """
-    Random regular graph tensor network.
-    
-    Each vertex is a tensor with `degree` indices.
-    Total edges = n * degree / 2.
-    """
-    random.seed(seed)
-    
-    # Generate random regular graph using configuration model
-    # Each vertex has `degree` half-edges
-    half_edges = []
-    for v in range(n):
-        for _ in range(degree):
-            half_edges.append(v)
-    
-    random.shuffle(half_edges)
-    
-    # Pair up half-edges to form edges
-    edges = []
-    edge_label = 0
-    vertex_edges: Dict[int, List[int]] = {v: [] for v in range(n)}
-    
-    for i in range(0, len(half_edges), 2):
-        v1, v2 = half_edges[i], half_edges[i + 1]
-        # Skip self-loops and multi-edges for simplicity
-        if v1 != v2:
-            vertex_edges[v1].append(edge_label)
-            vertex_edges[v2].append(edge_label)
-            edge_label += 1
-    
-    ixs = [vertex_edges[v] for v in range(n) if vertex_edges[v]]
-    sizes = {e: d for e in range(edge_label)}
-    iy = []  # scalar output
-    
-    return ixs, iy, sizes
+def run_benchmark(name: str, ntrials: int = 1, niters: int = 50):
+    from omeco import GreedyMethod, TreeSA, optimize_code
 
+    ixs, iy, sizes, description = load_graph(name)
 
-def run_benchmark(name: str, ixs, iy, sizes, ntrials=1, niters=50):
-    from omeco import (
-        GreedyMethod,
-        TreeSA,
-        optimize_greedy,
-        optimize_treesa,
-        contraction_complexity,
-    )
-    
-    print("=" * 60)
+    print("=" * 70)
     print(f"Benchmark: {name}")
+    print(f"  Description: {description}")
     print(f"  Tensors: {len(ixs)}")
     print(f"  Indices: {len(sizes)}")
     print()
-    
-    # Greedy warmup + benchmark
+
+    # ========== Greedy ==========
     print("GreedyMethod:")
+    greedy = GreedyMethod()
+
     # Warmup
-    _ = optimize_greedy(ixs, iy, sizes)
-    
+    _ = optimize_code(ixs, iy, sizes, greedy)
+
+    # Benchmark
     start = time.perf_counter()
     for _ in range(10):
-        greedy_result = optimize_greedy(ixs, iy, sizes)
+        greedy_result = optimize_code(ixs, iy, sizes, greedy)
     greedy_time = time.perf_counter() - start
-    
-    greedy_cc = contraction_complexity(greedy_result, ixs, sizes)
-    print(f"  tc={greedy_cc.tc:.2f}, sc={greedy_cc.sc:.2f}, rwc={greedy_cc.rwc:.2f}")
-    print(f"  Time (10 runs): {greedy_time*1000:.2f}ms, avg: {greedy_time/10*1000:.4f}ms")
+
+    greedy_cc = greedy_result.complexity(ixs, sizes)
+    print(f"  Time complexity (tc):       {greedy_cc.tc:.6f}")
+    print(f"  Space complexity (sc):      {greedy_cc.sc:.6f}")
+    print(f"  Read-write complexity (rwc): {greedy_cc.rwc:.6f}")
+    print(f"  Execution time (10 runs):   {greedy_time*1000:.2f} ms")
+    print(f"  Average per run:            {greedy_time/10*1000:.4f} ms")
     print()
-    
-    # TreeSA
+
+    # ========== TreeSA ==========
     print(f"TreeSA (ntrials={ntrials}, niters={niters}):")
     treesa_cfg = TreeSA(ntrials=ntrials, niters=niters)
-    
+
     # Warmup
-    _ = optimize_treesa(ixs, iy, sizes, treesa_cfg)
-    
+    _ = optimize_code(ixs, iy, sizes, treesa_cfg)
+
+    # Benchmark
     start = time.perf_counter()
     for _ in range(3):
-        treesa_result = optimize_treesa(ixs, iy, sizes, treesa_cfg)
+        treesa_result = optimize_code(ixs, iy, sizes, treesa_cfg)
     treesa_time = time.perf_counter() - start
-    
-    treesa_cc = contraction_complexity(treesa_result, ixs, sizes)
-    print(f"  tc={treesa_cc.tc:.2f}, sc={treesa_cc.sc:.2f}, rwc={treesa_cc.rwc:.2f}")
-    print(f"  Time (3 runs): {treesa_time*1000:.2f}ms, avg: {treesa_time/3*1000:.2f}ms")
+
+    treesa_cc = treesa_result.complexity(ixs, sizes)
+    print(f"  Time complexity (tc):       {treesa_cc.tc:.6f}")
+    print(f"  Space complexity (sc):      {treesa_cc.sc:.6f}")
+    print(f"  Read-write complexity (rwc): {treesa_cc.rwc:.6f}")
+    print(f"  Execution time (3 runs):    {treesa_time*1000:.2f} ms")
+    print(f"  Average per run:            {treesa_time/3*1000:.2f} ms")
     print()
-    
+
+    # ========== Improvement ==========
+    tc_improvement = greedy_cc.tc - treesa_cc.tc
+    sc_improvement = greedy_cc.sc - treesa_cc.sc
+    print(f"  Improvement over Greedy:")
+    print(f"    tc reduction: {tc_improvement:.2f} ({tc_improvement/greedy_cc.tc*100:.1f}%)")
+    print(f"    sc reduction: {sc_improvement:.2f}")
+    print()
+
     return {
+        "name": name,
+        "description": description,
         "tensors": len(ixs),
         "indices": len(sizes),
-        "ntrials": ntrials,
-        "niters": niters,
-        "greedy_avg_ms": greedy_time / 10 * 1000,
-        "greedy_tc": greedy_cc.tc,
-        "greedy_sc": greedy_cc.sc,
-        "greedy_rwc": greedy_cc.rwc,
-        "treesa_avg_ms": treesa_time / 3 * 1000,
-        "treesa_tc": treesa_cc.tc,
-        "treesa_sc": treesa_cc.sc,
-        "treesa_rwc": treesa_cc.rwc,
+        "greedy": {
+            "tc": greedy_cc.tc,
+            "sc": greedy_cc.sc,
+            "rwc": greedy_cc.rwc,
+            "avg_ms": greedy_time / 10 * 1000,
+            "total_ms": greedy_time * 1000,
+            "runs": 10,
+        },
+        "treesa": {
+            "ntrials": ntrials,
+            "niters": niters,
+            "tc": treesa_cc.tc,
+            "sc": treesa_cc.sc,
+            "rwc": treesa_cc.rwc,
+            "avg_ms": treesa_time / 3 * 1000,
+            "total_ms": treesa_time * 1000,
+            "runs": 3,
+        },
     }
 
 
 def main():
-    import os
-    
     print()
+    print("=" * 70)
     print("Python TreeSA Benchmark")
-    print("omeco (Rust via PyO3)")
-    print("=" * 60)
+    print("Backend: omeco (Rust via PyO3)")
+    print("=" * 70)
     print()
-    
+
+    RESULTS_DIR.mkdir(exist_ok=True)
+
     results = {}
-    
-    # Small: matrix chain
-    ixs, iy, sizes = chain_network(10, 100)
-    results["chain_10"] = run_benchmark("Matrix Chain (n=10)", ixs, iy, sizes, ntrials=1, niters=50)
-    
-    # Medium: small grid
-    ixs, iy, sizes = grid_network(4, 4, 2)
-    results["grid_4x4"] = run_benchmark("Grid 4x4", ixs, iy, sizes, ntrials=1, niters=100)
-    
-    # Large: bigger grid  
-    ixs, iy, sizes = grid_network(5, 5, 2)
-    results["grid_5x5"] = run_benchmark("Grid 5x5", ixs, iy, sizes, ntrials=1, niters=100)
-    
-    # Random 3-regular graph n=250
-    ixs, iy, sizes = random_regular_graph(250, 3, 2)
-    results["reg3_250"] = run_benchmark("Random 3-regular n=250", ixs, iy, sizes, ntrials=1, niters=100)
-    
-    # Summary
-    print("=" * 60)
-    print("Summary (Python/Rust):")
-    print("-" * 60)
-    print(f"{'Problem':<20} {'Greedy (ms)':<15} {'TreeSA (ms)':<15} {'Greedy tc':<12} {'TreeSA tc':<12}")
-    print("-" * 60)
+
+    # Define benchmarks: (graph_name, ntrials, niters)
+    benchmarks = [
+        ("chain_10", 1, 50),
+        ("chain_20", 1, 50),
+        ("grid_4x4", 1, 100),
+        ("grid_5x5", 1, 100),
+        ("grid_6x6", 1, 100),
+        ("petersen", 1, 50),
+        ("reg3_50", 1, 100),
+        ("reg3_100", 1, 100),
+        ("reg3_250", 1, 100),
+    ]
+
+    for name, ntrials, niters in benchmarks:
+        if not (GRAPHS_DIR / f"{name}.json").exists():
+            print(f"Skipping {name} (graph file not found)")
+            continue
+        results[name] = run_benchmark(name, ntrials=ntrials, niters=niters)
+
+    # ========== Summary Table ==========
+    print("=" * 70)
+    print("SUMMARY")
+    print("=" * 70)
+    print()
+    print(f"{'Graph':<15} {'Tensors':>8} {'Indices':>8} │ {'Greedy tc':>10} {'TreeSA tc':>10} │ {'Greedy ms':>10} {'TreeSA ms':>10}")
+    print("─" * 15 + "─" * 8 + "─" * 8 + "─┼" + "─" * 10 + "─" * 10 + "─┼" + "─" * 10 + "─" * 10)
     for name, r in results.items():
-        print(f"{name:<20} {r['greedy_avg_ms']:<15.3f} {r['treesa_avg_ms']:<15.2f} {r['greedy_tc']:<12.2f} {r['treesa_tc']:<12.2f}")
-    
-    # Save Greedy results to JSON
+        print(
+            f"{name:<15} {r['tensors']:>8} {r['indices']:>8} │ "
+            f"{r['greedy']['tc']:>10.2f} {r['treesa']['tc']:>10.2f} │ "
+            f"{r['greedy']['avg_ms']:>10.3f} {r['treesa']['avg_ms']:>10.2f}"
+        )
+    print()
+
+    # ========== Save Results ==========
+    # Save combined results
+    output = {
+        "language": "python",
+        "backend": "omeco (Rust via PyO3)",
+        "results": results,
+    }
+    output_path = RESULTS_DIR / "python_results.json"
+    with open(output_path, "w") as f:
+        json.dump(output, f, indent=2)
+
+    # Save separate greedy results (old format compatibility)
     greedy_output = {
-        "language": "rust",
+        "language": "python",
         "backend": "omeco (Rust via PyO3)",
         "method": "greedy",
-        "results": {name: {
-            "tensors": r["tensors"],
-            "indices": r["indices"],
-            "avg_ms": r["greedy_avg_ms"],
-            "tc": r["greedy_tc"],
-            "sc": r["greedy_sc"],
-            "rwc": r["greedy_rwc"],
-        } for name, r in results.items()}
+        "results": {
+            name: {
+                "tensors": r["tensors"],
+                "indices": r["indices"],
+                "tc": r["greedy"]["tc"],
+                "sc": r["greedy"]["sc"],
+                "rwc": r["greedy"]["rwc"],
+                "avg_ms": r["greedy"]["avg_ms"],
+            }
+            for name, r in results.items()
+        },
     }
-    greedy_path = os.path.join(os.path.dirname(__file__), "results_rust_greedy.json")
-    with open(greedy_path, "w") as f:
+    with open(RESULTS_DIR / "results_rust_greedy.json", "w") as f:
         json.dump(greedy_output, f, indent=2)
-    
-    # Save TreeSA results to JSON
+
+    # Save separate treesa results (old format compatibility)
     treesa_output = {
-        "language": "rust",
+        "language": "python",
         "backend": "omeco (Rust via PyO3)",
         "method": "treesa",
-        "results": {name: {
-            "tensors": r["tensors"],
-            "indices": r["indices"],
-            "ntrials": r["ntrials"],
-            "niters": r["niters"],
-            "avg_ms": r["treesa_avg_ms"],
-            "tc": r["treesa_tc"],
-            "sc": r["treesa_sc"],
-            "rwc": r["treesa_rwc"],
-        } for name, r in results.items()}
+        "results": {
+            name: {
+                "tensors": r["tensors"],
+                "indices": r["indices"],
+                "ntrials": r["treesa"]["ntrials"],
+                "niters": r["treesa"]["niters"],
+                "tc": r["treesa"]["tc"],
+                "sc": r["treesa"]["sc"],
+                "rwc": r["treesa"]["rwc"],
+                "avg_ms": r["treesa"]["avg_ms"],
+            }
+            for name, r in results.items()
+        },
     }
-    treesa_path = os.path.join(os.path.dirname(__file__), "results_rust_treesa.json")
-    with open(treesa_path, "w") as f:
+    with open(RESULTS_DIR / "results_rust_treesa.json", "w") as f:
         json.dump(treesa_output, f, indent=2)
-    
-    print()
+
     print(f"Results saved to:")
-    print(f"  {greedy_path}")
-    print(f"  {treesa_path}")
+    print(f"  {output_path}")
+    print(f"  {RESULTS_DIR / 'results_rust_greedy.json'}")
+    print(f"  {RESULTS_DIR / 'results_rust_treesa.json'}")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,23 @@
 - Rust core with Python bindings via PyO3
 - Current Version: 0.2.3
 
+## CRITICAL: Alignment with Julia OMEinsumContractionOrders
+
+**This project MUST stay aligned with [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).**
+
+When making changes:
+1. **Check Julia implementation first** at `~/.julia/dev/OMEinsumContractionOrders/`
+2. **Match algorithm behavior** - TreeSA, GreedyMethod, and complexity calculations must produce equivalent results
+3. **Run comparative benchmarks** to verify alignment:
+   ```bash
+   make benchmark-all      # Run Rust, Python, and Julia benchmarks
+   ```
+4. **Key files to compare:**
+   - `treesa.jl` ↔ `omeco/src/treesa.rs`
+   - `greedy.jl` ↔ `omeco/src/greedy.rs`
+   - `simplify.jl` ↔ `omeco/src/simplifier.rs`
+   - `json.jl` ↔ `omeco/src/json.rs`
+
 ## Development Setup
 
 ### Rust
@@ -37,6 +54,19 @@ make python-build       # Build Python wheel for distribution
 make python-test        # Run Python tests with pytest
 ```
 
+### Benchmarks
+```bash
+# Generate benchmark graphs (shared across all implementations)
+python benchmarks/generate_graphs.py
+
+# Run individual benchmarks
+cargo run --release --example benchmark -p omeco     # Rust benchmark
+python benchmarks/benchmark_python.py                 # Python benchmark
+julia --project=benchmarks benchmarks/benchmark_julia.jl  # Julia benchmark
+
+# Results are saved to benchmarks/results/
+```
+
 ### Documentation
 ```bash
 make doc                # Build rustdoc and open in browser
@@ -46,11 +76,6 @@ make install-mdbook     # Install mdBook if not present
 make build-book         # Build mdBook documentation
 make serve-book         # Serve mdBook at http://127.0.0.1:3000
 make clean-book         # Remove generated mdBook files
-```
-
-### Benchmarks
-```bash
-make benchmark          # Run Python vs Julia benchmark
 ```
 
 ### Version Management
@@ -88,6 +113,7 @@ make github-release     # 4. Create GitHub release with auto-generated notes
 - Rust: inline `#[test]` modules in source files
 - Python: tests in `omeco-python/tests/`
 - Use `criterion` for benchmarks
+- **Always compare results with Julia implementation**
 
 ## Project Structure
 
@@ -96,6 +122,8 @@ omeco/              # Core Rust library
 omeco-python/       # PyO3 Python bindings
 docs/               # mdBook documentation
 benchmarks/         # Performance benchmarks
+  graphs/           # Shared benchmark graph topologies (JSON)
+  results/          # Benchmark results from all implementations
 examples/           # Usage examples
 ```
 
@@ -105,12 +133,14 @@ examples/           # Usage examples
 - `omeco-python/pyproject.toml` - Python package config
 - `Makefile` - Build automation (primary interface)
 - `.github/workflows/` - CI/CD pipelines
+- `benchmarks/graphs/*.json` - Shared benchmark graphs
 
 ## Architecture
 
 - **Optimizers:** GreedyMethod (fast), TreeSA (quality), TreeSASlicer (memory reduction)
 - **Complexity Metrics:** Time (tc), Space (sc), Read-write (rwc) - all in log2 scale
 - **Parallelism:** TreeSA uses Rayon; control via `RAYON_NUM_THREADS`
+- **JSON Format:** Compatible with Julia's `writejson`/`readjson`
 
 ## CI Requirements
 
@@ -119,3 +149,12 @@ examples/           # Usage examples
 - Coverage >95%
 - Clippy with no warnings
 - Proper formatting
+- **Benchmark tc values must match Julia within tolerance**
+
+## Debugging Performance Issues
+
+If TreeSA produces worse results than Julia:
+1. Compare default parameters (betas, ntrials, niters)
+2. Check `contraction_output` logic in `expr_tree.rs`
+3. Verify `expr_tree_to_nested` correctly converts tree to NestedEinsum
+4. Run the same graph through both implementations and compare tc/sc

@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""
+Generate benchmark graph topologies and save to JSON files.
+These graphs can be loaded by Rust, Python, and Julia benchmarks.
+"""
+
+import json
+import os
+import random
+from typing import Dict, List, Tuple
+
+GRAPHS_DIR = os.path.join(os.path.dirname(__file__), "graphs")
+
+
+def chain_network(n: int, d: int) -> Dict:
+    """Matrix chain of n matrices."""
+    labels = list(range(n + 1))
+    ixs = [[labels[i], labels[i + 1]] for i in range(n)]
+    iy = [labels[0], labels[-1]]
+    sizes = {str(l): d for l in labels}
+    return {
+        "name": f"chain_{n}",
+        "description": f"Matrix chain of {n} matrices",
+        "ixs": ixs,
+        "iy": iy,
+        "sizes": sizes,
+    }
+
+
+def grid_network(rows: int, cols: int, d: int) -> Dict:
+    """2D grid tensor network (like PEPS)."""
+    label = 0
+    h_edge_map = {}
+    v_edge_map = {}
+
+    for r in range(rows):
+        for c in range(cols - 1):
+            h_edge_map[(r, c)] = label
+            label += 1
+
+    for r in range(rows - 1):
+        for c in range(cols):
+            v_edge_map[(r, c)] = label
+            label += 1
+
+    ixs = []
+    sizes = {}
+
+    for r in range(rows):
+        for c in range(cols):
+            tensor_ixs = []
+            if c > 0:
+                e = h_edge_map[(r, c - 1)]
+                tensor_ixs.append(e)
+                sizes[str(e)] = d
+            if c < cols - 1:
+                e = h_edge_map[(r, c)]
+                tensor_ixs.append(e)
+                sizes[str(e)] = d
+            if r > 0:
+                e = v_edge_map[(r - 1, c)]
+                tensor_ixs.append(e)
+                sizes[str(e)] = d
+            if r < rows - 1:
+                e = v_edge_map[(r, c)]
+                tensor_ixs.append(e)
+                sizes[str(e)] = d
+            if tensor_ixs:
+                ixs.append(tensor_ixs)
+
+    iy = []
+    return {
+        "name": f"grid_{rows}x{cols}",
+        "description": f"{rows}x{cols} grid tensor network",
+        "ixs": ixs,
+        "iy": iy,
+        "sizes": sizes,
+    }
+
+
+def random_regular_graph(n: int, degree: int, d: int, seed: int = 42) -> Dict:
+    """Random regular graph tensor network using configuration model."""
+    random.seed(seed)
+
+    half_edges = []
+    for v in range(n):
+        for _ in range(degree):
+            half_edges.append(v)
+
+    random.shuffle(half_edges)
+
+    edge_label = 0
+    vertex_edges: Dict[int, List[int]] = {v: [] for v in range(n)}
+
+    for i in range(0, len(half_edges), 2):
+        v1, v2 = half_edges[i], half_edges[i + 1]
+        if v1 != v2:
+            vertex_edges[v1].append(edge_label)
+            vertex_edges[v2].append(edge_label)
+            edge_label += 1
+
+    ixs = [vertex_edges[v] for v in range(n) if vertex_edges[v]]
+    sizes = {str(e): d for e in range(edge_label)}
+    iy = []
+
+    return {
+        "name": f"reg{degree}_{n}",
+        "description": f"Random {degree}-regular graph with {n} vertices",
+        "ixs": ixs,
+        "iy": iy,
+        "sizes": sizes,
+    }
+
+
+def petersen_graph(d: int) -> Dict:
+    """Petersen graph - 10 vertices, 15 edges."""
+    edges = [
+        (0, 1), (1, 2), (2, 3), (3, 4), (4, 0),  # outer pentagon
+        (5, 6), (6, 7), (7, 8), (8, 9), (9, 5),  # inner star connections
+        (0, 5), (1, 6), (2, 7), (3, 8), (4, 9),  # spokes
+    ]
+
+    vertex_edges: Dict[int, List[int]] = {v: [] for v in range(10)}
+    for i, (v1, v2) in enumerate(edges):
+        vertex_edges[v1].append(i)
+        vertex_edges[v2].append(i)
+
+    ixs = [vertex_edges[v] for v in range(10)]
+    sizes = {str(i): d for i in range(15)}
+
+    return {
+        "name": "petersen",
+        "description": "Petersen graph (10 vertices, 15 edges)",
+        "ixs": ixs,
+        "iy": [],
+        "sizes": sizes,
+    }
+
+
+def save_graph(graph: Dict, directory: str = GRAPHS_DIR):
+    """Save graph to JSON file."""
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, f"{graph['name']}.json")
+    with open(path, "w") as f:
+        json.dump(graph, f, indent=2)
+    print(f"Saved: {path}")
+    return path
+
+
+def main():
+    print("Generating benchmark graphs...")
+    print()
+
+    graphs = [
+        # Matrix chains
+        chain_network(10, 100),
+        chain_network(20, 100),
+
+        # Grid networks
+        grid_network(4, 4, 2),
+        grid_network(5, 5, 2),
+        grid_network(6, 6, 2),
+
+        # Random regular graphs
+        random_regular_graph(50, 3, 2, seed=42),
+        random_regular_graph(100, 3, 2, seed=42),
+        random_regular_graph(250, 3, 2, seed=42),
+
+        # Special graphs
+        petersen_graph(2),
+    ]
+
+    for graph in graphs:
+        save_graph(graph)
+
+    print()
+    print(f"Generated {len(graphs)} graphs in {GRAPHS_DIR}")
+
+
+if __name__ == "__main__":
+    main()

@@ -44,8 +44,8 @@ pub enum Initializer {
 
 impl Default for TreeSA {
     fn default() -> Self {
-        // Default schedule: β from 0.01 to 15.0 in steps of 0.05
-        let betas: Vec<f64> = (1..=300).map(|i| 0.01 + 0.05 * i as f64).collect();
+        // Default schedule: β from 0.01 to ~15.0 in steps of 0.05 (matching Julia's 0.01:0.05:15)
+        let betas: Vec<f64> = (0..300).map(|i| 0.01 + 0.05 * i as f64).collect();
         Self {
             betas,
             ntrials: 10,
