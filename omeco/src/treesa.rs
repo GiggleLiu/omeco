@@ -1088,4 +1088,196 @@ mod tests {
 
         assert!(result.is_some());
     }
+
+    #[test]
+    fn test_expr_tree_to_nested() {
+        use crate::expr_tree::ExprTree;
+
+        // Create a simple binary tree
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let tree = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+        let inverse_map = vec!['i', 'j', 'k'];
+        let openedges = vec!['i', 'k'];
+
+        let nested = expr_tree_to_nested(&tree, &original_ixs, &inverse_map, &openedges, 0);
+
+        assert!(nested.is_binary());
+        assert_eq!(nested.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_expr_tree_to_nested_deep() {
+        use crate::expr_tree::ExprTree;
+
+        // Create a deeper tree: ((0,1),2)
+        let leaf0 = ExprTree::leaf(vec![0, 1], 0);
+        let leaf1 = ExprTree::leaf(vec![1, 2], 1);
+        let leaf2 = ExprTree::leaf(vec![2, 3], 2);
+        let inner = ExprTree::node(leaf0, leaf1, vec![0, 2]);
+        let tree = ExprTree::node(inner, leaf2, vec![0, 3]);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']];
+        let inverse_map = vec!['i', 'j', 'k', 'l'];
+        let openedges = vec!['i', 'l'];
+
+        let nested = expr_tree_to_nested(&tree, &original_ixs, &inverse_map, &openedges, 0);
+
+        assert!(nested.is_binary());
+        assert_eq!(nested.leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_get_child_labels_leaf() {
+        let nested: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+
+        let labels = get_child_labels(&nested, &original_ixs);
+        assert_eq!(labels, vec!['i', 'j']);
+    }
+
+    #[test]
+    fn test_get_child_labels_node() {
+        let leaf0 = NestedEinsum::leaf(0);
+        let leaf1 = NestedEinsum::leaf(1);
+        let eins = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let nested = NestedEinsum::node(vec![leaf0, leaf1], eins);
+
+        let original_ixs = vec![vec!['i', 'j'], vec!['j', 'k']];
+
+        let labels = get_child_labels(&nested, &original_ixs);
+        assert_eq!(labels, vec!['i', 'k']); // Output labels of the node
+    }
+
+    #[test]
+    fn test_get_child_labels_out_of_bounds() {
+        // Test when tensor_index is out of bounds
+        let nested: NestedEinsum<char> = NestedEinsum::leaf(99);
+        let original_ixs = vec![vec!['i', 'j']];
+
+        let labels = get_child_labels(&nested, &original_ixs);
+        assert!(labels.is_empty()); // Should return default empty vec
+    }
+
+    #[test]
+    fn test_optimize_treesa_multiple_trials() {
+        // Test with multiple trials to ensure parallel execution works
+        let code = EinCode::new(
+            vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+            vec!['i', 'l'],
+        );
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 8), ('l', 4)].into();
+
+        let mut config = TreeSA::fast();
+        config.ntrials = 3; // Multiple trials
+
+        let result = optimize_treesa(&code, &sizes, &config);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().leaf_count(), 3);
+    }
+
+    #[test]
+    fn test_init_random_two_tensors() {
+        // Test with exactly 2 tensors
+        let int_ixs = vec![vec![0, 1], vec![1, 2]];
+        let int_iy = vec![0, 2];
+        let nedge = 3;
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Tree, &mut rng);
+        assert_eq!(tree.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_init_random_many_tensors() {
+        // Test with many tensors to exercise recursive partitioning
+        let int_ixs = vec![
+            vec![0, 1],
+            vec![1, 2],
+            vec![2, 3],
+            vec![3, 4],
+            vec![4, 5],
+            vec![5, 6],
+        ];
+        let int_iy = vec![0, 6];
+        let nedge = 7;
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Tree, &mut rng);
+        assert_eq!(tree.leaf_count(), 6);
+    }
+
+    #[test]
+    fn test_init_random_path_two_tensors() {
+        let int_ixs = vec![vec![0, 1], vec![1, 2]];
+        let int_iy = vec![0, 2];
+        let nedge = 3;
+        let mut rng = rand::rng();
+
+        let tree = init_random(&int_ixs, &int_iy, nedge, DecompositionType::Path, &mut rng);
+        assert_eq!(tree.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_init_greedy_success() {
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 4)].into();
+
+        let (label_map, _labels) = build_label_map(&code);
+        let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+        let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+
+        let tree = init_greedy(&code, &sizes, &label_map, &int_ixs, &int_iy);
+        assert!(tree.is_some());
+        assert_eq!(tree.unwrap().leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_optimize_treesa_scalar_output() {
+        // Test with scalar output (empty iy)
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'i']], vec![]);
+        let sizes: HashMap<char, usize> = [('i', 4), ('j', 8)].into();
+
+        let config = TreeSA::fast();
+        let result = optimize_treesa(&code, &sizes, &config);
+
+        assert!(result.is_some());
+        let nested = result.unwrap();
+        assert_eq!(nested.leaf_count(), 2);
+    }
+
+    #[test]
+    fn test_optimize_treesa_with_different_decomp() {
+        // Test tree vs path decomposition
+        let code = EinCode::new(
+            vec![vec!['a', 'b'], vec!['b', 'c'], vec!['c', 'd']],
+            vec!['a', 'd'],
+        );
+        let sizes: HashMap<char, usize> = [('a', 2), ('b', 4), ('c', 4), ('d', 2)].into();
+
+        // Tree decomposition
+        let mut config_tree = TreeSA::fast();
+        config_tree.decomposition_type = DecompositionType::Tree;
+        let result_tree = optimize_treesa(&code, &sizes, &config_tree);
+        assert!(result_tree.is_some());
+
+        // Path decomposition
+        let mut config_path = TreeSA::fast();
+        config_path.decomposition_type = DecompositionType::Path;
+        config_path.initializer = Initializer::Random;
+        let result_path = optimize_treesa(&code, &sizes, &config_path);
+        assert!(result_path.is_some());
+    }
+
+    #[test]
+    fn test_nested_to_expr_tree_inner_leaf() {
+        // Test the inner function with a leaf (edge case - should return None)
+        let nested: NestedEinsum<char> = NestedEinsum::leaf(0);
+        let label_map: HashMap<char, usize> = [('i', 0), ('j', 1)].into();
+
+        let result = nested_to_expr_tree_inner(&nested, &label_map);
+        assert!(result.is_none());
+    }
 }
