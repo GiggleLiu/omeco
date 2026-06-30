@@ -101,8 +101,19 @@ pub fn optimize_exhaustive<L: Label>(
         return Err(ExhaustiveSearchError::TooManyTensors(n));
     }
 
+    if n <= 2 {
+        validate_output_labels(code)?;
+    }
+
     if n == 1 {
-        return Ok(NestedEinsum::leaf(0));
+        if code.iy == code.ixs[0] {
+            return Ok(NestedEinsum::leaf(0));
+        }
+
+        return Ok(NestedEinsum::node(
+            vec![NestedEinsum::leaf(0)],
+            code.clone(),
+        ));
     }
     if n == 2 {
         return Ok(NestedEinsum::node(
@@ -247,7 +258,23 @@ impl<'a, L: Label> SearchContext<'a, L> {
     }
 }
 
+fn validate_output_labels<L: Label>(code: &EinCode<L>) -> Result<(), ExhaustiveSearchError> {
+    let input_labels: HashSet<_> = code.ixs.iter().flatten().cloned().collect();
+
+    for label in &code.iy {
+        if !input_labels.contains(label) {
+            return Err(ExhaustiveSearchError::InvalidOutputLabel(format!(
+                "{label:?}"
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_scope<L: Label>(code: &EinCode<L>) -> Result<(), ExhaustiveSearchError> {
+    validate_output_labels(code)?;
+
     let output_labels: HashSet<_> = code.iy.iter().cloned().collect();
     let mut occurrence_counts: HashMap<L, usize> = HashMap::new();
 
@@ -264,14 +291,6 @@ fn validate_scope<L: Label>(code: &EinCode<L>) -> Result<(), ExhaustiveSearchErr
 
         for label in seen {
             *occurrence_counts.entry(label).or_insert(0) += 1;
-        }
-    }
-
-    for label in &code.iy {
-        if !occurrence_counts.contains_key(label) {
-            return Err(ExhaustiveSearchError::InvalidOutputLabel(format!(
-                "{label:?}"
-            )));
         }
     }
 
@@ -505,13 +524,204 @@ fn bits(mask: Mask) -> impl Iterator<Item = usize> {
 }
 
 fn submasks_with_size(mask: Mask, size: usize) -> impl Iterator<Item = Mask> {
-    let mut submasks = Vec::new();
     let mut submask = mask;
-    while submask != 0 {
-        if submask.count_ones() as usize == size {
-            submasks.push(submask);
+
+    std::iter::from_fn(move || {
+        while submask != 0 {
+            let current = submask;
+            submask = (submask - 1) & mask;
+
+            if current.count_ones() as usize == size {
+                return Some(current);
+            }
         }
-        submask = (submask - 1) & mask;
+
+        None
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sizes(values: &[(usize, usize)]) -> HashMap<usize, usize> {
+        values.iter().copied().collect()
     }
-    submasks.into_iter()
+
+    #[test]
+    fn exhaustive_search_new_sets_verbose() {
+        assert!(ExhaustiveSearch::new(true).verbose);
+    }
+
+    #[test]
+    fn validates_empty_and_size_limit_errors() {
+        let empty = EinCode::<usize>::new(vec![], vec![]);
+        assert_eq!(
+            optimize_exhaustive(&empty, &HashMap::new(), &ExhaustiveSearch::default()).unwrap_err(),
+            ExhaustiveSearchError::EmptyInput
+        );
+
+        let too_many_tensors = EinCode::new(vec![vec![0usize]; 129], vec![]);
+        assert_eq!(
+            optimize_exhaustive(
+                &too_many_tensors,
+                &HashMap::new(),
+                &ExhaustiveSearch::default()
+            )
+            .unwrap_err(),
+            ExhaustiveSearchError::TooManyTensors(129)
+        );
+
+        let large_tensor: Vec<_> = (0usize..129).collect();
+        let too_many_labels = EinCode::new(
+            vec![large_tensor.clone(), vec![0], vec![1]],
+            large_tensor.clone(),
+        );
+        assert_eq!(
+            optimize_exhaustive(
+                &too_many_labels,
+                &uniform_sizes(&large_tensor),
+                &ExhaustiveSearch::default()
+            )
+            .unwrap_err(),
+            ExhaustiveSearchError::TooManyLabels(129)
+        );
+    }
+
+    #[test]
+    fn invalid_output_is_rejected_for_trivial_inputs() {
+        let one = EinCode::new(vec![vec![0usize]], vec![1]);
+        let two = EinCode::new(vec![vec![0usize], vec![0]], vec![1]);
+
+        assert!(matches!(
+            optimize_exhaustive(
+                &one,
+                &sizes(&[(0, 2), (1, 3)]),
+                &ExhaustiveSearch::default()
+            ),
+            Err(ExhaustiveSearchError::InvalidOutputLabel(_))
+        ));
+        assert!(matches!(
+            optimize_exhaustive(
+                &two,
+                &sizes(&[(0, 2), (1, 3)]),
+                &ExhaustiveSearch::default()
+            ),
+            Err(ExhaustiveSearchError::InvalidOutputLabel(_))
+        ));
+    }
+
+    #[test]
+    fn single_tensor_output_reorder_uses_unary_node() {
+        let code = EinCode::new(vec![vec![0usize, 1]], vec![1, 0]);
+        let nested = optimize_exhaustive(
+            &code,
+            &sizes(&[(0, 2), (1, 3)]),
+            &ExhaustiveSearch::default(),
+        )
+        .unwrap();
+
+        match nested {
+            NestedEinsum::Node { args, eins } => {
+                assert_eq!(args.len(), 1);
+                assert_eq!(eins.iy, vec![1, 0]);
+            }
+            NestedEinsum::Leaf { .. } => panic!("output reorder needs a unary node"),
+        }
+    }
+
+    #[test]
+    fn verbose_search_runs() {
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1, 2], vec![2, 3]], vec![0, 3]);
+        let size_dict = sizes(&[(0, 2), (1, 3), (2, 5), (3, 7)]);
+
+        let nested = optimize_exhaustive(&code, &size_dict, &ExhaustiveSearch::new(true)).unwrap();
+
+        assert!(nested.is_binary());
+    }
+
+    #[test]
+    fn oversized_dimensions_report_overflow() {
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1, 2], vec![2, 3]], vec![0, 3]);
+        let size_dict = sizes(&[(0, usize::MAX), (1, 2), (2, 2), (3, 2)]);
+
+        assert_eq!(
+            optimize_exhaustive(&code, &size_dict, &ExhaustiveSearch::default()).unwrap_err(),
+            ExhaustiveSearchError::CostOverflow
+        );
+    }
+
+    #[test]
+    fn validates_scope_errors_with_specific_variants() {
+        let partial_trace = EinCode::new(vec![vec![0usize, 0, 1], vec![1, 2], vec![2, 3]], vec![3]);
+        assert_eq!(
+            validate_scope(&partial_trace).unwrap_err(),
+            ExhaustiveSearchError::PartialTrace {
+                tensor: 0,
+                label: "0".to_string(),
+            }
+        );
+
+        let dangling_sum = EinCode::new(vec![vec![0usize, 1], vec![1, 2], vec![2, 3]], vec![0, 2]);
+        assert_eq!(
+            validate_scope(&dangling_sum).unwrap_err(),
+            ExhaustiveSearchError::DanglingSummedIndex("3".to_string())
+        );
+    }
+
+    #[test]
+    fn singleton_component_is_combined_with_other_components() {
+        let code = EinCode::new(
+            vec![vec![0usize], vec![1, 2], vec![2, 3], vec![4, 5], vec![5, 6]],
+            vec![0, 1, 3, 4, 6],
+        );
+        let size_dict = sizes(&[(0, 2), (1, 3), (2, 5), (3, 7), (4, 11), (5, 13), (6, 17)]);
+
+        let nested = optimize_exhaustive(&code, &size_dict, &ExhaustiveSearch::default()).unwrap();
+
+        assert!(nested.is_binary());
+        assert_eq!(nested.leaf_count(), 5);
+        assert_eq!(nested.output_labels(&code.ixs), code.iy);
+    }
+
+    #[test]
+    fn private_helpers_cover_boundary_cases() {
+        assert_eq!(first_n_bits(128), Mask::MAX);
+        assert_eq!(singleton_index(bit(17)), 17);
+
+        let submasks: Vec<_> = submasks_with_size(0b1111, 2).collect();
+        assert_eq!(submasks.len(), 6);
+        assert!(submasks.contains(&0b0011));
+        assert!(submasks.contains(&0b1100));
+    }
+
+    #[test]
+    fn combine_components_rejects_empty_results() {
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1, 2], vec![2, 3]], vec![0, 3]);
+        let size_dict = sizes(&[(0, 2), (1, 3), (2, 5), (3, 7)]);
+        let ctx = SearchContext::new(&code, &size_dict).unwrap();
+
+        assert_eq!(
+            combine_components(&ctx, Vec::new()).unwrap_err(),
+            ExhaustiveSearchError::NoContractionTree
+        );
+    }
+
+    #[test]
+    fn private_helpers_cover_defensive_branches() {
+        let disconnected = EinCode::new(vec![vec![0usize], vec![1]], vec![0, 1]);
+        let size_dict = sizes(&[(0, 2), (1, 3)]);
+        let ctx = SearchContext::new(&disconnected, &size_dict).unwrap();
+
+        assert_eq!(ctx.open_label_mask(0), 0);
+        assert_eq!(ctx.label_mask_size(0).unwrap(), 1);
+        assert_eq!(
+            optimize_component(&ctx, bit(0) | bit(1)).unwrap_err(),
+            ExhaustiveSearchError::NoContractionTree
+        );
+    }
+
+    fn uniform_sizes(labels: &[usize]) -> HashMap<usize, usize> {
+        labels.iter().copied().map(|label| (label, 2)).collect()
+    }
 }
