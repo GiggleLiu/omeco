@@ -127,12 +127,9 @@ pub fn optimize_exhaustive<L: Label>(
     let components = connected_components(&ctx);
 
     if config.verbose {
-        eprintln!(
-            "ExhaustiveSearch: {} tensors, {} labels, {} connected component(s)",
-            n,
-            ctx.labels.len(),
-            components.len()
-        );
+        let label_count = ctx.labels.len();
+        let component_count = components.len();
+        eprintln!("ExhaustiveSearch: {n} tensors, {label_count} labels, {component_count} connected component(s)");
     }
 
     let mut results = Vec::with_capacity(components.len());
@@ -181,14 +178,16 @@ impl<'a, L: Label> SearchContext<'a, L> {
             output_label_mask |= bit(pos);
         }
 
-        Ok(Self {
+        let full_tensor_mask = first_n_bits(code.num_tensors());
+        let ctx = Self {
             code,
             size_dict,
             labels,
             label_tensor_masks,
             output_label_mask,
-            full_tensor_mask: first_n_bits(code.num_tensors()),
-        })
+            full_tensor_mask,
+        };
+        Ok(ctx)
     }
 
     fn open_label_mask(&self, tensor_mask: Mask) -> Mask {
@@ -196,14 +195,12 @@ impl<'a, L: Label> SearchContext<'a, L> {
         let mut labels = 0;
 
         for (label_pos, &label_tensors) in self.label_tensor_masks.iter().enumerate() {
-            if label_tensors & tensor_mask == 0 {
-                continue;
-            }
-
-            let is_output = self.output_label_mask & bit(label_pos) != 0;
-            let appears_outside = label_tensors & outside != 0;
-            if is_output || appears_outside {
-                labels |= bit(label_pos);
+            if label_tensors & tensor_mask != 0 {
+                let is_output = self.output_label_mask & bit(label_pos) != 0;
+                let appears_outside = label_tensors & outside != 0;
+                if is_output || appears_outside {
+                    labels |= bit(label_pos);
+                }
             }
         }
 
@@ -229,30 +226,30 @@ impl<'a, L: Label> SearchContext<'a, L> {
             return self.code.iy.clone();
         }
 
+        let mut labels = Vec::new();
         let open_mask = self.open_label_mask(tensor_mask);
-        self.code
-            .iy
-            .iter()
-            .filter(|label| {
-                self.labels
-                    .iter()
-                    .position(|candidate| candidate == *label)
-                    .is_some_and(|pos| open_mask & bit(pos) != 0)
-            })
-            .cloned()
-            .collect()
+        for label in &self.code.iy {
+            let is_open = self
+                .labels
+                .iter()
+                .position(|candidate| candidate == label)
+                .is_some_and(|pos| open_mask & bit(pos) != 0);
+            if is_open {
+                labels.push(label.clone());
+            }
+        }
+        labels
     }
 
     fn label_mask_size(&self, label_mask: Mask) -> Result<usize, ExhaustiveSearchError> {
         let mut size = 1usize;
         for (i, label) in self.labels.iter().enumerate() {
-            if label_mask & bit(i) == 0 {
-                continue;
+            if label_mask & bit(i) != 0 {
+                let dim = self.size_dict.get(label).copied().unwrap_or(1);
+                size = size
+                    .checked_mul(dim)
+                    .ok_or(ExhaustiveSearchError::CostOverflow)?;
             }
-            let dim = self.size_dict.get(label).copied().unwrap_or(1);
-            size = size
-                .checked_mul(dim)
-                .ok_or(ExhaustiveSearchError::CostOverflow)?;
         }
         Ok(size)
     }
@@ -282,10 +279,8 @@ fn validate_scope<L: Label>(code: &EinCode<L>) -> Result<(), ExhaustiveSearchErr
         let mut seen = HashSet::new();
         for label in ix {
             if !seen.insert(label.clone()) {
-                return Err(ExhaustiveSearchError::PartialTrace {
-                    tensor,
-                    label: format!("{label:?}"),
-                });
+                let label = format!("{label:?}");
+                return Err(ExhaustiveSearchError::PartialTrace { tensor, label });
             }
         }
 
@@ -345,28 +340,30 @@ fn optimize_component<L: Label>(
     if component.count_ones() == 1 {
         let tensor = singleton_index(component);
         let labels = ctx.root_labels_for_mask(component);
+        let tree = NestedEinsum::leaf(tensor);
         let output_size = ctx.label_mask_size(ctx.open_label_mask(component))?;
-        return Ok(ComponentResult {
+        let result = ComponentResult {
             tensor_mask: component,
             labels,
-            tree: NestedEinsum::leaf(tensor),
+            tree,
             output_size,
-        });
+        };
+        return Ok(result);
     }
 
     let component_size = component.count_ones() as usize;
-    let mut by_size: Vec<HashMap<Mask, DpEntry>> =
-        (0..=component_size).map(|_| HashMap::new()).collect();
+    let mut by_size = Vec::with_capacity(component_size + 1);
+    for _ in 0..=component_size {
+        by_size.push(HashMap::new());
+    }
 
     for tensor in bits(component) {
         let mask = bit(tensor);
-        by_size[1].insert(
-            mask,
-            DpEntry {
-                cost: 0,
-                tree: SearchTree::Leaf(tensor),
-            },
-        );
+        let entry = DpEntry {
+            cost: 0,
+            tree: SearchTree::Leaf(tensor),
+        };
+        by_size[1].insert(mask, entry);
     }
 
     for size in 2..=component_size {
@@ -385,25 +382,26 @@ fn optimize_component<L: Label>(
                         by_size[left_size].get(&left),
                         by_size[right_size].get(&right),
                     ) {
-                        let shared_labels = ctx.open_label_mask(left) & ctx.open_label_mask(right);
+                        let left_open_labels = ctx.open_label_mask(left);
+                        let right_open_labels = ctx.open_label_mask(right);
+                        let shared_labels = left_open_labels & right_open_labels;
                         if shared_labels != 0 {
-                            let merge_label_mask =
-                                ctx.open_label_mask(left) | ctx.open_label_mask(right);
+                            let merge_label_mask = left_open_labels | right_open_labels;
                             let merge_cost = ctx.label_mask_size(merge_label_mask)?;
-                            let cost = left_entry
+                            let cost_after_left = left_entry
                                 .cost
                                 .checked_add(right_entry.cost)
-                                .and_then(|c| c.checked_add(merge_cost))
+                                .ok_or(ExhaustiveSearchError::CostOverflow)?;
+                            let cost = cost_after_left
+                                .checked_add(merge_cost)
                                 .ok_or(ExhaustiveSearchError::CostOverflow)?;
 
                             if best.as_ref().map_or(true, |entry| cost < entry.cost) {
-                                best = Some(DpEntry {
-                                    cost,
-                                    tree: SearchTree::Node(
-                                        Box::new(left_entry.tree.clone()),
-                                        Box::new(right_entry.tree.clone()),
-                                    ),
-                                });
+                                let tree = SearchTree::Node(
+                                    Box::new(left_entry.tree.clone()),
+                                    Box::new(right_entry.tree.clone()),
+                                );
+                                best = Some(DpEntry { cost, tree });
                             }
                         }
                     }
@@ -485,12 +483,13 @@ fn combine_components<L: Label>(
             EinCode::new(vec![left.labels, right.labels], output.clone()),
         );
 
-        results.push(ComponentResult {
+        let result = ComponentResult {
             tensor_mask,
             labels: output,
             tree,
             output_size,
-        });
+        };
+        results.push(result);
     }
 
     Ok(results.pop().unwrap().tree)
