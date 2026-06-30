@@ -62,10 +62,12 @@
 //! | Optimizer | Description |
 //! |-----------|-------------|
 //! | [`GreedyMethod`] | Fast O(n² log n) greedy heuristic |
+//! | [`ExhaustiveSearch`] | Exact dynamic programming for small networks |
 //! | [`TreeSA`] | Simulated annealing for higher-quality solutions |
 //!
-//! Use [`GreedyMethod`] when you need speed; use [`TreeSA`] when contraction
-//! cost dominates and you can afford extra search time.
+//! Use [`GreedyMethod`] when you need speed, [`ExhaustiveSearch`] when the
+//! network is small enough for exact optimization, and [`TreeSA`] when
+//! contraction cost dominates and you can afford extra search time.
 //!
 //! ### Feature 2: Slicing
 //!
@@ -127,6 +129,7 @@
 
 pub mod complexity;
 pub mod eincode;
+pub mod exhaustive;
 pub mod expr_tree;
 pub mod greedy;
 pub mod incidence_list;
@@ -141,12 +144,16 @@ pub mod utils;
 #[cfg(test)]
 pub mod test_utils;
 
+#[cfg(test)]
+mod exhaustive_tests;
+
 // Re-export main types
 pub use complexity::{
     eincode_complexity, flop, nested_complexity, nested_flop, peak_memory, sliced_complexity,
     ContractionComplexity,
 };
 pub use eincode::{log2_size_dict, uniform_size_dict, EinCode, NestedEinsum, SlicedEinsum};
+pub use exhaustive::{optimize_exhaustive, ExhaustiveSearch, ExhaustiveSearchError};
 pub use greedy::{optimize_greedy, ContractionTree, GreedyMethod, GreedyResult};
 pub use label::Label;
 pub use score::ScoreFunction;
@@ -182,6 +189,16 @@ impl CodeOptimizer for TreeSA {
         size_dict: &HashMap<L, usize>,
     ) -> Option<NestedEinsum<L>> {
         optimize_treesa(code, size_dict, self)
+    }
+}
+
+impl CodeOptimizer for ExhaustiveSearch {
+    fn optimize<L: Label>(
+        &self,
+        code: &EinCode<L>,
+        size_dict: &HashMap<L, usize>,
+    ) -> Option<NestedEinsum<L>> {
+        optimize_exhaustive(code, size_dict, self).ok()
     }
 }
 

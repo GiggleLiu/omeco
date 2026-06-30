@@ -13,6 +13,7 @@
   - [Complexity Metrics](./concepts/complexity-metrics.md)
 - [Algorithms](./algorithms/README.md)
   - [Greedy Method](./algorithms/greedy-method.md)
+  - [Exhaustive Search](./algorithms/exhaustive-search.md)
   - [TreeSA](./algorithms/tree-sa.md)
   - [Algorithm Comparison](./algorithms/comparison.md)
 

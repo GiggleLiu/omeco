@@ -25,7 +25,7 @@ Optimize tensor contraction order.
 - `ixs`: List of index lists for each tensor (e.g., `[[0, 1], [1, 2]]`)
 - `out`: Output indices (e.g., `[0, 2]`)
 - `sizes`: Dictionary mapping indices to dimensions (e.g., `{0: 10, 1: 20, 2: 10}`)
-- `optimizer`: Optimizer instance (default: `GreedyMethod()`)
+- `optimizer`: Optimizer instance (`GreedyMethod`, `ExhaustiveSearch`, or `TreeSA`; default: `GreedyMethod()`)
 
 **Returns**: `NestedEinsum` representing the optimized contraction tree
 
@@ -156,6 +156,26 @@ GreedyMethod()
 
 # Stochastic variant
 GreedyMethod(temperature=1.0, max_branches=5)
+```
+
+#### `ExhaustiveSearch`
+
+```python
+class ExhaustiveSearch:
+    def __init__(self, verbose: bool = False)
+```
+
+Exact dynamic-programming optimizer for small tensor networks. It minimizes
+total FLOP count within each connected component.
+
+**Parameters**:
+- `verbose`: Print progress information during the search
+
+**Example**:
+```python
+from omeco import ExhaustiveSearch, optimize_code
+
+tree = optimize_code(ixs, out, sizes, ExhaustiveSearch())
 ```
 
 #### `TreeSA`

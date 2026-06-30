@@ -26,6 +26,7 @@ When contracting multiple tensors together, the order of contractions significan
 This library provides:
 
 - **GreedyMethod**: Fast O(n² log n) greedy algorithm for contraction order
+- **ExhaustiveSearch**: Exact dynamic programming for small contraction networks
 - **TreeSA**: Simulated annealing for higher quality contraction orders
 - **TreeSASlicer**: Automatic slicing optimization to reduce memory usage
 
@@ -51,7 +52,7 @@ omeco = "0.1"
 ```python
 from omeco import (
     optimize_code, slice_code, contraction_complexity, sliced_complexity,
-    GreedyMethod, TreeSA, TreeSASlicer, ScoreFunction
+    GreedyMethod, ExhaustiveSearch, TreeSA, TreeSASlicer, ScoreFunction
 )
 
 # Matrix chain: A[0,1] × B[1,2] × C[2,3] → D[0,3]
@@ -82,7 +83,7 @@ orders and slicing for lower peak memory.
 
 ```rust
 use omeco::{
-    EinCode, GreedyMethod, TreeSASlicer, slice_code,
+    EinCode, GreedyMethod, ExhaustiveSearch, TreeSASlicer, slice_code,
     contraction_complexity, optimize_code, sliced_complexity,
 };
 use std::collections::HashMap;
@@ -146,6 +147,26 @@ let result = optimize_code(&code, &sizes, &stochastic);
 **Parameters:**
 - `alpha`: Balances output size vs input size reduction (0.0 to 1.0)
 - `temperature`: Enables Boltzmann sampling (0.0 = deterministic)
+
+### ExhaustiveSearch
+
+Exact dynamic programming for small networks:
+
+```rust
+use omeco::{EinCode, ExhaustiveSearch, optimize_code};
+
+let code = EinCode::new(
+    vec![vec!['a', 'b'], vec!['b', 'c'], vec!['c', 'd']],
+    vec!['a', 'd']
+);
+let sizes = omeco::uniform_size_dict(&code, 10);
+
+let result = optimize_code(&code, &sizes, &ExhaustiveSearch::default());
+```
+
+`ExhaustiveSearch` minimizes total FLOP count within each connected component.
+It supports hyperedges and shared output indices, but nontrivial inputs with
+partial traces or dangling summed indices are outside its exact-search scope.
 
 ### TreeSA
 

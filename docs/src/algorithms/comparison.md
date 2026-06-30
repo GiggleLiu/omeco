@@ -1,16 +1,16 @@
 # Algorithm Comparison
 
-Detailed comparison of GreedyMethod vs TreeSA.
+Detailed comparison of GreedyMethod, ExhaustiveSearch, and TreeSA.
 
 ## Quick Summary
 
-| Metric | GreedyMethod | TreeSA |
-|--------|--------------|--------|
-| **Speed** | Seconds | Minutes |
-| **Solution Quality** | Good | Better |
-| **Deterministic** | Yes (default) | No |
-| **Scalability** | 100+ tensors | 50-100 tensors |
-| **Tuning Required** | Minimal | Some |
+| Metric | GreedyMethod | ExhaustiveSearch | TreeSA |
+|--------|--------------|------------------|--------|
+| **Speed** | Seconds | Exponential | Minutes |
+| **Solution Quality** | Good | Optimal FLOP count | Better |
+| **Deterministic** | Yes (default) | Yes | No |
+| **Scalability** | 100+ tensors | Small networks | 50-100 tensors |
+| **Tuning Required** | Minimal | None | Some |
 
 ## Performance Benchmarks
 
@@ -143,6 +143,8 @@ memory_reduction = 2 ** (comp_greedy.sc - comp_sa.sc)  # 2.5x less memory
 ```
 Start
   │
+  ├─ Need a small exact baseline? ──→ ExhaustiveSearch
+  │
   ├─ Need results in <1 second? ──→ GreedyMethod
   │
   ├─ Problem is a chain/tree? ──→ GreedyMethod
@@ -181,6 +183,7 @@ if comp_greedy.tc > 35.0:  # Too slow
 
 | Scenario | Algorithm | Configuration |
 |----------|-----------|---------------|
+| Exact small-network baseline | ExhaustiveSearch | Default |
 | Quick prototyping | GreedyMethod | Default |
 | Production (simple) | GreedyMethod | Default |
 | Production (complex) | TreeSA | `TreeSA.fast()` |
@@ -190,5 +193,6 @@ if comp_greedy.tc > 35.0:  # Too slow
 ## Next Steps
 
 - [Greedy Method](./greedy-method.md) - Details on greedy algorithm
+- [Exhaustive Search](./exhaustive-search.md) - Exact optimizer for small networks
 - [TreeSA](./tree-sa.md) - Details on simulated annealing
 - [Score Function](../guides/score-function.md) - Tune for your hardware

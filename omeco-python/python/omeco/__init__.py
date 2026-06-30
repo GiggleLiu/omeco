@@ -11,6 +11,9 @@ Classes:
     GreedyMethod: Fast greedy optimizer.
         GreedyMethod(alpha=0.0, temperature=0.0)
 
+    ExhaustiveSearch: Exact optimizer for small tensor networks.
+        ExhaustiveSearch(verbose=False)
+
     TreeSA: Simulated annealing optimizer.
         TreeSA(ntrials=10, niters=50, betas=None, score=None)
         TreeSA.fast(score=None)
@@ -60,10 +63,12 @@ from omeco._core import (
     ContractionComplexity,
     ScoreFunction,
     GreedyMethod,
+    ExhaustiveSearch,
     TreeSA,
     TreeSASlicer,
     # Functions
     optimize_code,
+    optimize_exhaustive,
     contraction_complexity,
     sliced_complexity,
     slice_code,
@@ -77,12 +82,13 @@ __all__ = [
     "ContractionComplexity",
     "ScoreFunction",
     "GreedyMethod",
+    "ExhaustiveSearch",
     "TreeSA",
     "TreeSASlicer",
     "optimize_code",
+    "optimize_exhaustive",
     "contraction_complexity",
     "sliced_complexity",
     "slice_code",
     "uniform_size_dict",
 ]
-

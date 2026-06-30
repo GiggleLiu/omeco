@@ -3,10 +3,12 @@
 import pytest
 from omeco import (
     GreedyMethod,
+    ExhaustiveSearch,
     TreeSA,
     TreeSASlicer,
     ScoreFunction,
     optimize_code,
+    optimize_exhaustive,
     slice_code,
     SlicedEinsum,
     uniform_size_dict,
@@ -222,6 +224,48 @@ def test_optimize_code_treesa():
     tree = optimize_code(ixs, out, sizes, TreeSA.fast())
     assert tree is not None
     assert tree.is_binary()
+
+
+def test_optimize_code_exhaustive():
+    """Test optimize_code with ExhaustiveSearch."""
+    ixs = [[0, 1], [1, 2], [2, 3]]
+    out = [0, 3]
+    sizes = {0: 2, 1: 3, 2: 4, 3: 5}
+
+    tree = optimize_code(ixs, out, sizes, ExhaustiveSearch())
+    assert tree is not None
+    assert tree.is_binary()
+    assert tree.leaf_count() == 3
+    assert tree.to_dict()["eins"]["iy"] == out
+
+
+def test_optimize_exhaustive_helper():
+    """Test explicit optimize_exhaustive helper."""
+    ixs = [[0, 1], [1, 2]]
+    out = [0, 2]
+    sizes = {0: 2, 1: 3, 2: 5}
+
+    tree = optimize_exhaustive(ixs, out, sizes)
+    assert tree.is_binary()
+    assert tree.leaf_count() == 2
+
+
+def test_exhaustive_search_config_and_repr():
+    """Test ExhaustiveSearch configuration."""
+    opt = ExhaustiveSearch(verbose=True)
+    assert opt.verbose is True
+    assert "ExhaustiveSearch" in repr(opt)
+    assert "verbose=True" in repr(opt)
+
+
+def test_exhaustive_scope_error_becomes_value_error():
+    """Test exact-search unsupported scope error in Python."""
+    ixs = [[0, 0, 1], [1, 2], [2, 3]]
+    out = [3]
+    sizes = {0: 2, 1: 3, 2: 5, 3: 7}
+
+    with pytest.raises(ValueError, match="partial traces"):
+        optimize_code(ixs, out, sizes, ExhaustiveSearch())
 
 
 def test_optimize_code_treesa_configured():

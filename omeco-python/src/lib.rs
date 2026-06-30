@@ -5,8 +5,8 @@ use pyo3::prelude::*;
 use std::collections::HashMap;
 
 use omeco::{
-    CodeOptimizer, ContractionComplexity, EinCode, GreedyMethod, NestedEinsum, ScoreFunction,
-    SlicedEinsum, TreeSA, TreeSASlicer,
+    CodeOptimizer, ContractionComplexity, EinCode, ExhaustiveSearch, GreedyMethod, NestedEinsum,
+    ScoreFunction, SlicedEinsum, TreeSA, TreeSASlicer,
 };
 
 /// A contraction order represented as a nested einsum tree.
@@ -417,6 +417,42 @@ impl PyGreedyMethod {
     }
 }
 
+/// Exact optimizer for small contraction networks.
+///
+/// Args:
+///     verbose: Print progress information during the exhaustive search.
+///              Default: False.
+#[pyclass(name = "ExhaustiveSearch")]
+#[derive(Clone)]
+pub struct PyExhaustiveSearch {
+    inner: ExhaustiveSearch,
+}
+
+#[pymethods]
+impl PyExhaustiveSearch {
+    /// Create a new exact optimizer.
+    #[new]
+    #[pyo3(signature = (verbose=false))]
+    fn new(verbose: bool) -> Self {
+        Self {
+            inner: ExhaustiveSearch::new(verbose),
+        }
+    }
+
+    /// Get the verbose flag.
+    #[getter]
+    fn verbose(&self) -> bool {
+        self.inner.verbose
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ExhaustiveSearch(verbose={})",
+            if self.inner.verbose { "True" } else { "False" }
+        )
+    }
+}
+
 /// Simulated annealing optimizer for contraction order.
 ///
 /// Args:
@@ -700,6 +736,32 @@ fn optimize_treesa(
         .ok_or_else(|| PyValueError::new_err("Optimization failed"))
 }
 
+/// Optimize the contraction order using exact exhaustive search.
+///
+/// Args:
+///     ixs: List of index lists for each tensor.
+///     out: Output indices.
+///     sizes: Dictionary mapping indices to their dimensions.
+///     optimizer: ExhaustiveSearch optimizer configuration.
+///
+/// Returns:
+///     Optimized contraction tree as NestedEinsum.
+#[pyfunction]
+#[pyo3(signature = (ixs, out, sizes, optimizer=None))]
+fn optimize_exhaustive(
+    ixs: Vec<Vec<i64>>,
+    out: Vec<i64>,
+    sizes: HashMap<i64, usize>,
+    optimizer: Option<PyExhaustiveSearch>,
+) -> PyResult<PyNestedEinsum> {
+    let code = EinCode::new(ixs, out);
+    let opt = optimizer.unwrap_or_else(|| PyExhaustiveSearch::new(false));
+
+    omeco::optimize_exhaustive(&code, &sizes, &opt.inner)
+        .map(|inner| PyNestedEinsum { inner })
+        .map_err(|err| PyValueError::new_err(err.to_string()))
+}
+
 /// Compute the contraction complexity of an optimized tree.
 ///
 /// .. deprecated:: 0.3.0
@@ -847,10 +909,11 @@ fn slice_code(
         .ok_or_else(|| PyValueError::new_err("Slicing failed"))
 }
 
-/// Unified optimizer type that can be either GreedyMethod or TreeSA.
+/// Unified optimizer type for contraction order optimization.
 #[derive(FromPyObject)]
 enum PyOptimizer {
     Greedy(PyGreedyMethod),
+    Exhaustive(PyExhaustiveSearch),
     TreeSA(PyTreeSA),
 }
 
@@ -862,17 +925,19 @@ enum PyOptimizer {
 ///     ixs: List of index lists for each tensor (e.g., [[0, 1], [1, 2]]).
 ///     out: Output indices (e.g., [0, 2]).
 ///     sizes: Dictionary mapping indices to their dimensions.
-///     optimizer: Optimizer to use (GreedyMethod or TreeSA). Defaults to GreedyMethod().
+///     optimizer: Optimizer to use (GreedyMethod, ExhaustiveSearch, or TreeSA).
+///                Defaults to GreedyMethod().
 ///
 /// Returns:
 ///     Optimized contraction tree as NestedEinsum.
 ///
 /// Example:
-///     >>> from omeco import optimize_code, GreedyMethod, TreeSA
+///     >>> from omeco import optimize_code, GreedyMethod, ExhaustiveSearch, TreeSA
 ///     >>> ixs = [[0, 1], [1, 2], [2, 3]]
 ///     >>> out = [0, 3]
 ///     >>> sizes = {0: 100, 1: 50, 2: 80, 3: 100}
 ///     >>> tree = optimize_code(ixs, out, sizes, GreedyMethod())
+///     >>> tree = optimize_code(ixs, out, sizes, ExhaustiveSearch())
 ///     >>> tree = optimize_code(ixs, out, sizes, TreeSA.fast())
 #[pyfunction]
 #[pyo3(signature = (ixs, out, sizes, optimizer=None))]
@@ -885,14 +950,22 @@ fn optimize_code(
     let code = EinCode::new(ixs, out);
 
     let result = match optimizer {
-        Some(PyOptimizer::Greedy(opt)) => opt.inner.optimize(&code, &sizes),
-        Some(PyOptimizer::TreeSA(opt)) => opt.inner.optimize(&code, &sizes),
-        None => GreedyMethod::default().optimize(&code, &sizes),
+        Some(PyOptimizer::Greedy(opt)) => opt
+            .inner
+            .optimize(&code, &sizes)
+            .ok_or_else(|| PyValueError::new_err("Optimization failed")),
+        Some(PyOptimizer::Exhaustive(opt)) => omeco::optimize_exhaustive(&code, &sizes, &opt.inner)
+            .map_err(|err| PyValueError::new_err(err.to_string())),
+        Some(PyOptimizer::TreeSA(opt)) => opt
+            .inner
+            .optimize(&code, &sizes)
+            .ok_or_else(|| PyValueError::new_err("Optimization failed")),
+        None => GreedyMethod::default()
+            .optimize(&code, &sizes)
+            .ok_or_else(|| PyValueError::new_err("Optimization failed")),
     };
 
-    result
-        .map(|inner| PyNestedEinsum { inner })
-        .ok_or_else(|| PyValueError::new_err("Optimization failed"))
+    result.map(|inner| PyNestedEinsum { inner })
 }
 
 /// Python module for omeco tensor network contraction order optimization.
@@ -903,10 +976,12 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyContractionComplexity>()?;
     m.add_class::<PyScoreFunction>()?;
     m.add_class::<PyGreedyMethod>()?;
+    m.add_class::<PyExhaustiveSearch>()?;
     m.add_class::<PyTreeSA>()?;
     m.add_class::<PyTreeSASlicer>()?;
     m.add_function(wrap_pyfunction!(optimize_code, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_greedy, m)?)?;
+    m.add_function(wrap_pyfunction!(optimize_exhaustive, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_treesa, m)?)?;
     m.add_function(wrap_pyfunction!(contraction_complexity, m)?)?;
     m.add_function(wrap_pyfunction!(sliced_complexity, m)?)?;
