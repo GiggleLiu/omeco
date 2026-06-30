@@ -12,9 +12,10 @@ Ported from [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsum
 
 When contracting multiple tensors together, the order of contractions significantly affects computational cost. Finding the optimal contraction order is NP-complete, but good heuristics can find near-optimal solutions quickly.
 
-This library provides two optimization algorithms:
+This library provides three optimization algorithms:
 
 - **GreedyMethod**: Fast O(n² log n) greedy algorithm
+- **ExhaustiveSearch**: Exact dynamic programming for small networks
 - **TreeSA**: Simulated annealing for higher quality solutions
 
 ## Installation
@@ -155,7 +156,7 @@ orders and slicing for lower peak memory.
 
 ```rust
 use omeco::{
-    EinCode, GreedyMethod, SlicedEinsum, contraction_complexity, optimize_code, sliced_complexity,
+    EinCode, GreedyMethod, ExhaustiveSearch, SlicedEinsum, contraction_complexity, optimize_code, sliced_complexity,
 };
 use std::collections::HashMap;
 
@@ -215,6 +216,26 @@ let result = optimize_code(&code, &sizes, &stochastic);
 **Parameters:**
 - `alpha`: Balances output size vs input size reduction (0.0 to 1.0)
 - `temperature`: Enables Boltzmann sampling (0.0 = deterministic)
+
+### ExhaustiveSearch
+
+Exact dynamic programming for small networks:
+
+```rust
+use omeco::{EinCode, ExhaustiveSearch, optimize_code};
+
+let code = EinCode::new(
+    vec![vec!['a', 'b'], vec!['b', 'c'], vec!['c', 'd']],
+    vec!['a', 'd']
+);
+let sizes = omeco::uniform_size_dict(&code, 10);
+
+let result = optimize_code(&code, &sizes, &ExhaustiveSearch::default());
+```
+
+`ExhaustiveSearch` minimizes total FLOP count within each connected component.
+It is intended for small networks and reports unsupported nontrivial inputs
+that require unary traces or dangling summed-index contractions.
 
 ### TreeSA
 
