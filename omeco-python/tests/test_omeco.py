@@ -80,6 +80,20 @@ def test_sliced_einsum():
     assert complexity.sc > 0
 
 
+def test_sliced_einsum_exposes_tree_and_dict():
+    """Test SlicedEinsum exposes its optimized tree."""
+    ixs = [[0, 1], [1, 2]]
+    out = [0, 2]
+    sizes = {0: 10, 1: 20, 2: 10}
+
+    tree = optimize_code(ixs, out, sizes)
+    sliced = SlicedEinsum([1], tree)
+
+    assert sliced.tree().to_dict() == tree.to_dict()
+    assert sliced.to_dict() == tree.to_dict()
+    assert sliced.tree().leaf_count() == tree.leaf_count()
+
+
 def test_uniform_size_dict():
     """Test uniform size dictionary creation."""
     ixs = [[0, 1], [1, 2]]
@@ -291,6 +305,8 @@ def test_slice_code_basic():
     sliced = slice_code(tree, ixs, sizes, slicer)
     assert sliced is not None
     assert sliced.num_slices() >= 0
+    assert sliced.tree().is_binary()
+    assert sliced.to_dict() == sliced.tree().to_dict()
 
 
 def test_slice_code_reduces_space():
