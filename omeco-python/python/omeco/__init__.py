@@ -42,6 +42,8 @@ Slicing to reduce memory:
     >>> score = ScoreFunction(sc_target=10.0)
     >>> sliced = slice_code(tree, ixs, sizes, TreeSASlicer.fast(score=score))
     >>> print(f"Sliced indices: {sliced.slicing()}")
+    >>> sliced_tree = sliced.tree()
+    >>> sliced_tree_dict = sliced.to_dict()
     >>>
     >>> # With fixed slices (indices that must be sliced)
     >>> slicer = TreeSASlicer(fixed_slices=[1, 2], score=ScoreFunction(sc_target=10.0))

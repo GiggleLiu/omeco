@@ -51,7 +51,7 @@ def slice_code(
     ixs: List[List[int]],
     sizes: Dict[int, int],
     slicer: Optional[TreeSASlicer] = None
-) -> SlicedCode
+) -> SlicedEinsum
 ```
 
 Apply slicing to reduce memory usage.
@@ -62,7 +62,7 @@ Apply slicing to reduce memory usage.
 - `sizes`: Dimension sizes
 - `slicer`: Slicer instance (optional, defaults to `TreeSASlicer()`)
 
-**Returns**: `SlicedCode` with slicing applied
+**Returns**: `SlicedEinsum` with slicing applied and an optimized contraction tree for each slice
 
 **Example**:
 ```python
@@ -74,6 +74,8 @@ slicer = TreeSASlicer.fast(
     score=ScoreFunction(sc_target=28.0)
 )
 sliced = slice_code(tree, ixs, sizes, slicer)
+sliced_tree = sliced.tree()
+sliced_tree_dict = sliced.to_dict()
 ```
 
 ### Complexity Functions
@@ -330,19 +332,24 @@ print(tree)
 tree_dict = tree.to_dict()
 ```
 
-#### `SlicedCode`
+#### `SlicedEinsum`
 
 Represents a contraction with slicing applied.
 
 **Methods**:
 ```python
-sliced.slicing() -> List[int]   # Get sliced indices
+sliced.slicing() -> List[int]     # Get sliced indices
+sliced.num_slices() -> int        # Number of sliced indices
+sliced.tree() -> NestedEinsum     # Optimized tree for each slice
+sliced.to_dict() -> dict          # Optimized tree as a dict
 ```
 
 **Example**:
 ```python
 sliced = slice_code(tree, ixs, sizes, slicer)
 print(f"Sliced indices: {sliced.slicing()}")
+sliced_tree = sliced.tree()
+tree_dict = sliced.to_dict()
 # Output: [1, 3]
 ```
 

@@ -226,6 +226,20 @@ impl PySlicedEinsum {
         self.inner.num_slices()
     }
 
+    /// Get the optimized contraction tree executed for each slice.
+    fn tree(&self) -> PyNestedEinsum {
+        PyNestedEinsum {
+            inner: self.inner.eins.clone(),
+        }
+    }
+
+    /// Convert the optimized contraction tree to a Python dictionary.
+    ///
+    /// This returns the same structure as `NestedEinsum.to_dict()`.
+    fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        nested_to_dict(py, &self.inner.eins)
+    }
+
     fn __repr__(&self) -> String {
         format!("SlicedEinsum(slicing={:?})", self.inner.slicing)
     }

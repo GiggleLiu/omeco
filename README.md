@@ -74,6 +74,8 @@ print(f"Sliced space: 2^{sliced_comp.sc:.2f}")
 
 # Use with PyTorch (see examples/pytorch_tensor_network_example.py)
 tree_dict = tree.to_dict()  # Convert to dict for traversal
+sliced_tree = sliced.tree()  # Optimized tree after slicing
+sliced_tree_dict = sliced.to_dict()  # Dict for the optimized sliced tree
 ```
 
 ## Rust Quick Start

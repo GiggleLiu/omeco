@@ -125,6 +125,10 @@ sliced = slice_code(tree, ixs, sizes, slicer)
 c_sliced = sliced_complexity(sliced, ixs, sizes)
 print(f"Sliced:   tc=2^{c_sliced.tc:.2f}, sc=2^{c_sliced.sc:.2f}")
 print(f"Indices to loop over: {sliced.slicing()}")
+print(f"Optimized sliced tree: {sliced.tree()}")
+
+# Convert the optimized sliced tree to dict for traversal/execution
+sliced_tree_dict = sliced.to_dict()
 
 # With fixed slices (indices that must be sliced)
 slicer = TreeSASlicer(fixed_slices=[1, 2], score=ScoreFunction(sc_target=10.0))
