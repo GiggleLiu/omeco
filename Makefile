@@ -108,12 +108,14 @@ version:
 # Helper to update version in all files
 define update_version
 	@echo "Updating version from $(VERSION) to $(1)..."
+	@sed -i 's/^version = "$(VERSION)"/version = "$(1)"/' Cargo.toml
 	@sed -i 's/^version = "$(VERSION)"/version = "$(1)"/' omeco/Cargo.toml
 	@sed -i 's/^version = "$(VERSION)"/version = "$(1)"/' omeco-python/pyproject.toml
+	@sed -i 's/^__version__ = ".*"/__version__ = "$(1)"/' omeco-python/python/omeco/__init__.py
 	@echo "Updating Cargo.lock..."
 	@cd omeco && $(CARGO) update -p omeco --precise $(1) 2>/dev/null || $(CARGO) check --quiet
 	@echo "Updated version to $(1)"
-	@git add omeco/Cargo.toml omeco-python/pyproject.toml Cargo.lock
+	@git add Cargo.toml omeco/Cargo.toml omeco-python/pyproject.toml omeco-python/python/omeco/__init__.py Cargo.lock
 	@git commit -m "Bump version to $(1)"
 	@echo "Committed version bump"
 endef

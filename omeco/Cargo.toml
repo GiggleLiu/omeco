@@ -1,6 +1,6 @@
 [package]
 name = "omeco"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 description = "Tensor network contraction order optimization"
 license = "MIT"
@@ -23,4 +23,3 @@ criterion = "0.5"
 ndarray = "0.15"
 tempfile = "3"
 petgraph = "0.7"
-

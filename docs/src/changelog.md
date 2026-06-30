@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-06-30
+
 ### Added
 - Comprehensive mdBook documentation following tropical-gemm standard
 - Pretty printing for Python `NestedEinsum` with ASCII tree visualization

@@ -77,7 +77,7 @@ from omeco._core import (
     uniform_size_dict,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.2.5"
 __all__ = [
     "NestedEinsum",
     "SlicedEinsum",
