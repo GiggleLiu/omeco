@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "cycle": 5,
+  "date_utc": "2026-07-22T20:45:14Z",
+  "project": "omeco beat-existing-optimizers",
+  "attempts_range": [
+    26,
+    30
+  ],
+  "attempts_remaining": 0,
+  "primary_metric": {
+    "name": "mean \u0394tc vs pre-run records",
+    "direction": "max"
+  },
+  "guard_metrics": [],
+  "bar": {
+    "value": 0.0,
+    "source": "GOAL.md v2.1 pure-tc optimization mode"
+  },
+  "best_this_cycle": -0.1086,
+  "best_prior": -0.0308,
+  "holdout": {
+    "spent": false,
+    "result": "n/a in v2"
+  },
+  "attempts": [
+    {
+      "id": 26,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "sum-form isoperimetric-profile LB certifies the gap above the width bound",
+      "primary": null,
+      "status": "no-change",
+      "causal_note": "Theorem proven; unconstrained bound collapses to max-form via skewed adversary; dyadic-window fix identified",
+      "log_path": ".worktrees/attempt-026/LOG.md"
+    },
+    {
+      "id": 27,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "profile-aware SA (sharpened energy + top-decile targeting) breaks the frontier",
+      "primary": -0.1086,
+      "status": "no-change",
+      "causal_note": "null; inverted finding: lower tc = fatter near-max shelf (flop conservation)",
+      "log_path": ".worktrees/attempt-027/LOG.md"
+    },
+    {
+      "id": 28,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "lean continuous anneal + throughput engineering wins at non-converged scale",
+      "primary": -3.3618,
+      "status": "no-change",
+      "causal_note": "local wins did not replicate; single-run variance at scale dominates method differences",
+      "log_path": ".worktrees/attempt-028/LOG.md"
+    },
+    {
+      "id": 29,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "structural seed quality dominates at non-converged scale",
+      "primary": -0.3246,
+      "status": "no-change",
+      "causal_note": "refuted (hot anneals forget seeds); discovered + fixed scorer depth-limit harness bug",
+      "log_path": ".worktrees/attempt-029/LOG.md"
+    },
+    {
+      "id": 30,
+      "kind": "debug",
+      "parent": 29,
+      "hypothesis": "unblocked deep-tree warm path beats the rqc record",
+      "primary": -0.7058,
+      "status": "no-change",
+      "causal_note": "local 106.284 beat the record; scored run 106.996 did not replicate (variance)",
+      "log_path": ".worktrees/attempt-030/LOG.md"
+    }
+  ],
+  "reflection": {
+    "review": "5 of 5 attempts completed (1 theory/measurement, 4 optimizer incl. 1 debug).\n0 records moved. Board unchanged: reg3_250 39.95 / sycamore_m20 61.544 /\nreg3_1000 135.75 / rqc_97_m24 106.47 (all `ref:treesa-inf`).\n\n- 026 (theory): **Theorem 1 (sum-form isoperimetric-profile LB) proven and\n  validated**; but the unconstrained bound COLLAPSES to the max-form (<1 bit\n  above balanced-separator: 30.81 vs 30 on reg3, 47.17 vs 47 on sycamore) \u2014\n  the relaxation admits a maximally-skewed adversary tree. On the frontier\n  tree's own profile the sum-form explains 93\u201396% of tc. Fix identified:\n  balance-constrained (dyadic-window) DP, provably > 53 on sycamore.\n- 027 (profile-aware SA): scored 40.114/61.598, no records. Pre-registered\n  null, with an inverted finding: lower-tc trees have FATTER near-max\n  shelves (reg3: peak 37\u219236 but near-max count 7\u219218) \u2014 flops are conserved\n  across profile reshaping. Global sharpened-energy variant stalls (bulk\n  gradient vanishes); local-dtc formulation ties the plain control exactly.\n- 028 (scale generalist): scored 140.78/108.17 \u2014 its local bests (133.57 /\n  106.30) did not replicate. Throughput 5\u20136\u00d710^5 moves/s; top-decile-only\n  targeting failed (systematic sweep essential; decile boost helps as a\n  layer).\n- 029 (scale seeds): scored 136.40/106.47 (rqc tie to 0.004). Seed-quality\n  hypothesis refuted (hot anneals forget inits; warm preservation needed).\n  **Discovered a harness bug**: the scorer's recursion limit silently\n  rejected trees taller than ~475 \u2014 precisely the deep MPS-like trees good\n  RQC orders need. Scorer fixed (iterative walk + raised limit), all five\n  negative controls re-rejected, manifest updated.\n- 030 (debug, parent 029): unblocked warm path locally beats the rqc\n  record (106.284, height-506 tree) but the scored run landed 106.996 \u2014\n  not replicated.\n\nBudget: 5/5 slots used; authorized_rounds now 0. Overrides: none this\ncycle (scorer fix is a harness correction, self-test re-passed).",
+    "evidence": "- Profile-optimizer direction closed (026 collapse + 027 null, both\n  pre-registered). Blacklist: global sharpened-energy SA; top-decile-only\n  move sampling at scale; structural seeding at 90 s (029).\n- Open theory thread: dyadic-window balance-constrained bound (provably\n  exceeds the 53 cap on sycamore; cheap to compute; unclaimed).\n- Scale scoring is variance-limited; any future scale cycle must fix the\n  protocol first.\n- Small-instance certification story is complete and robust: frontier\n  width-optimal, profile conservation-like, twelve+ methods and two\n  toolchains at the same point, budget-independent.",
+    "literature": "Nothing in `.knowledge/` treats profile/sum-form bounds for contraction\ncost or reports the fat-shelf conservation behavior; both appear novel.\nThe scale-variance lesson matches the multi-seed methodology in\n[gray_2020_hyper] (they report distributions, not single runs \u2014 our\nprotocol should too at scale). The harness-bug case study extends the\nmethodological thread (Lipton\u2013Steinhardt style) with an\ninstrument-bias example.",
+    "next": "None authorized. Recommendation to the user: (1) finish the\ndyadic-window bound as Theorem 2 (cheap, completes the certification\narc); (2) proceed to write-up \u2014 the paper is the certification +\nsc_target discovery + methodology; (3) optionally, a variance-aware\nscoring amendment (median-of-3 at scale) before any further scale\ncycles. The optimizer-record chase on the current four instances is at\ndiminishing returns by every measure this loop can produce."
+  },
+  "lessons": [
+    {
+      "observation": "three local wins at scale evaporated in scored runs (028: 133.57/106.30; 030: 106.28)",
+      "root_cause": "at n>=1000 with 90s budgets single-run variance (1-5 log2) exceeds real method differences (0.2-0.5); confirm-twice blocks lucky records AND genuine sub-variance gains",
+      "evidence": "reference rows spread 106.5-111.4; 028/030 LOG-vs-report deltas",
+      "implication": "scale records need median-of-k scoring or bigger budgets \u2014 gate design decision",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "026's bound collapsed to max-form; 027 nulled with the fat-shelf inversion",
+      "root_cause": "min-over-all-subsets b(k) admits a skewed adversary (relaxation failure, not idea failure); at the frontier flops behave as conserved under profile reshaping",
+      "evidence": "026 gap table + skew diagnosis; 027 histograms 37/7 -> 36/18 at equal tc",
+      "implication": "profile-optimizer direction closed (pre-registered); dyadic-window bound + conservation observation = Theorem 2 candidate for the certification paper",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "an attempt's failure analysis exposed the scorer's depth limit silently biasing the admissible tree space",
+      "root_cause": "default recursion limits vs inherently deep RQC contraction trees",
+      "evidence": "029 LOG; height-506 tree rejected before fix, accepted after; controls re-passed",
+      "implication": "harness fixed; third case study for the methodological narrative (instrument bias)",
+      "confidence": "confirmed"
+    }
+  ],
+  "blacklist_new": [
+    "global sharpened-energy (E_gamma) SA \u2014 bulk gradient vanishes (027)",
+    "top-decile-only move sampling at scale \u2014 systematic sweep essential (028)",
+    "structural seeding under hot anneals at 90s (029)"
+  ],
+  "insight_promotions": []
+}

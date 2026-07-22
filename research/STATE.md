@@ -4,9 +4,9 @@
 - topic: beat-existing-optimizers  # slug of the chosen topic once stage >= db
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
-- authorized_rounds: 1     # cycles the loop may run without user review
+- authorized_rounds: 0     # cycles the loop may run without user review
 - next_attempt: 31         # next .worktrees/attempt-NNN number
-- next_cycle: 5            # next reflection cycle number
+- next_cycle: 6            # next reflection cycle number
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
   - validator_gate: passed 2026-07-22 (v2)  # pending | passed YYYY-MM-DD

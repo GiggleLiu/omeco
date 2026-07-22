@@ -44,7 +44,7 @@
     }
   ],
   "self_test": {
-    "date": "2026-07-22",
+    "date": "2026-07-23",
     "validator_version": 2,
     "all_hard_controls_rejected": true,
     "controls": {
@@ -52,11 +52,11 @@
         "status": "rejected",
         "rejected": true,
         "first_error": {
-          "where": "reg3_250@90000ms",
-          "what": "invalid contraction tree: leaves must be a permutation of 0..249: got 10 leaves, missing=[10, 11, 12, 13, 14], dup=[]",
+          "where": "reg3_1000@90000ms",
+          "what": "invalid contraction tree: leaves must be a permutation of 0..999: got 10 leaves, missing=[10, 11, 12, 13, 14], dup=[]",
           "hint": "the scorer recomputes from topology; check leaf coverage and output labels of the emitted tree"
         },
-        "date": "2026-07-22"
+        "date": "2026-07-23"
       },
       "wrong-answer": {
         "status": "rejected",
@@ -66,17 +66,17 @@
           "what": "invalid contraction tree: leaves must be a permutation of 0..9: got 9 leaves, missing=[9], dup=[]",
           "hint": "the scorer recomputes from topology; check leaf coverage and output labels of the emitted tree"
         },
-        "date": "2026-07-22"
+        "date": "2026-07-23"
       },
       "timeout": {
         "status": "rejected",
         "rejected": true,
         "first_error": {
           "where": "precheck_chain_10@2000ms",
-          "what": "wall-clock limit exceeded (2102ms > 2000ms budget +5% grace) and no tree was written",
+          "what": "wall-clock limit exceeded (2103ms > 2000ms budget +5% grace) and no tree was written",
           "hint": "attempt must write best-so-far tree before the deadline; check the anytime write loop"
         },
-        "date": "2026-07-22"
+        "date": "2026-07-23"
       },
       "env-escape": {
         "status": "rejected",
@@ -86,17 +86,17 @@
           "what": "attempt exited rc=1 with no output; sandbox denial in stderr suggests an attempted environment escape (network or out-of-dir read)",
           "hint": "stderr tail: cat: /Users/liujinguo/rcode/omeco/research/benchmark/private/seeds.json: Operation not permitted\n"
         },
-        "date": "2026-07-22"
+        "date": "2026-07-23"
       },
       "thread-cheat": {
         "status": "rejected",
         "rejected": true,
         "first_error": {
           "where": "precheck_chain_10@2000ms",
-          "what": "resource-cap guard: CPU time 3.74s > 1.3x wall 2.10s \u2014 parallel execution detected (single-thread protocol)",
+          "what": "resource-cap guard: CPU time 6.57s > 1.3x wall 1.65s \u2014 parallel execution detected (single-thread protocol)",
           "hint": "the budget is wall-clock at RAYON_NUM_THREADS=1; remove thread pools / background processes"
         },
-        "date": "2026-07-22"
+        "date": "2026-07-23"
       },
       "schedule-only": {
         "status": "scored",
@@ -131,7 +131,8 @@
           "date": "2026-07-22"
         }
       }
-    }
+    },
+    "note": "re-run after scorer recursion-limit fix (attempt-029 discovery: default limit rejected valid deep trees); iterative leaf walk added"
   },
   "version": 2,
   "mode": "optimization/leaderboard (v2, user-directed 2026-07-22): no pass/fail; minimize tc on two fixed targets; records in leaderboard.json seeded by best-of-3 reference runs (treesa-baseline, treesa-hygiene); record claims need a confirmation run, worse-of-two recorded"

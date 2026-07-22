@@ -14,6 +14,13 @@ Matches omeco's complexity conventions (log2 scale):
 
 import json
 import math
+import sys
+
+# Deep contraction trees (e.g., MPS-like sweeps on RQC instances reach height
+# ~n) exceed CPython's default recursion limit both in json parsing and in the
+# recursive walks below. Discovered by attempt-029: the default limit silently
+# rejected valid low-tc trees. Raise it far above any realistic tree height.
+sys.setrecursionlimit(1_000_000)
 
 
 class TreeError(ValueError):
@@ -30,17 +37,19 @@ def _log2sumexp2(vals):
 
 
 def _collect_leaves(node, leaves):
-    if node.get("isleaf"):
-        leaves.append(node["tensorindex"])
-        return
-    args = node.get("args")
-    if not isinstance(args, list) or len(args) != 2:
-        raise TreeError(
-            f"internal node must have exactly 2 children, got "
-            f"{len(args) if isinstance(args, list) else type(args).__name__}"
-        )
-    for a in args:
-        _collect_leaves(a, leaves)
+    stack = [node]
+    while stack:
+        nd = stack.pop()
+        if nd.get("isleaf"):
+            leaves.append(nd["tensorindex"])
+            continue
+        args = nd.get("args")
+        if not isinstance(args, list) or len(args) != 2:
+            raise TreeError(
+                f"internal node must have exactly 2 children, got "
+                f"{len(args) if isinstance(args, list) else type(args).__name__}"
+            )
+        stack.extend(args)
 
 
 def score_tree(graph, tree_doc):
