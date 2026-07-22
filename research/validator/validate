@@ -1,0 +1,416 @@
+#!/usr/bin/env python3
+"""Autoresearch validator CLI — topic beat-existing-optimizers.
+
+    validate <candidate-dir> [--precheck] [--instances dev|holdout]
+             [--dev-score X] [--out report.json]
+
+The ONLY thing that counts as scoring. See research/validator/GOAL.md for the
+bar and research/topics.md for metric definitions. Runs candidates under a
+macOS sandbox-exec profile (fallback environment: no Docker on this host):
+network denied, file reads restricted to the candidate dir + toolchain, so
+the sealed holdout under research/benchmark/private/ is unreachable by
+construction (it is also gitignored and therefore absent from attempt
+worktrees).
+
+Exit codes: 0 scored, 1 rejected, 2 infrastructure error.
+"""
+
+import argparse
+import hashlib
+import json
+import math
+import os
+import pathlib
+import random
+import resource
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+VALIDATOR_DIR = pathlib.Path(__file__).resolve().parent
+REPO_ROOT = VALIDATOR_DIR.parent.parent
+DEV_DIR = REPO_ROOT / "research" / "benchmark" / "dev"
+PRIV_DIR = REPO_ROOT / "research" / "benchmark" / "private"
+DEV_BASELINES = REPO_ROOT / "research" / "database" / "baselines.json"
+PRIV_BASELINES = PRIV_DIR / "baselines_private.json"
+MANIFEST = VALIDATOR_DIR / "manifest.json"
+STATE = REPO_ROOT / "research" / "STATE.md"
+
+sys.path.insert(0, str(VALIDATOR_DIR))
+from scorer import TreeError, score_tree  # noqa: E402
+
+BUDGET_FRACTIONS = (1.0, 0.25, 0.0625)  # T, T/4, T/16
+BUDGET_FLOOR_MS = 100.0  # process launch overhead floor
+GRACE = 1.05  # <5% overshoot per negative-controls contract
+FAIL_PENALTY = -5.0  # Δtc contribution of a failed/timeout (instance, budget)
+SC_CAP_SLACK = 2.0
+QUALITY_MEAN = 1.0
+QUALITY_WORST_REGRESSION = -0.5
+SPEED_TOL = 0.3
+HOLDOUT_GUARD_SLACK = 1.0
+WALL_LIMIT_S = 300  # STATE.md time_limit_seconds, enforced per scored run
+
+
+def log(*a):
+    print("[validate]", *a, file=sys.stderr)
+
+
+def sandbox_profile(candidate_dir, work_dir):
+    # (deny default) is unusably fragile on modern macOS; instead allow the
+    # base system and deny the two things that matter: all network, and any
+    # access to the sealed holdout. Research artifacts the validator owns are
+    # write-protected so attempts cannot tamper with scorer/manifest/baselines.
+    return (
+        "(version 1)\n"
+        "(allow default)\n"
+        "(deny network*)\n"
+        f'(deny file-read* (subpath "{PRIV_DIR}"))\n'
+        f'(deny file-write* (subpath "{PRIV_DIR}"))\n'
+        f'(deny file-write* (subpath "{REPO_ROOT / "research"}"))\n'
+    )
+
+
+def run_sandboxed(cmd, candidate_dir, work_dir, timeout_s, env=None):
+    """Run cmd under sandbox-exec. Returns (rc, stderr_tail, seconds, timed_out)."""
+    prof = work_dir / "profile.sb"
+    prof.write_text(sandbox_profile(candidate_dir, work_dir))
+    full = ["/usr/bin/sandbox-exec", "-f", str(prof)] + cmd
+    e = dict(os.environ)
+    e.update(env or {})
+    e["RAYON_NUM_THREADS"] = "1"
+    start = time.monotonic()
+    try:
+        p = subprocess.run(full, cwd=candidate_dir, env=e, timeout=timeout_s,
+                           capture_output=True, text=True)
+        return p.returncode, (p.stderr or "")[-2000:], time.monotonic() - start, False
+    except subprocess.TimeoutExpired as ex:
+        stderr = ex.stderr.decode() if isinstance(ex.stderr, bytes) else (ex.stderr or "")
+        return -9, stderr[-2000:], time.monotonic() - start, True
+
+
+def permute_instance(graph, rng):
+    """Random tensor permutation + index relabeling (tc/sc invariant)."""
+    labels = sorted(int(k) for k in graph["sizes"])
+    shuffled = labels[:]
+    rng.shuffle(shuffled)
+    relabel = dict(zip(labels, shuffled))
+    order = list(range(len(graph["ixs"])))
+    rng.shuffle(order)
+    new = {
+        "name": graph.get("name", "instance"),
+        "description": graph.get("description", ""),
+        "ixs": [[relabel[l] for l in graph["ixs"][i]] for i in order],
+        "iy": [relabel[l] for l in graph["iy"]],
+        "sizes": {str(relabel[int(k)]): v for k, v in graph["sizes"].items()},
+    }
+    return new
+
+
+def load_instances(which):
+    if which == "dev":
+        base = json.load(open(DEV_BASELINES))["results"]
+        out = []
+        for p in sorted(DEV_DIR.glob("*.json")):
+            g = json.load(open(p))
+            b = base.get(p.stem)
+            if b is None:
+                continue
+            out.append((p.stem, g, b["treesa"]))
+        return out
+    base = json.load(open(PRIV_BASELINES))["results"]
+    out = []
+    for p in sorted(PRIV_DIR.glob("*.json")):
+        if p.name in ("seeds.json", "baselines_private.json"):
+            continue
+        g = json.load(open(p))
+        b = base.get(p.stem)
+        if b is None:
+            continue
+        out.append((p.stem, g, b["treesa"]))
+    return out
+
+
+def current_cycle():
+    try:
+        for line in STATE.read_text().splitlines():
+            if line.strip().startswith("- next_cycle:"):
+                return int(line.split(":")[1].split("#")[0].strip())
+    except Exception:
+        pass
+    return 1
+
+
+def check_holdout_budget():
+    m = json.load(open(MANIFEST)) if MANIFEST.exists() else {}
+    queries = m.get("holdout_queries", [])
+    allowed = 1 + (current_cycle() - 1) // 3
+    return len(queries) < allowed, len(queries), allowed
+
+
+def log_holdout_query(candidate_dir, passed):
+    m = json.load(open(MANIFEST)) if MANIFEST.exists() else {}
+    m.setdefault("holdout_queries", []).append(
+        {"date": time.strftime("%Y-%m-%d %H:%M:%S"),
+         "candidate": str(candidate_dir), "aggregate_pass": bool(passed)})
+    json.dump(m, open(MANIFEST, "w"), indent=2)
+
+
+def environment_desc():
+    lock = REPO_ROOT / "Cargo.lock"
+    h = hashlib.sha256(lock.read_bytes()).hexdigest()[:16] if lock.exists() else "no-lock"
+    return {"kind": "fallback",
+            "image_or_lock": f"sandbox-exec+cargo-lock:{h}",
+            "reason": "no Docker on this macOS host; sandbox-exec denies "
+                      "network and restricts reads by (deny default)"}
+
+
+def build_candidate(candidate_dir, work_dir, errors):
+    """Build the candidate (sandboxed, offline). Returns True on success."""
+    build_sh = candidate_dir / "build.sh"
+    if build_sh.exists():
+        cmd = ["/bin/bash", str(build_sh)]
+    else:
+        cmd = ["/bin/bash", "-c",
+               "cargo build --release --offline --example attempt -p omeco"]
+    rc, err, secs, to = run_sandboxed(cmd, candidate_dir, work_dir, 300)
+    if to or rc != 0:
+        errors.append({"where": "build",
+                       "what": f"build {'timed out' if to else f'failed rc={rc}'} "
+                               f"after {secs:.0f}s",
+                       "hint": "stderr tail: " + err[-500:]})
+        return False
+    return True
+
+
+def attempt_cmd(candidate_dir, graph_path, budget_ms, out_path):
+    sh = candidate_dir / "attempt.sh"
+    if sh.exists():
+        return ["/bin/bash", str(sh), str(graph_path), str(int(budget_ms)), str(out_path)]
+    binp = candidate_dir / "target" / "release" / "examples" / "attempt"
+    return [str(binp), str(graph_path), str(int(budget_ms)), str(out_path)]
+
+
+def run_one(candidate_dir, work_dir, name, graph, budget_ms, errors):
+    """Run attempt on one (permuted) instance. Returns dict result."""
+    inst_dir = work_dir / f"{name}_{int(budget_ms)}"
+    inst_dir.mkdir(parents=True, exist_ok=True)
+    gp = inst_dir / "graph.json"
+    json.dump(graph, open(gp, "w"))
+    op = inst_dir / "tree.json"
+    deadline = max(budget_ms * GRACE / 1000.0, 0.2)
+    cpu0 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    rc, err, secs, timed_out = run_sandboxed(
+        attempt_cmd(candidate_dir, gp, budget_ms, op),
+        candidate_dir, work_dir, deadline)
+    cpu1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    cpu_used = (cpu1.ru_utime + cpu1.ru_stime) - (cpu0.ru_utime + cpu0.ru_stime)
+    if cpu_used > secs * 1.3 + 0.2:
+        errors.append({"where": f"{name}@{int(budget_ms)}ms",
+                       "what": f"resource-cap guard: CPU time {cpu_used:.2f}s > "
+                               f"1.3x wall {secs:.2f}s — parallel execution "
+                               "detected (single-thread protocol)",
+                       "hint": "the budget is wall-clock at RAYON_NUM_THREADS=1; "
+                               "remove thread pools / background processes"})
+        return {"result": "invalid", "seconds": secs,
+                "detail": f"cpu {cpu_used:.2f}s vs wall {secs:.2f}s"}
+    if timed_out and not op.exists():
+        errors.append({"where": f"{name}@{int(budget_ms)}ms",
+                       "what": f"wall-clock limit exceeded ({secs * 1e3:.0f}ms > "
+                               f"{budget_ms:.0f}ms budget +5% grace) and no tree "
+                               "was written",
+                       "hint": "attempt must write best-so-far tree before the "
+                               "deadline; check the anytime write loop"})
+        return {"result": "timeout", "seconds": secs, "detail": "killed at limit, no output"}
+    if rc != 0 and not timed_out and not op.exists():
+        escape = ("deny" in err.lower() or "operation not permitted" in err.lower()
+                  or "not permitted" in err.lower())
+        what = (f"attempt exited rc={rc} with no output"
+                + ("; sandbox denial in stderr suggests an attempted "
+                   "environment escape (network or out-of-dir read)" if escape else ""))
+        errors.append({"where": f"{name}@{int(budget_ms)}ms", "what": what,
+                       "hint": "stderr tail: " + err[-500:]})
+        return {"result": "fail", "seconds": secs, "detail": "nonzero exit, no output"}
+    try:
+        tree_doc = json.load(open(op))
+        tc, sc, _ = score_tree(graph, tree_doc)
+    except TreeError as ex:
+        errors.append({"where": f"{name}@{int(budget_ms)}ms",
+                       "what": f"invalid contraction tree: {ex}",
+                       "hint": "the scorer recomputes from topology; check leaf "
+                               "coverage and output labels of the emitted tree"})
+        return {"result": "invalid", "seconds": secs, "detail": str(ex)}
+    except (json.JSONDecodeError, OSError, KeyError, TypeError) as ex:
+        errors.append({"where": f"{name}@{int(budget_ms)}ms",
+                       "what": f"unreadable tree JSON: {ex}",
+                       "hint": "emit omeco writejson format"})
+        return {"result": "invalid", "seconds": secs, "detail": f"bad json: {ex}"}
+    return {"result": "ok", "seconds": secs, "tc": tc, "sc": sc,
+            "detail": f"tc={tc:.3f} sc={sc:.3f}" + (" (timeout-grace hit)" if timed_out else "")}
+
+
+def evaluate(candidate_dir, instances, errors):
+    """Cascade: smallest instances first; per instance budgets T, T/4, T/16."""
+    rng = random.Random(int.from_bytes(os.urandom(8), "big"))
+    per_instance = []
+    rows = []  # (name, frac, delta, sc_ok, ok_at_T, ok)
+    rejected = False
+    start = time.monotonic()
+    ordered = sorted(instances, key=lambda t: len(t[1]["ixs"]))
+    for name, graph, base in ordered:
+        if time.monotonic() - start > WALL_LIMIT_S:
+            errors.append({"where": name,
+                           "what": f"scored-run wall limit {WALL_LIMIT_S}s exhausted "
+                                   "before this instance",
+                           "hint": "reduce per-instance cost or raise "
+                                   "time_limit_seconds in STATE.md"})
+            break
+        perm = permute_instance(graph, rng)
+        T = max(base["avg_ms"], BUDGET_FLOOR_MS)
+        for frac in BUDGET_FRACTIONS:
+            budget = max(T * frac, BUDGET_FLOOR_MS)
+            r = run_one(candidate_dir, pathlib.Path(tempfile.mkdtemp(prefix="val_")),
+                        name, perm, budget, errors)
+            entry = {"instance": f"{name}@{frac:g}T",
+                     "result": "pass" if r["result"] == "ok" else r["result"],
+                     "seconds": round(r["seconds"], 3), "detail": r["detail"]}
+            if r["result"] == "ok":
+                delta = base["tc"] - r["tc"]
+                sc_ok = r["sc"] <= base["sc"] + SC_CAP_SLACK
+                if not sc_ok:
+                    errors.append({"where": f"{name}@{frac:g}T",
+                                   "what": f"sc-cap guard: candidate sc={r['sc']:.2f} "
+                                           f"> baseline sc={base['sc']:.2f}+{SC_CAP_SLACK}",
+                                   "hint": "candidate trades memory blow-up for tc; "
+                                           "instance scored as fail"})
+                    entry["result"] = "fail"
+                    entry["detail"] += " [sc-cap violated]"
+                rows.append((name, frac, delta if sc_ok else FAIL_PENALTY,
+                             sc_ok, frac == 1.0, True))
+            elif r["result"] == "invalid":
+                rejected = True
+                rows.append((name, frac, FAIL_PENALTY, False, frac == 1.0, False))
+            else:
+                rows.append((name, frac, FAIL_PENALTY, False, frac == 1.0, False))
+            per_instance.append(entry)
+        if rejected:
+            break  # cheap-first cascade: stop at first invalid tree
+    return per_instance, rows, rejected
+
+
+def wins(rows, instances):
+    names = {n for n, *_ in rows}
+    deltas = [d for _, _, d, _, _, _ in rows]
+    mean_delta = sum(deltas) / len(deltas) if deltas else float("-inf")
+    at_T = {n: (d, sc_ok, ok) for n, frac, d, sc_ok, _, ok in rows if frac == 1.0}
+    at_T4 = {n: (d, sc_ok, ok) for n, frac, d, sc_ok, _, ok in rows if frac == 0.25}
+    complete = len(names) == len(instances)
+    quality = (complete and mean_delta >= QUALITY_MEAN
+               and all(n in at_T and at_T[n][2] and at_T[n][1]
+                       and at_T[n][0] >= QUALITY_WORST_REGRESSION for n in names))
+    speed = (complete and
+             all(n in at_T4 and at_T4[n][2] and at_T4[n][1]
+                 and at_T4[n][0] >= -SPEED_TOL for n in names))
+    return mean_delta, quality, speed
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("candidate_dir")
+    ap.add_argument("--precheck", action="store_true")
+    ap.add_argument("--instances", choices=["dev", "holdout"], default="dev")
+    ap.add_argument("--dev-score", type=float, default=None,
+                    help="dev mean Δtc (required for holdout guard comparison)")
+    ap.add_argument("--out", default="report.json")
+    args = ap.parse_args()
+
+    candidate_dir = pathlib.Path(args.candidate_dir).resolve()
+    report = {"status": "error", "score": None, "per_instance": [], "errors": [],
+              "environment": environment_desc()}
+    errors = report["errors"]
+
+    def finish(status, score=None, exit_code=0, extra=None):
+        report["status"] = status
+        report["score"] = score
+        if extra:
+            report.update(extra)
+        json.dump(report, open(args.out, "w"), indent=2)
+        log(f"status={status} score={score} -> {args.out}")
+        sys.exit(exit_code)
+
+    if not candidate_dir.is_dir():
+        errors.append({"where": "precheck", "what": f"{candidate_dir} is not a directory",
+                       "hint": "pass an attempt worktree"})
+        finish("error", exit_code=2)
+
+    work = pathlib.Path(tempfile.mkdtemp(prefix="validate_"))
+
+    # ---- cascade stage 1: build + structural precheck (free) ----
+    if not build_candidate(candidate_dir, work, errors):
+        finish("rejected", exit_code=1)
+    tiny = json.load(open(DEV_DIR / "chain_10.json"))
+    r = run_one(candidate_dir, work, "precheck_chain_10", tiny, 2000, errors)
+    if r["result"] != "ok":
+        errors.append({"where": "precheck",
+                       "what": "candidate failed the free structural check on "
+                               "chain_10 (2s budget)",
+                       "hint": "fix contract compliance before scored runs; "
+                               "see prior error entries"})
+        finish("rejected", exit_code=1)
+    if args.precheck:
+        report["per_instance"] = [{"instance": "precheck_chain_10", "result": "pass",
+                                   "seconds": r["seconds"],
+                                   "detail": "structure ok (no score revealed)"}]
+        finish("scored", score=None)
+
+    # ---- holdout metering ----
+    if args.instances == "holdout":
+        ok, used, allowed = check_holdout_budget()
+        if not ok:
+            errors.append({"where": "holdout",
+                           "what": f"holdout query budget exhausted "
+                                   f"({used}/{allowed} used at cycle {current_cycle()})",
+                           "hint": "budget grows by 1 per 3 cycles; keep developing "
+                                   "against dev instances"})
+            finish("error", exit_code=2)
+        if args.dev_score is None:
+            errors.append({"where": "holdout",
+                           "what": "--dev-score is required for holdout runs",
+                           "hint": "pass the dev mean Δtc from the latest dev report"})
+            finish("error", exit_code=2)
+
+    instances = load_instances(args.instances)
+    per_instance, rows, rejected = evaluate(candidate_dir, instances, errors)
+    report["per_instance"] = per_instance
+
+    if rejected:
+        finish("rejected", exit_code=1)
+
+    mean_delta, quality, speed = wins(rows, instances)
+
+    if args.instances == "holdout":
+        guard_ok = mean_delta >= args.dev_score - HOLDOUT_GUARD_SLACK
+        passed = (quality or speed) and guard_ok
+        if not guard_ok:
+            errors.append({"where": "holdout",
+                           "what": "held-out generalization guard failed: holdout "
+                                   "mean Δtc is more than "
+                                   f"{HOLDOUT_GUARD_SLACK} below the dev mean",
+                           "hint": "likely overfit to dev instances (hard-coding, "
+                                   "family-specific tuning)"})
+        log_holdout_query(candidate_dir, passed)
+        # Aggregate only: per-instance results are pass/fail already; hide details.
+        for e in report["per_instance"]:
+            e["detail"] = "aggregate-only (holdout)"
+        finish("scored", score=None, exit_code=0,
+               extra={"holdout_pass": bool(passed), "quality_win": bool(quality),
+                      "speed_win": bool(speed), "generalization_guard": bool(guard_ok)})
+
+    finish("scored", score=round(mean_delta, 4),
+           extra={"quality_win": bool(quality), "speed_win": bool(speed),
+                  "pass": bool(quality or speed)})
+
+
+if __name__ == "__main__":
+    main()

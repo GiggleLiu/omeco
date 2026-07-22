@@ -1,0 +1,278 @@
+{
+  "inputs": [
+    [
+      0,
+      1
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      3,
+      4
+    ],
+    [
+      4,
+      5
+    ],
+    [
+      5,
+      6
+    ],
+    [
+      6,
+      7
+    ],
+    [
+      7,
+      8
+    ],
+    [
+      8,
+      9
+    ],
+    [
+      9,
+      10
+    ]
+  ],
+  "label-type": "Int64",
+  "output": [
+    0,
+    10
+  ],
+  "tree": {
+    "args": [
+      {
+        "args": [
+          {
+            "args": [
+              {
+                "isleaf": true,
+                "tensorindex": 7
+              },
+              {
+                "isleaf": true,
+                "tensorindex": 8
+              }
+            ],
+            "eins": {
+              "ixs": [
+                [
+                  7,
+                  8
+                ],
+                [
+                  8,
+                  9
+                ]
+              ],
+              "iy": [
+                7,
+                9
+              ]
+            },
+            "isleaf": false
+          },
+          {
+            "args": [
+              {
+                "args": [
+                  {
+                    "args": [
+                      {
+                        "args": [
+                          {
+                            "args": [
+                              {
+                                "isleaf": true,
+                                "tensorindex": 1
+                              },
+                              {
+                                "args": [
+                                  {
+                                    "isleaf": true,
+                                    "tensorindex": 3
+                                  },
+                                  {
+                                    "isleaf": true,
+                                    "tensorindex": 2
+                                  }
+                                ],
+                                "eins": {
+                                  "ixs": [
+                                    [
+                                      3,
+                                      4
+                                    ],
+                                    [
+                                      2,
+                                      3
+                                    ]
+                                  ],
+                                  "iy": [
+                                    2,
+                                    4
+                                  ]
+                                },
+                                "isleaf": false
+                              }
+                            ],
+                            "eins": {
+                              "ixs": [
+                                [
+                                  1,
+                                  2
+                                ],
+                                [
+                                  2,
+                                  4
+                                ]
+                              ],
+                              "iy": [
+                                4,
+                                1
+                              ]
+                            },
+                            "isleaf": false
+                          },
+                          {
+                            "isleaf": true,
+                            "tensorindex": 4
+                          }
+                        ],
+                        "eins": {
+                          "ixs": [
+                            [
+                              4,
+                              1
+                            ],
+                            [
+                              4,
+                              5
+                            ]
+                          ],
+                          "iy": [
+                            5,
+                            1
+                          ]
+                        },
+                        "isleaf": false
+                      },
+                      {
+                        "isleaf": true,
+                        "tensorindex": 0
+                      }
+                    ],
+                    "eins": {
+                      "ixs": [
+                        [
+                          5,
+                          1
+                        ],
+                        [
+                          0,
+                          1
+                        ]
+                      ],
+                      "iy": [
+                        5,
+                        0
+                      ]
+                    },
+                    "isleaf": false
+                  },
+                  {
+                    "isleaf": true,
+                    "tensorindex": 5
+                  }
+                ],
+                "eins": {
+                  "ixs": [
+                    [
+                      5,
+                      0
+                    ],
+                    [
+                      5,
+                      6
+                    ]
+                  ],
+                  "iy": [
+                    6,
+                    0
+                  ]
+                },
+                "isleaf": false
+              },
+              {
+                "isleaf": true,
+                "tensorindex": 6
+              }
+            ],
+            "eins": {
+              "ixs": [
+                [
+                  6,
+                  0
+                ],
+                [
+                  6,
+                  7
+                ]
+              ],
+              "iy": [
+                7,
+                0
+              ]
+            },
+            "isleaf": false
+          }
+        ],
+        "eins": {
+          "ixs": [
+            [
+              7,
+              9
+            ],
+            [
+              7,
+              0
+            ]
+          ],
+          "iy": [
+            9,
+            0
+          ]
+        },
+        "isleaf": false
+      },
+      {
+        "isleaf": true,
+        "tensorindex": 9
+      }
+    ],
+    "eins": {
+      "ixs": [
+        [
+          9,
+          0
+        ],
+        [
+          9,
+          10
+        ]
+      ],
+      "iy": [
+        0,
+        10
+      ]
+    },
+    "isleaf": false
+  }
+}

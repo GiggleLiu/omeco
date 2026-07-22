@@ -1,0 +1,94 @@
+{
+  "graphs": [
+    {
+      "name": "chain_10",
+      "family": "chain",
+      "description": "Matrix chain of 10 matrices",
+      "schema": "einsum",
+      "tensors": 10,
+      "indices": 11,
+      "file": "benchmarks/graphs/chain_10.json"
+    },
+    {
+      "name": "chain_20",
+      "family": "chain",
+      "description": "Matrix chain of 20 matrices",
+      "schema": "einsum",
+      "tensors": 20,
+      "indices": 21,
+      "file": "benchmarks/graphs/chain_20.json"
+    },
+    {
+      "name": "grid_4x4",
+      "family": "grid",
+      "description": "4x4 grid tensor network",
+      "schema": "einsum",
+      "tensors": 16,
+      "indices": 24,
+      "file": "benchmarks/graphs/grid_4x4.json"
+    },
+    {
+      "name": "grid_5x5",
+      "family": "grid",
+      "description": "5x5 grid tensor network",
+      "schema": "einsum",
+      "tensors": 25,
+      "indices": 40,
+      "file": "benchmarks/graphs/grid_5x5.json"
+    },
+    {
+      "name": "grid_6x6",
+      "family": "grid",
+      "description": "6x6 grid tensor network",
+      "schema": "einsum",
+      "tensors": 36,
+      "indices": 60,
+      "file": "benchmarks/graphs/grid_6x6.json"
+    },
+    {
+      "name": "petersen",
+      "family": "named",
+      "description": "Petersen graph (10 vertices, 15 edges)",
+      "schema": "einsum",
+      "tensors": 10,
+      "indices": 15,
+      "file": "benchmarks/graphs/petersen.json"
+    },
+    {
+      "name": "reg3_100",
+      "family": "reg3",
+      "description": "Random 3-regular graph with 100 vertices",
+      "schema": "einsum",
+      "tensors": 100,
+      "indices": 148,
+      "file": "benchmarks/graphs/reg3_100.json"
+    },
+    {
+      "name": "reg3_220",
+      "family": "reg3",
+      "description": "Random 3-regular graph with 220 vertices (Julia Random.seed!(2))",
+      "schema": "edge_list",
+      "tensors": 220,
+      "indices": 330,
+      "file": "benchmarks/graphs/reg3_220.json"
+    },
+    {
+      "name": "reg3_250",
+      "family": "reg3",
+      "description": "Random 3-regular graph with 250 vertices",
+      "schema": "einsum",
+      "tensors": 250,
+      "indices": 372,
+      "file": "benchmarks/graphs/reg3_250.json"
+    },
+    {
+      "name": "reg3_50",
+      "family": "reg3",
+      "description": "Random 3-regular graph with 50 vertices",
+      "schema": "einsum",
+      "tensors": 50,
+      "indices": 74,
+      "file": "benchmarks/graphs/reg3_50.json"
+    }
+  ]
+}

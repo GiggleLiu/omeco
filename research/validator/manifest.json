@@ -1,0 +1,92 @@
+{
+  "topic": "beat-existing-optimizers",
+  "created": "2026-07-22",
+  "environment": {
+    "kind": "fallback",
+    "reason": "no Docker on this macOS host; sandbox-exec profile denies all network and all access to research/benchmark/private/, plus write-denial on research/; wall-clock and CPU-time limits enforced by the validate harness (subprocess kill + rusage)",
+    "residual_risks": [
+      "orphaned background processes escape CPU-time accounting (in-process thread pools ARE caught); flagrant cases still hit the wall-clock kill",
+      "attempts run as the local user outside the repo: reads of unrelated user files are not blocked (allow-default profile)"
+    ],
+    "rustc": "rustc 1.93.1 (01f6ddf75 2026-02-11)",
+    "omeco_commit": "6c83996f418ad6da548b618fbb566682b2f0797b"
+  },
+  "instances": {
+    "dev": {
+      "path": "research/benchmark/dev/",
+      "provenance": "copied from benchmarks/graphs/*.json (einsum-schema files, checked into repo; same graphs as the Julia/Python/Rust cross-implementation benchmarks)",
+      "baselines": "research/database/baselines.json (TreeSA ntrials=1 niters=100/50, RAYON_NUM_THREADS=1, measured 2026-07-22 on this machine)",
+      "count": 9
+    },
+    "holdout": {
+      "path": "research/benchmark/private/ (gitignored -> absent from attempt worktrees; sandbox-denied at runtime)",
+      "provenance": "generated 2026-07-22 by research/validator/gen_holdout.py; reg3_60/140/300 seeds drawn from os.urandom and stored only in private/seeds.json; grid_7x7 and chain_30 deterministic at unseen sizes; labels = private baselines measured by bin/baseline_measure at generation time, never opened in design context",
+      "count": 5
+    }
+  },
+  "holdout_query_budget": "1 aggregate query per 3 cycles (allowed = 1 + (cycle-1)//3)",
+  "holdout_queries": [],
+  "self_test": {
+    "date": "2026-07-22",
+    "all_rejected": true,
+    "controls": {
+      "cheater": {
+        "status": "rejected",
+        "rejected": true,
+        "first_error": {
+          "where": "chain_10@1T",
+          "what": "sc-cap guard: candidate sc=39.86 > baseline sc=13.29+2.0",
+          "hint": "candidate trades memory blow-up for tc; instance scored as fail"
+        },
+        "date": "2026-07-22"
+      },
+      "wrong-answer": {
+        "status": "rejected",
+        "rejected": true,
+        "first_error": {
+          "where": "precheck_chain_10@2000ms",
+          "what": "invalid contraction tree: leaves must be a permutation of 0..9: got 9 leaves, missing=[9], dup=[]",
+          "hint": "the scorer recomputes from topology; check leaf coverage and output labels of the emitted tree"
+        },
+        "date": "2026-07-22"
+      },
+      "timeout": {
+        "status": "rejected",
+        "rejected": true,
+        "first_error": {
+          "where": "precheck_chain_10@2000ms",
+          "what": "wall-clock limit exceeded (2102ms > 2000ms budget +5% grace) and no tree was written",
+          "hint": "attempt must write best-so-far tree before the deadline; check the anytime write loop"
+        },
+        "date": "2026-07-22"
+      },
+      "env-escape": {
+        "status": "rejected",
+        "rejected": true,
+        "first_error": {
+          "where": "precheck_chain_10@2000ms",
+          "what": "attempt exited rc=1 with no output; sandbox denial in stderr suggests an attempted environment escape (network or out-of-dir read)",
+          "hint": "stderr tail: cat: /Users/liujinguo/rcode/omeco/research/benchmark/private/seeds.json: Operation not permitted\n"
+        },
+        "date": "2026-07-22"
+      },
+      "thread-cheat": {
+        "status": "rejected",
+        "rejected": true,
+        "first_error": {
+          "where": "chain_10@100ms",
+          "what": "wall-clock limit exceeded (203ms > 100ms budget +5% grace) and no tree was written",
+          "hint": "attempt must write best-so-far tree before the deadline; check the anytime write loop"
+        },
+        "date": "2026-07-22"
+      }
+    },
+    "baseline_candidate": {
+      "candidate": "repo root (greedy seed + TreeSA rounds, examples/attempt.rs)",
+      "status": "scored",
+      "score": -0.2272,
+      "pass": false,
+      "note": "honest baseline evaluates end-to-end; correctly does not pass its own bar"
+    }
+  }
+}
