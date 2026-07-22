@@ -4,9 +4,9 @@
 - topic: beat-existing-optimizers  # slug of the chosen topic once stage >= db
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
-- authorized_rounds: 0     # cycles the loop may run without user review
-- next_attempt: 19         # next .worktrees/attempt-NNN number
-- next_cycle: 3            # next reflection cycle number
+- authorized_rounds: 1     # cycles the loop may run without user review
+- next_attempt: 31         # next .worktrees/attempt-NNN number
+- next_cycle: 4            # next reflection cycle number
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
   - validator_gate: passed 2026-07-22 (v2)  # pending | passed YYYY-MM-DD
@@ -18,3 +18,7 @@
   - 2026-07-22: holdout/twin anti-memorization guards dropped by user
     decision ("no twins"); risk accepted, mitigations: per-run relabeling,
     confirmation runs, code review of record-setters.
+  - 2026-07-23: objective simplified to PURE tc (user direction: "ignore the
+    sc_target, only optimize tc, unbounded"); sc-cap guard removed, cap-era
+    leaderboard archived to leaderboard_v2cap_archive.json, references
+    re-measured under pure tc.

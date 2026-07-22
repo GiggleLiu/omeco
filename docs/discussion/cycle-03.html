@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omeco beat-existing-optimizers — cycle 03</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f9f9f7; color: #0b0b0b;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
+h1 { font-size: 20px; margin: 0 0 2px; }
+h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #e1e0d9;
+  padding-bottom: 4px; }
+h3 { font-size: 14px; margin: 18px 0 4px; color: #52514e; }
+h4, h5, h6 { font-size: 14px; margin: 12px 0 4px; }
+a { color: #1c5cab; }
+.meta { color: #52514e; margin: 0 0 16px; }
+.note { color: #898781; font-size: 12px; margin: 6px 0 0; }
+.card { background: #fcfcfb; border: 1px solid rgba(11,11,11,0.10);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.kpis { display: flex; flex-wrap: wrap; gap: 12px; }
+.kpi { flex: 1 1 180px; background: #fcfcfb;
+  border: 1px solid rgba(11,11,11,0.10); border-radius: 6px; padding: 10px 14px; }
+.kpi-label { color: #52514e; font-size: 12px; }
+.kpi-value { font-size: 24px; font-weight: 650; margin: 2px 0; }
+.kpi-note { font-size: 12px; color: #52514e; }
+.delta-good { color: #006300; font-weight: 600; }
+.delta-flat { color: #52514e; }
+table { border-collapse: collapse; width: 100%; background: #fcfcfb; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #e1e0d9;
+  vertical-align: top; }
+th { color: #52514e; font-size: 12px; font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.hyp { max-width: 26em; }
+tr.best td { background: #eef4fc; }
+tr.prior td { color: #898781; background: #f5f5f2; font-size: 12px; }
+td.idcell { white-space: nowrap; }
+.scroll { overflow-x: auto; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 9px;
+  font-size: 12px; white-space: nowrap; }
+.st-good { background: #e2f3e2; color: #0a5c0a; }
+.st-neutral { background: #f0efec; color: #52514e; }
+.st-critical { background: #fae3e3; color: #922929; }
+.st-serious { background: #fdeae2; color: #8a4526; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 3px;
+  font-size: 12px; white-space: nowrap; }
+.kind-draft { background: #e5eefb; color: #1c5cab; }
+.kind-improve { background: #ddf2ea; color: #0b6647; }
+.kind-debug { background: #faf0d8; color: #7a5600; }
+.lesson { border-left: 3px solid #c3c2b7; background: #fcfcfb;
+  padding: 8px 14px; margin: 10px 0; }
+.lesson-obs { margin: 0 0 6px; font-weight: 600; }
+.lesson dl { display: grid; grid-template-columns: 7em 1fr; gap: 2px 12px;
+  margin: 0; }
+.lesson dt { color: #898781; font-size: 12px; line-height: 1.7; }
+.lesson dd { margin: 0; }
+.conf { font-size: 11px; padding: 1px 7px; border-radius: 9px;
+  vertical-align: 1px; }
+.conf-confirmed { background: #e2f3e2; color: #0a5c0a; }
+.conf-suspected { background: #f0efec; color: #52514e; }
+.box { border-radius: 6px; padding: 10px 14px; margin: 10px 0; }
+.box ul { margin: 6px 0 0; padding-left: 20px; }
+.box-blacklist { background: #fae3e3; border: 1px solid #e8b9b9; }
+.box-promote { background: #faf0d8; border: 1px solid #e3cf94; }
+figure { margin: 0; }
+figcaption { color: #52514e; font-size: 12px; margin-bottom: 2px; }
+.guards { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 10px; }
+svg { max-width: 100%; height: auto; }
+footer { margin-top: 32px; color: #52514e; display: flex; gap: 16px; }
+footer .disabled { color: #c3c2b7; }
+</style>
+</head>
+<body>
+<main>
+<h1>omeco beat-existing-optimizers — cycle 03</h1>
+<p class="meta">attempts 019–020 · 2026-07-22 17:37:15 UTC
+· attempts remaining after this cycle: 0</p>
+<div class="kpis">
+<div class="kpi"><div class="kpi-label">best mean Δtc vs pre-run records this cycle</div>
+<div class="kpi-value">-0.0983</div><div class="kpi-note"><span class="delta-flat">▼ -6.884 vs prior best 6.786</span></div></div>
+<div class="kpi"><div class="kpi-label">bar (GOAL.md v2.1: pure-tc optimization mode; any confirmed record counts)</div>
+<div class="kpi-value">0</div><div class="kpi-note"><strong>bar met</strong></div></div>
+<div class="kpi"><div class="kpi-label">yield</div>
+<div class="kpi-value">0/2</div><div class="kpi-note">attempts improved</div></div>
+<div class="kpi"><div class="kpi-label">holdout</div>
+<div class="kpi-value">—</div>
+<div class="kpi-note">not spent this cycle</div></div>
+</div>
+<h2>Review — what we did</h2>
+<div class="card">
+<figure><figcaption>best-so-far mean Δtc vs pre-run records by cycle
+(higher is better; dashed line = bar)</figcaption>
+<svg viewBox="0 0 720 220" width="720" height="220" role="img" aria-label="best-so-far mean Δtc vs pre-run records by cycle" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">
+<line x1="52" y1="182.2" x2="624" y2="182.2" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="182.2" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">-0.1143</text>
+<line x1="52" y1="143.1" x2="624" y2="143.1" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="143.1" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">1.611</text>
+<line x1="52" y1="104.0" x2="624" y2="104.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="104.0" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">3.336</text>
+<line x1="52" y1="64.9" x2="624" y2="64.9" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="64.9" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">5.061</text>
+<line x1="52" y1="25.8" x2="624" y2="25.8" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="25.8" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">6.786</text>
+<text x="52.0" y="206" text-anchor="middle" fill="#898781" font-size="11">1</text>
+<text x="338.0" y="206" text-anchor="middle" fill="#898781" font-size="11">2</text>
+<text x="624.0" y="206" text-anchor="middle" fill="#898781" font-size="11">3</text>
+<line x1="52" y1="190" x2="624" y2="190" stroke="#c3c2b7" stroke-width="1"/>
+<line x1="52" y1="179.6" x2="624" y2="179.6" stroke="#898781" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="630" y="179.6" dominant-baseline="middle" fill="#898781" font-size="11">bar 0</text>
+<polyline points="52.0,182.2 338.0,25.8 624.0,25.8" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="52.0" cy="182.2" r="4" fill="#2a78d6"><title>cycle 1: -0.1143</title></circle>
+<circle cx="338.0" cy="25.8" r="4" fill="#2a78d6"><title>cycle 2: 6.786</title></circle>
+<circle cx="624.0" cy="25.8" r="4" fill="#2a78d6"><title>cycle 3: 6.786</title></circle>
+<text x="633.0" y="25.8" dominant-baseline="middle" fill="#0b0b0b" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">6.786</text>
+</svg>
+</figure>
+
+</div>
+<div class="scroll"><table class="attempts"><thead><tr><th>id</th><th>kind</th><th>hypothesis</th><th class="num">mean Δtc vs pre-run records</th><th>status</th><th>causal note</th></tr></thead><tbody><tr class="best"><td class="idcell"><a href="../../.worktrees/attempt-019/LOG.md">019</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">sycamore spacetime-sweep structured seeds beat undirected search</td><td class="num">-0.0983</td><td><span class="chip st-neutral">no-change</span></td><td class="hyp">structured fronts pay sc 73-98 vs TreeSA&#x27;s 53; refuted</td></tr><tr class="prior"><td class="idcell">015</td><td colspan="5">ancestor from an earlier cycle — this batch builds on it below</td></tr><tr><td class="idcell"><span style="padding-left:16px">└ </span><a href="../../.worktrees/attempt-020/LOG.md">020</a></td><td><span class="badge kind-improve">improve</span></td><td class="hyp">population x lambda-ramp composition breaks the plateau (pre-registered basin-limit test)</td><td class="num">-0.1632</td><td><span class="chip st-neutral">no-change</span></td><td class="hyp">gain &lt; 0.2 on both targets; move-set direction formally dead</td></tr></tbody></table><p class="note">Grouped by lineage: └ rows build on the attempt above; grey rows are earlier-cycle ancestors. Best row shaded. Direction: higher is better. Attempt ids link to the worktree LOG.md (may dangle if pruned).</p></div>
+<p>A measurement-heavy cycle testing the basin-limit hypothesis from cycle 2.</p>
+<ol>
+<li><strong>cotengra reference rows (cap era)</strong>: HyperOptimizer (greedy+kahypar)</li>
+</ol>
+<p>best-of-3 scored 41.97 (reg3_250) / 68.02 (sycamore_m20) vs our records 39.90/61.51 — external SOTA hyper-optimization is ~2/~6.5 log2 behind under the protocol. cotengra-sa initially failed on sycamore in all runs — diagnosed as OUR adapter's cap-compliance bug, not cotengra weakness.</p>
+<ol>
+<li><strong>Attempt 019</strong> (draft, structure-guided sycamore sweeps): scored</li>
+</ol>
+<p>39.996/61.619, no records. All structured spacetime sweeps landed at sc 73–98 vs TreeSA's 53 — the 8×7×20 lattice's temporal and spatial extents are not graph-separated enough for flat fronts; TreeSA already realizes the ~53-wide cut. Hypothesis refuted.</p>
+<ol>
+<li><strong>Attempt 020</strong> (improve, population × λ-ramp composition — the</li>
+</ol>
+<p>pre-registered basin-limit test): scored 40.110/61.635, no records; local best 39.894/61.555. Gain &lt; 0.2 on both targets → by its own criterion the move-set direction is DEAD.</p>
+<ol>
+<li><strong>Objective change (user-directed)</strong>: v2.1 pure tc, sc unbounded;</li>
+</ol>
+<p>cap-era board archived; sc-cap guard removed; references re-measured.</p>
+<ol>
+<li><strong>Pure-tc board (best-of-3)</strong>: treesa-inf 39.950/61.544 — identical</li>
+</ol>
+<p>plateau; unconstrained sc changed nothing (min-tc trees are low-sc anyway). cotengra-hyper 41.68/63.97. cotengra-sa (adapter fixed) ~40.00/62.05 — nearly closes the gap to treesa-inf.</p>
+<p>Budget: 2/2 remaining attempt slots used (019, 020); authorized round consumed. Overrides recorded: pure-tc objective change (STATE.md).</p>
+<h2>Lessons we learnt</h2>
+<div class="lessons"><div class="lesson">
+<p class="lesson-obs">treesa-inf, cotengra-sa and ten in-house mechanisms converge to 39.95-40.1/61.5-62.1; cotengra-hyper stays 1.7-2.4 behind <span class="conf conf-confirmed">confirmed</span></p>
+<dl>
+<dt>root cause</dt><dd>SA-style local refinement from any codebase reaches the same basin at 90s; refinement is the differentiator, not brand/move set/constraint handling</dd>
+<dt>evidence</dt><dd>pure-tc reference rows; ten-mechanism convergence across cycles 2-3</dd>
+<dt>implication</dt><dd>dominance claim vs cotengra does not survive the cotengra-sa row; open question is distance to true optimum — needs a lower bound</dd>
+</dl>
+</div><div class="lesson">
+<p class="lesson-obs">unbounded sc left the frontier unchanged (39.95/61.54, sc 34/53) <span class="conf conf-confirmed">confirmed</span></p>
+<dl>
+<dt>root cause</dt><dd>min-tc trees have near-minimal sc; the cap was never binding at the optimum, only during trajectories</dd>
+<dt>evidence</dt><dd>treesa-inf rows identical to cap-era records</dd>
+<dt>implication</dt><dd>omeco fix should default sc_target to infinity unless a real memory budget is supplied; harm of low sc_target is one-directional</dd>
+</dl>
+</div><div class="lesson">
+<p class="lesson-obs">structured sweeps lost by ~40 tc on the instance they were designed for <span class="conf conf-confirmed">confirmed</span></p>
+<dl>
+<dt>root cause</dt><dd>linear fronts pay the full spacetime cross-section; BFS layering mixes space and time so flat slices are unrecoverable</dd>
+<dt>evidence</dt><dd>019 LOG: best sweep sc 73-98 vs TreeSA 53</dd>
+<dt>implication</dt><dd>structure exploitation closed on this proxy; only exact separator machinery might revive it</dd>
+</dl>
+</div></div>
+<h3>Evidence carried forward</h3>
+<ul>
+<li>Frontier: 39.95 / 61.54 (ref:treesa-inf, pure tc), reproduced by two</li>
+</ul>
+<p>independent toolchains; nothing known beats it at 90 s single-thread.</p>
+<ul>
+<li>cotengra-sa ≈ frontier (Δ ≈ 0.05/0.5); cotengra-hyper ≠ frontier.</li>
+<li>Blacklist: structure-guided sweeps on layered RQC proxies (019);</li>
+</ul>
+<p>move-set/constraint-handling variations (020 closed the direction).</p>
+<ul>
+<li>Unknown: distance from the frontier to the true optimum — no lower</li>
+</ul>
+<p>bound exists yet. This is the highest-value open measurement.</p><div class="box box-blacklist"><strong>New blacklist entries this cycle</strong><ul><li>structure-guided linear sweeps on layered RQC proxies (019)</li><li>further move-set / constraint-handling variants of four-rotation local search (020 closed the direction)</li></ul></div>
+<h3>Literature check</h3><p>The two-toolchain convergence matches the anytime-plateau picture in [gray_2020_hyper]; the sc_target finding now reads as "aspirational low-memory targets are harmful, unconstrained tc is safe" — consistent with [kalachev_2021_multi]'s overflow-penalty-only design (β penalty activates only above the cap, never below: exactly the one-directional harm we measured). Lower-bound machinery for next cycle is catalogued: PID/minor-based LB [tamaki_2017_positive, tamaki_2022_heuristic].</p>
+<h2>Next round</h2><p>Hypothesis: the 39.95/61.54 frontier is near-optimal; certified lower bounds will show a gap &lt; 1 log2. Batch (6 slots): 021 LB for reg3_250 (line-graph treewidth, minor-based); 022 LB for sycamore_m20 (line-graph treewidth + lattice cut counting); 023 hierarchical-exact search, expander flavor (coarsen → exact DP → expand); 024 hierarchical-exact, lattice flavor; budget-scaling measurement of treesa-inf at 90/300/900 s (not an attempt); 025 debug slot. Abandon hierarchical-exact if it cannot match the frontier; if LB ≈ frontier, declare the instances solved and pivot the project to write-up + new instance regimes.</p>
+<footer><a href="cycle-02.html">← cycle 02</a><a href="index.html">index</a><span class="disabled">cycle 04 →</span></footer>
+</main>
+</body>
+</html>

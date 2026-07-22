@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "cycle": 3,
+  "date_utc": "2026-07-22T17:37:15Z",
+  "project": "omeco beat-existing-optimizers",
+  "attempts_range": [
+    19,
+    20
+  ],
+  "attempts_remaining": 0,
+  "primary_metric": {
+    "name": "mean \u0394tc vs pre-run records",
+    "direction": "max"
+  },
+  "guard_metrics": [],
+  "bar": {
+    "value": 0.0,
+    "source": "GOAL.md v2.1: pure-tc optimization mode; any confirmed record counts"
+  },
+  "best_this_cycle": -0.0983,
+  "best_prior": 6.7857,
+  "holdout": {
+    "spent": false,
+    "result": "n/a in v2"
+  },
+  "attempts": [
+    {
+      "id": 19,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "sycamore spacetime-sweep structured seeds beat undirected search",
+      "primary": -0.0983,
+      "status": "no-change",
+      "causal_note": "structured fronts pay sc 73-98 vs TreeSA's 53; refuted",
+      "log_path": ".worktrees/attempt-019/LOG.md"
+    },
+    {
+      "id": 20,
+      "kind": "improve",
+      "parent": 15,
+      "hypothesis": "population x lambda-ramp composition breaks the plateau (pre-registered basin-limit test)",
+      "primary": -0.1632,
+      "status": "no-change",
+      "causal_note": "gain < 0.2 on both targets; move-set direction formally dead",
+      "log_path": ".worktrees/attempt-020/LOG.md"
+    }
+  ],
+  "reflection": {
+    "review": "A measurement-heavy cycle testing the basin-limit hypothesis from cycle 2.\n\n1. **cotengra reference rows (cap era)**: HyperOptimizer (greedy+kahypar)\n   best-of-3 scored 41.97 (reg3_250) / 68.02 (sycamore_m20) vs our records\n   39.90/61.51 \u2014 external SOTA hyper-optimization is ~2/~6.5 log2 behind\n   under the protocol. cotengra-sa initially failed on sycamore in all runs\n   \u2014 diagnosed as OUR adapter's cap-compliance bug, not cotengra weakness.\n2. **Attempt 019** (draft, structure-guided sycamore sweeps): scored\n   39.996/61.619, no records. All structured spacetime sweeps landed at\n   sc 73\u201398 vs TreeSA's 53 \u2014 the 8\u00d77\u00d720 lattice's temporal and spatial\n   extents are not graph-separated enough for flat fronts; TreeSA already\n   realizes the ~53-wide cut. Hypothesis refuted.\n3. **Attempt 020** (improve, population \u00d7 \u03bb-ramp composition \u2014 the\n   pre-registered basin-limit test): scored 40.110/61.635, no records;\n   local best 39.894/61.555. Gain < 0.2 on both targets \u2192 by its own\n   criterion the move-set direction is DEAD.\n4. **Objective change (user-directed)**: v2.1 pure tc, sc unbounded;\n   cap-era board archived; sc-cap guard removed; references re-measured.\n5. **Pure-tc board (best-of-3)**: treesa-inf 39.950/61.544 \u2014 identical\n   plateau; unconstrained sc changed nothing (min-tc trees are low-sc\n   anyway). cotengra-hyper 41.68/63.97. cotengra-sa (adapter fixed)\n   ~40.00/62.05 \u2014 nearly closes the gap to treesa-inf.\n\nBudget: 2/2 remaining attempt slots used (019, 020); authorized round\nconsumed. Overrides recorded: pure-tc objective change (STATE.md).",
+    "evidence": "- Frontier: 39.95 / 61.54 (ref:treesa-inf, pure tc), reproduced by two\n  independent toolchains; nothing known beats it at 90 s single-thread.\n- cotengra-sa \u2248 frontier (\u0394 \u2248 0.05/0.5); cotengra-hyper \u2260 frontier.\n- Blacklist: structure-guided sweeps on layered RQC proxies (019);\n  move-set/constraint-handling variations (020 closed the direction).\n- Unknown: distance from the frontier to the true optimum \u2014 no lower\n  bound exists yet. This is the highest-value open measurement.",
+    "literature": "The two-toolchain convergence matches the anytime-plateau picture in\n[gray_2020_hyper]; the sc_target finding now reads as \"aspirational\nlow-memory targets are harmful, unconstrained tc is safe\" \u2014 consistent\nwith [kalachev_2021_multi]'s overflow-penalty-only design (\u03b2 penalty\nactivates only above the cap, never below: exactly the one-directional\nharm we measured). Lower-bound machinery for next cycle is catalogued:\nPID/minor-based LB [tamaki_2017_positive, tamaki_2022_heuristic].",
+    "next": "Hypothesis: the 39.95/61.54 frontier is near-optimal; certified lower\nbounds will show a gap < 1 log2. Batch (6 slots): 021 LB for reg3_250\n(line-graph treewidth, minor-based); 022 LB for sycamore_m20 (line-graph\ntreewidth + lattice cut counting); 023 hierarchical-exact search, expander\nflavor (coarsen \u2192 exact DP \u2192 expand); 024 hierarchical-exact, lattice\nflavor; budget-scaling measurement of treesa-inf at 90/300/900 s (not an\nattempt); 025 debug slot. Abandon hierarchical-exact if it cannot match\nthe frontier; if LB \u2248 frontier, declare the instances solved and pivot the\nproject to write-up + new instance regimes."
+  },
+  "lessons": [
+    {
+      "observation": "treesa-inf, cotengra-sa and ten in-house mechanisms converge to 39.95-40.1/61.5-62.1; cotengra-hyper stays 1.7-2.4 behind",
+      "root_cause": "SA-style local refinement from any codebase reaches the same basin at 90s; refinement is the differentiator, not brand/move set/constraint handling",
+      "evidence": "pure-tc reference rows; ten-mechanism convergence across cycles 2-3",
+      "implication": "dominance claim vs cotengra does not survive the cotengra-sa row; open question is distance to true optimum \u2014 needs a lower bound",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "unbounded sc left the frontier unchanged (39.95/61.54, sc 34/53)",
+      "root_cause": "min-tc trees have near-minimal sc; the cap was never binding at the optimum, only during trajectories",
+      "evidence": "treesa-inf rows identical to cap-era records",
+      "implication": "omeco fix should default sc_target to infinity unless a real memory budget is supplied; harm of low sc_target is one-directional",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "structured sweeps lost by ~40 tc on the instance they were designed for",
+      "root_cause": "linear fronts pay the full spacetime cross-section; BFS layering mixes space and time so flat slices are unrecoverable",
+      "evidence": "019 LOG: best sweep sc 73-98 vs TreeSA 53",
+      "implication": "structure exploitation closed on this proxy; only exact separator machinery might revive it",
+      "confidence": "confirmed"
+    }
+  ],
+  "blacklist_new": [
+    "structure-guided linear sweeps on layered RQC proxies (019)",
+    "further move-set / constraint-handling variants of four-rotation local search (020 closed the direction)"
+  ],
+  "insight_promotions": []
+}

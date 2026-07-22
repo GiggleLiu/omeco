@@ -64,3 +64,12 @@ Candidate = attempt worktree. Validator runs `build.sh` (else
 `target/release/examples/attempt`), sandboxed. Write the best tree in omeco
 `writejson` format early and improve it in place (anytime). `validate
 <dir> --precheck` is free and unlimited.
+
+## v2.1 (2026-07-23) — pure-tc objective
+
+User direction: ignore sc entirely — minimize tc only, sc unbounded. The
+sc-cap guard is removed from the validator (sc still reported,
+informational). The cap-era board is archived at
+`leaderboard_v2cap_archive.json`; records re-seeded from references
+re-measured under pure tc (`ref:treesa-inf` = stock TreeSA with
+`sc_target = ∞`, plus cotengra rows with flops-only objectives).

@@ -22,12 +22,9 @@ struct GraphData {
     sizes: HashMap<String, usize>,
 }
 
-fn sc_cap(name: &str, greedy_sc: f64) -> f64 {
-    match name {
-        "reg3_250" => 35.0,
-        "sycamore_m20" => 55.0,
-        _ => greedy_sc.max(30.0) + 2.0,
-    }
+fn sc_cap(_name: &str, _greedy_sc: f64) -> f64 {
+    // v2.1 pure-tc objective: sc unbounded.
+    f64::INFINITY
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

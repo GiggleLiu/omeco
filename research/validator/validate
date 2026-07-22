@@ -280,18 +280,7 @@ def main():
             report["per_instance"].append(entry)
             continue
         tc, sc = res["tc"], res["sc"]
-        cap = lb["sc_cap"].get(name)
-        if cap is not None and sc > cap:
-            errors.append({"where": name,
-                           "what": f"sc-cap guard: sc={sc:.2f} > cap {cap:.2f} "
-                                   "(reference sc + 2)",
-                           "hint": "candidate trades memory blow-up for tc; "
-                                   "instance scored as fail"})
-            entry["result"] = "fail"
-            entry["detail"] += " [sc-cap violated]"
-            deltas.append(FAIL_DELTA)
-            report["per_instance"].append(entry)
-            continue
+        # v2.1 (2026-07-23): pure-tc objective — sc unbounded, reported only.
         rec = lb["records"].get(name)
         rec_tc = rec["tc"] if rec else float("inf")
         delta = (rec_tc - tc) if rec else 0.0
@@ -305,8 +294,6 @@ def main():
             if prev is None or tc < prev["tc"]:
                 row[args.as_reference] = {"tc": tc, "sc": sc,
                                           "date": time.strftime("%Y-%m-%d")}
-            if sc is not None:
-                lb["sc_cap"][name] = min(lb["sc_cap"].get(name, sc + 2), sc + 2)
             if rec is None or tc < rec_tc:
                 lb["records"][name] = {"tc": tc, "sc": sc,
                                        "by": f"ref:{args.as_reference}",
@@ -320,7 +307,7 @@ def main():
                 confirm = run_one(candidate_dir, work, name + "_confirm",
                                   permute_instance(graph, rng),
                                   min(budget, remaining * 1000.0 / GRACE), errors)
-                if confirm["result"] == "ok" and confirm["sc"] <= (cap or 1e18):
+                if confirm["result"] == "ok":
                     worse = max(tc, confirm["tc"])
                     if worse < rec_tc - RECORD_EPS:
                         lb["records"][name] = {"tc": worse, "sc": max(sc, confirm["sc"]),
