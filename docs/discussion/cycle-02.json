@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "cycle": 2,
+  "date_utc": "2026-07-22T16:10:47Z",
+  "project": "omeco beat-existing-optimizers",
+  "attempts_range": [
+    11,
+    18
+  ],
+  "attempts_remaining": 0,
+  "primary_metric": {
+    "name": "mean \u0394tc vs pre-run records",
+    "direction": "max"
+  },
+  "guard_metrics": [],
+  "bar": {
+    "value": 0.0,
+    "source": "GOAL.md v2: optimization mode \u2014 any confirmed record improvement counts; no pass/fail bar"
+  },
+  "best_this_cycle": 6.7857,
+  "best_prior": null,
+  "holdout": {
+    "spent": false,
+    "result": "n/a in v2 (holdout dropped by user decision)"
+  },
+  "attempts": [
+    {
+      "id": 11,
+      "kind": "improve",
+      "parent": 1,
+      "hypothesis": "hard sc constraint at proposal time in 001's subtree-shift SA",
+      "primary": 6.7857,
+      "status": "improved",
+      "causal_note": "first scorer; +4.13/+9.44 vs reference records, set both initial records",
+      "log_path": ".worktrees/attempt-011/LOG.md"
+    },
+    {
+      "id": 12,
+      "kind": "improve",
+      "parent": 8,
+      "hypothesis": "sc-feasibility projection + hard rejection in 008's basin hopping",
+      "primary": -0.0406,
+      "status": "no-change",
+      "causal_note": "ties 011 within noise; projection \u2248 hard rejection in outcome",
+      "log_path": ".worktrees/attempt-012/LOG.md"
+    },
+    {
+      "id": 13,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "simplification preprocessing (absorb rank-1/2) before baseline TreeSA",
+      "primary": -6.6013,
+      "status": "no-change",
+      "causal_note": "refuted: optimizer-at-baseline scored at reference level; search-space size not binding",
+      "log_path": ".worktrees/attempt-013/LOG.md"
+    },
+    {
+      "id": 14,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "large-neighborhood destroy-and-repair over TreeSA warm-start",
+      "primary": -4.4195,
+      "status": "no-change",
+      "causal_note": "smoke 40.3/62.2 did not replicate under scoring; heavy-tailed variance suspected",
+      "log_path": ".worktrees/attempt-014/LOG.md"
+    },
+    {
+      "id": 15,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "sequential evolutionary population of 4 SA replicas, clone-the-best",
+      "primary": 0.319,
+      "status": "improved",
+      "causal_note": "confirmed records on BOTH instances (reg3 39.95, syc 61.80)",
+      "log_path": ".worktrees/attempt-015/LOG.md"
+    },
+    {
+      "id": 16,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "temperature-free tabu with aspiration + strategic oscillation",
+      "primary": -5.227,
+      "status": "no-change",
+      "causal_note": "own predicted 1-in-5 reg3 tail hit on the scored run",
+      "log_path": ".worktrees/attempt-016/LOG.md"
+    },
+    {
+      "id": 17,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "exact-penalty lambda-ramp SA traversing sc-infeasible saddles",
+      "primary": 0.1152,
+      "status": "improved",
+      "causal_note": "confirmed sycamore record 61.57; reg3 tie with record to 0.001",
+      "log_path": ".worktrees/attempt-017/LOG.md"
+    },
+    {
+      "id": 18,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "memetic: Boltzmann seeds + sc-aware SA + interleaved order-DP",
+      "primary": -0.0059,
+      "status": "improved",
+      "causal_note": "final sycamore record 61.51; own DP component measured inert (0.002)",
+      "log_path": ".worktrees/attempt-018/LOG.md"
+    }
+  ],
+  "reflection": {
+    "review": "8 of 8 planned attempts implemented, prechecked, and scored under the v2\noptimization-mode gate (leaderboard, no pass/fail; two fixed targets at 90 s\neach; records seeded by best-of-3 reference runs including the\nschedule-hygiene variant). 4 of 8 set confirmed records at their scoring\ntime; final records vs the reference seeds:\n\n- **reg3_250: 44.29 \u2192 39.95** (attempt-015; \u22124.34 log2 \u2248 20\u00d7 fewer flops)\n- **sycamore_m20: 71.17 \u2192 61.51** (attempt-018; \u22129.66 log2 \u2248 800\u00d7 fewer flops)\n\nPer attempt (kind, parent, scored tc reg3/syc, one-line causal claim):\n\n- 011 improve/001, 40.16/61.73: first scorer \u2014 smashed both reference\n  records (+4.13/+9.44), set the bar the siblings then chased.\n- 012 improve/008, 40.29/62.05: ties 011 within noise; projection \u2248 hard\n  rejection in outcome.\n- 013 draft, 43.45/72.00: simplification preprocessing **refuted** \u2014 with\n  the optimizer held at baseline, pre-absorbing sycamore's 106 rank-1\n  vectors gained \u2248 nothing over the reference (72.0 vs 71.17 seed).\n- 014 draft, 45.04/66.06: LNS scored far below its own 90 s smoke tests\n  (40.3/62.2) \u2014 did not replicate under the validator.\n- 015 draft, **39.95**/61.80: evolutionary replica population \u2014 new\n  confirmed records on both instances.\n- 016 draft, 45.12/67.08: tabu \u2014 its own predicted 1-in-5 reg3 upper tail\n  hit on the scored run; also behind SA on sycamore.\n- 017 draft, 39.95/**61.57**: exact-penalty \u03bb-ramp \u2014 new confirmed sycamore\n  record; reg3 tie with 015's record to 0.001.\n- 018 draft, 40.02/**61.51**: memetic pipeline \u2014 final sycamore record;\n  its own DP component measured inert (gain \u2248 0.002).\n\nZero sc-cap violations, zero rejections, zero timeouts across 16 scored\ninstances (every mechanism handled sc explicitly \u2014 cycle 1's lesson held).\nBudget: 8/8 attempts used; authorized_rounds now 0; 2 debug slots unused.\nNo overrides this cycle.",
+    "evidence": "- Confirmed records: reg3_250 tc 39.95 sc 34 (015), sycamore_m20 tc 61.51\n  sc 53 (018); every record double-run confirmed under fresh relabeling.\n- Five-mechanism convergence to the same basins suggests 39.9/61.5 is near\n  the sc-constrained optimum reachable by local search at this budget \u2014\n  further move-set variations are unlikely to move records much\n  (diminishing-returns warning for more same-family attempts).\n- Blacklist additions: simplification preprocessing as a quality lever\n  (013); single-run high-variance methods without internal\n  restart-min (014, 016 as scored).\n- Standing risk: records measured against omeco-only references; external\n  SOTA (cotengra) not yet on the board.",
+    "literature": "`sc_target = cap` as the operative annealing objective matches the\nmemory-bounded practice in [kalachev_2021_multi] (\u03b2-penalty on\nlog2(M/Mmax) overflow) \u2014 our finding sharpens it: on instances whose\noptimum sits near the cap, target-the-cap dominates target-a-low-sc. The\nfive-way basin convergence at matched budget echoes the plateau behavior\ndescribed in [gray_2020_hyper]'s anytime curves. No paper in `.knowledge/`\nreports the specific failure mode \"default sc_target sabotages TreeSA on\nhigh-sc-optimum instances\" \u2014 novel at the library/engineering level; the\nrecord-sized quality gains need a cotengra head-to-head before any\nexternal claim. Shelved insights: none (all Selected).",
+    "next": "Falsifiable hypothesis for a cycle 3, if authorized: \"the 39.9/61.5 basins\nare near the local-search limit; breaking below requires either external\nreference pressure (cotengra rows may reveal deeper basins exist) or\nglobal-structure methods on sycamore's layered geometry.\" Sketch: (1) add\ncotengra SA + KaHyPar reference rows (measurement, not an attempt); (2)\none improve on 015 and one on 017 (unify: population + \u03bb-ramp, the two\nbest-variance mechanisms); (3) repeated-scoring debug of 014 to settle its\nvariance question; (4) a sycamore-specific draft exploiting circuit\nlayering (cut along time slices). Abandon the move-set direction if (2)\ngains < 0.2 on both targets \u2014 that would confirm the basin-limit\nhypothesis and shift effort to new instance families or to merging the\nfinding into omeco. Also proposed for the gate: fold the `sc_target=cap`\nprinciple into the omeco library (PR to `treesa.rs`), independent of\nfurther cycles."
+  },
+  "lessons": [
+    {
+      "observation": "five mechanically different searches landed within 0.35 log2 of each other on both targets, ~4.3/~9.7 below the TreeSA references",
+      "root_cause": "the gain comes from the shared objective change \u2014 sc_target = cap instead of omeco's default 20 \u2014 plus full-budget anytime annealing; the default target drags search toward low-memory/high-flop trees on instances whose optimum sits at sc 33-53",
+      "evidence": "018's ablation (soft penalty at cap: reg3 56.8 -> 40.0, its DP gained 0.002); the 0.35-wide five-way cluster; references measured at default sc_target",
+      "implication": "publishable object is the sc-budget-aware annealing principle, not a move set; fix omeco TreeSA's default sc_target footgun in the library",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "014 and 016 scored 4-5 log2 worse than their own smoke tests; the SA family replicated to within 0.1",
+      "root_cause": "heavy-tailed run-to-run variance in LNS/tabu; a single scored run samples the tail, while SA-family methods are intrinsically low-variance",
+      "evidence": "016's LOG documents a 1-in-5 tail incl. 45.1; 014 smoke 40.3 vs scored 45.0",
+      "implication": "variance is a first-class quality axis; high-variance mechanisms need internal restart-and-min to compete per single run",
+      "confidence": "suspected"
+    },
+    {
+      "observation": "simplification preprocessing (013) gained nothing despite 106 rank-1 tensors on sycamore",
+      "root_cause": "TreeSA spends negligible budget on trivially-decidable contractions; search-space size was not the binding constraint",
+      "evidence": "013 held the optimizer at baseline and scored at reference level on both targets",
+      "implication": "blacklist search-space reduction as a standalone quality lever on these targets",
+      "confidence": "confirmed"
+    }
+  ],
+  "blacklist_new": [
+    "simplification preprocessing as a standalone quality lever (013)",
+    "single-shot LNS/tabu without internal restart-min \u2014 heavy-tailed variance loses scored runs (014, 016)"
+  ],
+  "insight_promotions": []
+}

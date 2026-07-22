@@ -5,8 +5,8 @@
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
 - authorized_rounds: 0     # cycles the loop may run without user review
-- next_attempt: 11         # next .worktrees/attempt-NNN number
-- next_cycle: 2            # next reflection cycle number
+- next_attempt: 19         # next .worktrees/attempt-NNN number
+- next_cycle: 3            # next reflection cycle number
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
   - validator_gate: passed 2026-07-22 (v2)  # pending | passed YYYY-MM-DD

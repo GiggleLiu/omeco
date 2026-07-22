@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>omeco beat-existing-optimizers — cycle 02</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #f9f9f7; color: #0b0b0b;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
+h1 { font-size: 20px; margin: 0 0 2px; }
+h2 { font-size: 16px; margin: 28px 0 8px; border-bottom: 1px solid #e1e0d9;
+  padding-bottom: 4px; }
+h3 { font-size: 14px; margin: 18px 0 4px; color: #52514e; }
+h4, h5, h6 { font-size: 14px; margin: 12px 0 4px; }
+a { color: #1c5cab; }
+.meta { color: #52514e; margin: 0 0 16px; }
+.note { color: #898781; font-size: 12px; margin: 6px 0 0; }
+.card { background: #fcfcfb; border: 1px solid rgba(11,11,11,0.10);
+  border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+.kpis { display: flex; flex-wrap: wrap; gap: 12px; }
+.kpi { flex: 1 1 180px; background: #fcfcfb;
+  border: 1px solid rgba(11,11,11,0.10); border-radius: 6px; padding: 10px 14px; }
+.kpi-label { color: #52514e; font-size: 12px; }
+.kpi-value { font-size: 24px; font-weight: 650; margin: 2px 0; }
+.kpi-note { font-size: 12px; color: #52514e; }
+.delta-good { color: #006300; font-weight: 600; }
+.delta-flat { color: #52514e; }
+table { border-collapse: collapse; width: 100%; background: #fcfcfb; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #e1e0d9;
+  vertical-align: top; }
+th { color: #52514e; font-size: 12px; font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.hyp { max-width: 26em; }
+tr.best td { background: #eef4fc; }
+tr.prior td { color: #898781; background: #f5f5f2; font-size: 12px; }
+td.idcell { white-space: nowrap; }
+.scroll { overflow-x: auto; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 9px;
+  font-size: 12px; white-space: nowrap; }
+.st-good { background: #e2f3e2; color: #0a5c0a; }
+.st-neutral { background: #f0efec; color: #52514e; }
+.st-critical { background: #fae3e3; color: #922929; }
+.st-serious { background: #fdeae2; color: #8a4526; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 3px;
+  font-size: 12px; white-space: nowrap; }
+.kind-draft { background: #e5eefb; color: #1c5cab; }
+.kind-improve { background: #ddf2ea; color: #0b6647; }
+.kind-debug { background: #faf0d8; color: #7a5600; }
+.lesson { border-left: 3px solid #c3c2b7; background: #fcfcfb;
+  padding: 8px 14px; margin: 10px 0; }
+.lesson-obs { margin: 0 0 6px; font-weight: 600; }
+.lesson dl { display: grid; grid-template-columns: 7em 1fr; gap: 2px 12px;
+  margin: 0; }
+.lesson dt { color: #898781; font-size: 12px; line-height: 1.7; }
+.lesson dd { margin: 0; }
+.conf { font-size: 11px; padding: 1px 7px; border-radius: 9px;
+  vertical-align: 1px; }
+.conf-confirmed { background: #e2f3e2; color: #0a5c0a; }
+.conf-suspected { background: #f0efec; color: #52514e; }
+.box { border-radius: 6px; padding: 10px 14px; margin: 10px 0; }
+.box ul { margin: 6px 0 0; padding-left: 20px; }
+.box-blacklist { background: #fae3e3; border: 1px solid #e8b9b9; }
+.box-promote { background: #faf0d8; border: 1px solid #e3cf94; }
+figure { margin: 0; }
+figcaption { color: #52514e; font-size: 12px; margin-bottom: 2px; }
+.guards { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 10px; }
+svg { max-width: 100%; height: auto; }
+footer { margin-top: 32px; color: #52514e; display: flex; gap: 16px; }
+footer .disabled { color: #c3c2b7; }
+</style>
+</head>
+<body>
+<main>
+<h1>omeco beat-existing-optimizers — cycle 02</h1>
+<p class="meta">attempts 011–018 · 2026-07-22 16:10:47 UTC
+· attempts remaining after this cycle: 0</p>
+<div class="kpis">
+<div class="kpi"><div class="kpi-label">best mean Δtc vs pre-run records this cycle</div>
+<div class="kpi-value">6.786</div><div class="kpi-note"><span class="delta-flat">first scored cycle</span></div></div>
+<div class="kpi"><div class="kpi-label">bar (GOAL.md v2: optimization mode — any confirmed record improvement counts; no pass/fail bar)</div>
+<div class="kpi-value">0</div><div class="kpi-note"><strong>bar met</strong></div></div>
+<div class="kpi"><div class="kpi-label">yield</div>
+<div class="kpi-value">4/8</div><div class="kpi-note">attempts improved</div></div>
+<div class="kpi"><div class="kpi-label">holdout</div>
+<div class="kpi-value">—</div>
+<div class="kpi-note">not spent this cycle</div></div>
+</div>
+<h2>Review — what we did</h2>
+<div class="card">
+<figure><figcaption>best-so-far mean Δtc vs pre-run records by cycle
+(higher is better; dashed line = bar)</figcaption>
+<svg viewBox="0 0 720 220" width="720" height="220" role="img" aria-label="best-so-far mean Δtc vs pre-run records by cycle" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">
+<line x1="52" y1="182.2" x2="624" y2="182.2" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="182.2" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">-0.1143</text>
+<line x1="52" y1="143.1" x2="624" y2="143.1" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="143.1" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">1.611</text>
+<line x1="52" y1="104.0" x2="624" y2="104.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="104.0" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">3.336</text>
+<line x1="52" y1="64.9" x2="624" y2="64.9" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="64.9" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">5.061</text>
+<line x1="52" y1="25.8" x2="624" y2="25.8" stroke="#e1e0d9" stroke-width="1"/>
+<text x="44" y="25.8" text-anchor="end" dominant-baseline="middle" fill="#898781" font-size="11" font-variant-numeric="tabular-nums">6.786</text>
+<text x="52.0" y="206" text-anchor="middle" fill="#898781" font-size="11">1</text>
+<text x="624.0" y="206" text-anchor="middle" fill="#898781" font-size="11">2</text>
+<line x1="52" y1="190" x2="624" y2="190" stroke="#c3c2b7" stroke-width="1"/>
+<line x1="52" y1="179.6" x2="624" y2="179.6" stroke="#898781" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="630" y="179.6" dominant-baseline="middle" fill="#898781" font-size="11">bar 0</text>
+<polyline points="52.0,182.2 624.0,25.8" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="52.0" cy="182.2" r="4" fill="#2a78d6"><title>cycle 1: -0.1143</title></circle>
+<circle cx="624.0" cy="25.8" r="4" fill="#2a78d6"><title>cycle 2: 6.786</title></circle>
+<text x="633.0" y="25.8" dominant-baseline="middle" fill="#0b0b0b" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">6.786</text>
+</svg>
+</figure>
+
+</div>
+<div class="scroll"><table class="attempts"><thead><tr><th>id</th><th>kind</th><th>hypothesis</th><th class="num">mean Δtc vs pre-run records</th><th>status</th><th>causal note</th></tr></thead><tbody><tr class="prior"><td class="idcell">001</td><td colspan="5">ancestor from an earlier cycle — this batch builds on it below</td></tr><tr class="best"><td class="idcell"><span style="padding-left:16px">└ </span><a href="../../.worktrees/attempt-011/LOG.md">011</a></td><td><span class="badge kind-improve">improve</span></td><td class="hyp">hard sc constraint at proposal time in 001&#x27;s subtree-shift SA</td><td class="num">6.786</td><td><span class="chip st-good">improved</span></td><td class="hyp">first scorer; +4.13/+9.44 vs reference records, set both initial records</td></tr><tr class="prior"><td class="idcell">008</td><td colspan="5">ancestor from an earlier cycle — this batch builds on it below</td></tr><tr><td class="idcell"><span style="padding-left:16px">└ </span><a href="../../.worktrees/attempt-012/LOG.md">012</a></td><td><span class="badge kind-improve">improve</span></td><td class="hyp">sc-feasibility projection + hard rejection in 008&#x27;s basin hopping</td><td class="num">-0.0406</td><td><span class="chip st-neutral">no-change</span></td><td class="hyp">ties 011 within noise; projection ≈ hard rejection in outcome</td></tr><tr><td class="idcell"><a href="../../.worktrees/attempt-013/LOG.md">013</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">simplification preprocessing (absorb rank-1/2) before baseline TreeSA</td><td class="num">-6.601</td><td><span class="chip st-neutral">no-change</span></td><td class="hyp">refuted: optimizer-at-baseline scored at reference level; search-space size not binding</td></tr><tr><td class="idcell"><a href="../../.worktrees/attempt-014/LOG.md">014</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">large-neighborhood destroy-and-repair over TreeSA warm-start</td><td class="num">-4.42</td><td><span class="chip st-neutral">no-change</span></td><td class="hyp">smoke 40.3/62.2 did not replicate under scoring; heavy-tailed variance suspected</td></tr><tr><td class="idcell"><a href="../../.worktrees/attempt-015/LOG.md">015</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">sequential evolutionary population of 4 SA replicas, clone-the-best</td><td class="num">0.319</td><td><span class="chip st-good">improved</span></td><td class="hyp">confirmed records on BOTH instances (reg3 39.95, syc 61.80)</td></tr><tr><td class="idcell"><a href="../../.worktrees/attempt-016/LOG.md">016</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">temperature-free tabu with aspiration + strategic oscillation</td><td class="num">-5.227</td><td><span class="chip st-neutral">no-change</span></td><td class="hyp">own predicted 1-in-5 reg3 tail hit on the scored run</td></tr><tr><td class="idcell"><a href="../../.worktrees/attempt-017/LOG.md">017</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">exact-penalty lambda-ramp SA traversing sc-infeasible saddles</td><td class="num">0.1152</td><td><span class="chip st-good">improved</span></td><td class="hyp">confirmed sycamore record 61.57; reg3 tie with record to 0.001</td></tr><tr><td class="idcell"><a href="../../.worktrees/attempt-018/LOG.md">018</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">memetic: Boltzmann seeds + sc-aware SA + interleaved order-DP</td><td class="num">-0.0059</td><td><span class="chip st-good">improved</span></td><td class="hyp">final sycamore record 61.51; own DP component measured inert (0.002)</td></tr></tbody></table><p class="note">Grouped by lineage: └ rows build on the attempt above; grey rows are earlier-cycle ancestors. Best row shaded. Direction: higher is better. Attempt ids link to the worktree LOG.md (may dangle if pruned).</p></div>
+<p>8 of 8 planned attempts implemented, prechecked, and scored under the v2 optimization-mode gate (leaderboard, no pass/fail; two fixed targets at 90 s each; records seeded by best-of-3 reference runs including the schedule-hygiene variant). 4 of 8 set confirmed records at their scoring time; final records vs the reference seeds:</p>
+<ul>
+<li><strong>reg3_250: 44.29 → 39.95</strong> (attempt-015; −4.34 log2 ≈ 20× fewer flops)</li>
+<li><strong>sycamore_m20: 71.17 → 61.51</strong> (attempt-018; −9.66 log2 ≈ 800× fewer flops)</li>
+</ul>
+<p>Per attempt (kind, parent, scored tc reg3/syc, one-line causal claim):</p>
+<ul>
+<li>011 improve/001, 40.16/61.73: first scorer — smashed both reference</li>
+</ul>
+<p>records (+4.13/+9.44), set the bar the siblings then chased.</p>
+<ul>
+<li>012 improve/008, 40.29/62.05: ties 011 within noise; projection ≈ hard</li>
+</ul>
+<p>rejection in outcome.</p>
+<ul>
+<li>013 draft, 43.45/72.00: simplification preprocessing <strong>refuted</strong> — with</li>
+</ul>
+<p>the optimizer held at baseline, pre-absorbing sycamore's 106 rank-1 vectors gained ≈ nothing over the reference (72.0 vs 71.17 seed).</p>
+<ul>
+<li>014 draft, 45.04/66.06: LNS scored far below its own 90 s smoke tests</li>
+</ul>
+<p>(40.3/62.2) — did not replicate under the validator.</p>
+<ul>
+<li>015 draft, <strong>39.95</strong>/61.80: evolutionary replica population — new</li>
+</ul>
+<p>confirmed records on both instances.</p>
+<ul>
+<li>016 draft, 45.12/67.08: tabu — its own predicted 1-in-5 reg3 upper tail</li>
+</ul>
+<p>hit on the scored run; also behind SA on sycamore.</p>
+<ul>
+<li>017 draft, 39.95/<strong>61.57</strong>: exact-penalty λ-ramp — new confirmed sycamore</li>
+</ul>
+<p>record; reg3 tie with 015's record to 0.001.</p>
+<ul>
+<li>018 draft, 40.02/<strong>61.51</strong>: memetic pipeline — final sycamore record;</li>
+</ul>
+<p>its own DP component measured inert (gain ≈ 0.002).</p>
+<p>Zero sc-cap violations, zero rejections, zero timeouts across 16 scored instances (every mechanism handled sc explicitly — cycle 1's lesson held). Budget: 8/8 attempts used; authorized_rounds now 0; 2 debug slots unused. No overrides this cycle.</p>
+<h2>Lessons we learnt</h2>
+<div class="lessons"><div class="lesson">
+<p class="lesson-obs">five mechanically different searches landed within 0.35 log2 of each other on both targets, ~4.3/~9.7 below the TreeSA references <span class="conf conf-confirmed">confirmed</span></p>
+<dl>
+<dt>root cause</dt><dd>the gain comes from the shared objective change — sc_target = cap instead of omeco's default 20 — plus full-budget anytime annealing; the default target drags search toward low-memory/high-flop trees on instances whose optimum sits at sc 33-53</dd>
+<dt>evidence</dt><dd>018's ablation (soft penalty at cap: reg3 56.8 -&gt; 40.0, its DP gained 0.002); the 0.35-wide five-way cluster; references measured at default sc_target</dd>
+<dt>implication</dt><dd>publishable object is the sc-budget-aware annealing principle, not a move set; fix omeco TreeSA's default sc_target footgun in the library</dd>
+</dl>
+</div><div class="lesson">
+<p class="lesson-obs">014 and 016 scored 4-5 log2 worse than their own smoke tests; the SA family replicated to within 0.1 <span class="conf conf-suspected">suspected</span></p>
+<dl>
+<dt>root cause</dt><dd>heavy-tailed run-to-run variance in LNS/tabu; a single scored run samples the tail, while SA-family methods are intrinsically low-variance</dd>
+<dt>evidence</dt><dd>016's LOG documents a 1-in-5 tail incl. 45.1; 014 smoke 40.3 vs scored 45.0</dd>
+<dt>implication</dt><dd>variance is a first-class quality axis; high-variance mechanisms need internal restart-and-min to compete per single run</dd>
+</dl>
+</div><div class="lesson">
+<p class="lesson-obs">simplification preprocessing (013) gained nothing despite 106 rank-1 tensors on sycamore <span class="conf conf-confirmed">confirmed</span></p>
+<dl>
+<dt>root cause</dt><dd>TreeSA spends negligible budget on trivially-decidable contractions; search-space size was not the binding constraint</dd>
+<dt>evidence</dt><dd>013 held the optimizer at baseline and scored at reference level on both targets</dd>
+<dt>implication</dt><dd>blacklist search-space reduction as a standalone quality lever on these targets</dd>
+</dl>
+</div></div>
+<h3>Evidence carried forward</h3>
+<ul>
+<li>Confirmed records: reg3_250 tc 39.95 sc 34 (015), sycamore_m20 tc 61.51</li>
+</ul>
+<p>sc 53 (018); every record double-run confirmed under fresh relabeling.</p>
+<ul>
+<li>Five-mechanism convergence to the same basins suggests 39.9/61.5 is near</li>
+</ul>
+<p>the sc-constrained optimum reachable by local search at this budget — further move-set variations are unlikely to move records much (diminishing-returns warning for more same-family attempts).</p>
+<ul>
+<li>Blacklist additions: simplification preprocessing as a quality lever</li>
+</ul>
+<p>(013); single-run high-variance methods without internal restart-min (014, 016 as scored).</p>
+<ul>
+<li>Standing risk: records measured against omeco-only references; external</li>
+</ul>
+<p>SOTA (cotengra) not yet on the board.</p><div class="box box-blacklist"><strong>New blacklist entries this cycle</strong><ul><li>simplification preprocessing as a standalone quality lever (013)</li><li>single-shot LNS/tabu without internal restart-min — heavy-tailed variance loses scored runs (014, 016)</li></ul></div>
+<h3>Literature check</h3><p><code>sc_target = cap</code> as the operative annealing objective matches the memory-bounded practice in [kalachev_2021_multi] (β-penalty on log2(M/Mmax) overflow) — our finding sharpens it: on instances whose optimum sits near the cap, target-the-cap dominates target-a-low-sc. The five-way basin convergence at matched budget echoes the plateau behavior described in [gray_2020_hyper]'s anytime curves. No paper in <code>.knowledge/</code> reports the specific failure mode "default sc_target sabotages TreeSA on high-sc-optimum instances" — novel at the library/engineering level; the record-sized quality gains need a cotengra head-to-head before any external claim. Shelved insights: none (all Selected).</p>
+<h2>Next round</h2><p>Falsifiable hypothesis for a cycle 3, if authorized: "the 39.9/61.5 basins are near the local-search limit; breaking below requires either external reference pressure (cotengra rows may reveal deeper basins exist) or global-structure methods on sycamore's layered geometry." Sketch: (1) add cotengra SA + KaHyPar reference rows (measurement, not an attempt); (2) one improve on 015 and one on 017 (unify: population + λ-ramp, the two best-variance mechanisms); (3) repeated-scoring debug of 014 to settle its variance question; (4) a sycamore-specific draft exploiting circuit layering (cut along time slices). Abandon the move-set direction if (2) gains &lt; 0.2 on both targets — that would confirm the basin-limit hypothesis and shift effort to new instance families or to merging the finding into omeco. Also proposed for the gate: fold the <code>sc_target=cap</code> principle into the omeco library (PR to <code>treesa.rs</code>), independent of further cycles.</p>
+<footer><a href="cycle-01.html">← cycle 01</a><a href="index.html">index</a><span class="disabled">cycle 03 →</span></footer>
+</main>
+</body>
+</html>
