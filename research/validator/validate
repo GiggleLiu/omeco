@@ -206,6 +206,10 @@ def main():
     ap.add_argument("--as-reference", default=None, metavar="NAME",
                     help="record results as a trusted reference row (bootstrap; "
                          "no confirmation runs; min-of-runs kept)")
+    ap.add_argument("--targets", default=None,
+                    help="comma-separated instance names to score (default: all "
+                         "in targets dir); keeps scored runs inside the wall "
+                         "limit now that the target set has grown")
     ap.add_argument("--out", default="report.json")
     args = ap.parse_args()
 
@@ -254,8 +258,11 @@ def main():
     rng = random.Random(int.from_bytes(os.urandom(8), "big"))
     deltas = []
     rejected = False
+    wanted = set(args.targets.split(",")) if args.targets else None
     for path in sorted(TARGETS_DIR.glob("*.json")):
         name = path.stem
+        if wanted is not None and name not in wanted:
+            continue
         graph = json.load(open(path))
         remaining = WALL_LIMIT_S - (time.monotonic() - start)
         if remaining < BUDGET_MS / 1000.0 * 0.5:

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "cycle": 4,
+  "date_utc": "2026-07-22T18:52:35Z",
+  "project": "omeco beat-existing-optimizers",
+  "attempts_range": [
+    21,
+    24
+  ],
+  "attempts_remaining": 0,
+  "primary_metric": {
+    "name": "mean \u0394tc vs pre-run records",
+    "direction": "max"
+  },
+  "guard_metrics": [],
+  "bar": {
+    "value": 0.0,
+    "source": "GOAL.md v2.1 pure-tc optimization mode"
+  },
+  "best_this_cycle": -0.0308,
+  "best_prior": -0.0983,
+  "holdout": {
+    "spent": false,
+    "result": "n/a in v2"
+  },
+  "attempts": [
+    {
+      "id": 21,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "certified LB via line-graph treewidth places the reg3 frontier near optimal",
+      "primary": null,
+      "status": "no-change",
+      "causal_note": "measurement: tc >= 18 certified (minor-verified); LB tooling stalls far below structural ~34",
+      "log_path": ".worktrees/attempt-021/LOG.md"
+    },
+    {
+      "id": 22,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "line-graph tw + lattice cut arguments localize the sycamore optimum",
+      "primary": null,
+      "status": "no-change",
+      "causal_note": "measurement: optimum in [53, 61.544]; frontier width-optimal; residual 8.5 inherent to log-sum",
+      "log_path": ".worktrees/attempt-022/LOG.md"
+    },
+    {
+      "id": 23,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "agglomerative coarsen + exact super-solve escapes the plateau",
+      "primary": -0.0505,
+      "status": "no-change",
+      "causal_note": "null: exact super-trees 0.4-2.3 above plateau across ~170 coarsenings",
+      "log_path": ".worktrees/attempt-023/LOG.md"
+    },
+    {
+      "id": 24,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "geometry-aware spacetime-block coarsening + exact super-solve beats the sycamore plateau",
+      "primary": -0.0308,
+      "status": "no-change",
+      "causal_note": "null: block-internal cost dominates (block trees tc~130); mechanism cap-independent",
+      "log_path": ".worktrees/attempt-024/LOG.md"
+    }
+  ],
+  "reflection": {
+    "review": "4 of 4 planned attempts completed (2 measurement, 2 optimizer) plus the\nbudget-scaling measurement. 0 records moved; that was a possible and\ninformative outcome by design. Frontier stands at reg3_250 39.95 /\nsycamore_m20 61.544 (`ref:treesa-inf`).\n\n- 021 (measurement): certified **tc \u2265 18** for reg3_250 via a\n  minor-verified treewidth LB of the line graph (twalgor `UpLow`,\n  certificate independently checked by two exact PACE solvers). LB\n  machinery stalls far below the structural truth (tw(L) \u2208 [18, 34]).\n- 022 (measurement): sycamore_m20 optimum localized to **[53, 61.544]**:\n  rigorous balanced-cut lemma + explicit 53-wire temporal cut. Proved the\n  frontier is **width-optimal** (sc = 53 is the minimum any tree can\n  achieve; hence tw(L) = 52). Identified that ALL width/cut/treewidth\n  bounds cap at 53 \u2014 the residual 8.5 \u2248 log2(#near-max contractions) is\n  inherent to the log-sum objective and needs a sum-form bound.\n- 023 (draft, hierarchical exact, agglomerative): scored 40.024/61.571, no\n  records. Exact super-trees over ~170 coarsenings landed 0.4\u20132.3 above\n  the plateau.\n- 024 (draft, hierarchical exact, spacetime blocks): scored 39.949/61.607,\n  no records (reg3 tie to +0.001 = noise). Block trees catastrophically\n  worse (tc \u2248 130) \u2014 block-internal cost dominates before the exact top\n  level can act.\n- Budget scaling (treesa-inf, 90/300/900 s): flat within noise\n  (39.94\u219239.88\u219239.95 / 61.61\u219261.58\u219261.51). The plateau is structural, not\n  budget-limited, at these sizes.\n\nProtocol notes: 021/022 are measurement attempts \u2014 no validator scoring by\ndesign (nothing to score; they set no records); deliverables are certified\nbounds with reproducible certificates in their worktrees. 023/024 read\ncap-era protocol files (worktrees predated the v2.1 commit) and\nself-imposed the old sc caps; scored results are unaffected (their trees\nsit at the frontier under pure tc), but 023's DP pruned with a constraint\nthat no longer exists \u2014 its null is corroborated by 024's cap-independent\nmechanism, not standalone. v2.1 protocol committed mid-cycle to stop this\nclass of staleness.",
+    "evidence": "- Sycamore: optimum \u2208 [53, 61.544]; frontier width-optimal; tw(L) = 52.\n- reg3_250: tc \u2265 18 certified; structural picture 39.95 \u2248 34 + ~6.\n- Blacklist: coarsen-then-exact (023/024); width-based LB machinery as the\n  sole certification route on expander line graphs (021).\n- Plateau is budget-independent at current sizes (scaling measurement).\n- Open: the profile (sum-form) bound and profile-aware search \u2014 cycle 5.",
+    "literature": "Sum-form/isoperimetric bounds for contraction cost do not appear in the\nproject KB \u2014 [markov_2005_simulating] and the PACE line are max-form;\n[gray_2020_hyper] reports empirical plateaus without bounding them. The\nwidth-optimality proof for a Sycamore-class proxy plus the inherent-residual\nargument appears novel. 022's temporal-cut value matches the qubit-count\nintuition in the RQC simulation literature ([liu_2022_verifying] slicing\npractice). Cycle-5's profile objective has no direct antecedent in the KB.",
+    "next": "Paper-driving batch: 026 isoperimetric-profile LB (Theorem 1 + certified\nnumbers for both original targets); 027 profile-aware SA vs the\n39.95/61.544 frontier (pre-registered: any confirmed record validates the\nobjective; a null + tight LB certifies near-optimality); 028/029\nprofile-aware SA vs treesa-inf on the new large targets reg3_1000 and\nrqc_97_m24 (references being measured); 030 debug reserve. Abandon the\nprofile direction if 026's bound lands \u2264 width bound + 1 AND 027 gains\n< 0.05 \u2014 that combination would mean the profile is not the lever either."
+  },
+  "lessons": [
+    {
+      "observation": "sycamore frontier is width-optimal yet 8.5 log2 of tc sits above the width bound (reg3: ~6)",
+      "root_cause": "tc is a soft-max over ~n contractions; at the width-optimal frontier the PROFILE (count of near-max contractions) governs, and nothing existing targets or bounds it",
+      "evidence": "022 cut lemma; 61.544-53=8.5 vs log2(561)=9.1; twelve-method plateau",
+      "implication": "cycle 5: sum-form isoperimetric-profile LB + profile-aware search \u2014 the only direction with identified headroom",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "both hierarchical-exact drafts nulled with the same signature",
+      "root_cause": "any ~30-45-tensor connected cluster is itself a hard subproblem; coarsening spends the cost before exactness can act",
+      "evidence": "024 block trees tc~130 regardless of geometry; 023 excess 0.4-2.3 across all coarsenings",
+      "implication": "blacklist coarsen-then-exact on dense-width instances; exactness only below ~15 tensors",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "10x budget moved tc by <0.1 at n=250/561",
+      "root_cause": "SA converges to the width-optimal set within 90s at these sizes; the plateau is landscape structure, not schedule truncation",
+      "evidence": "scaling runs 90/300/900s flat within noise",
+      "implication": "optimizer differentiation must be tested at larger scale (reg3_1000, rqc_97_m24)",
+      "confidence": "confirmed"
+    }
+  ],
+  "blacklist_new": [
+    "coarsen-then-exact super-solve on dense-width instances (023/024)",
+    "width-based LB machinery as sole certification on expander line graphs (021: stalls at 18 vs ~34)"
+  ],
+  "insight_promotions": []
+}
