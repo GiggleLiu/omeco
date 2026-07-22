@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "cycle": 1,
+  "date_utc": "2026-07-22T12:54:22Z",
+  "project": "omeco beat-existing-optimizers",
+  "attempts_range": [
+    1,
+    10
+  ],
+  "attempts_remaining": 0,
+  "primary_metric": {
+    "name": "mean \u0394tc@budget (dev)",
+    "direction": "max"
+  },
+  "guard_metrics": [],
+  "bar": {
+    "value": 1.0,
+    "source": "GOAL.md (quality path; speed path is a per-instance parity check at T/4 \u2014 met by 004)"
+  },
+  "best_this_cycle": -0.1143,
+  "best_prior": -0.2272,
+  "holdout": {
+    "spent": true,
+    "result": "attempt-004: speed_win=true, generalization_guard=true, 15/15 pairs valid \u2014 PASS"
+  },
+  "attempts": [
+    {
+      "id": 1,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "subtree-shift move added to TreeSA local rewrites",
+      "primary": -0.4361,
+      "status": "no-change",
+      "causal_note": "reg3_250 full-budget win (+4.8) erased by sc-cap fails at reduced budgets",
+      "log_path": ".worktrees/attempt-001/LOG.md"
+    },
+    {
+      "id": 2,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "wall-clock-indexed exponential cooling + restart-from-best",
+      "primary": -0.1466,
+      "status": "no-change",
+      "causal_note": "matches baseline on small graphs; hot phase hurts large graphs at short budgets",
+      "log_path": ".worktrees/attempt-002/LOG.md"
+    },
+    {
+      "id": 3,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "best-of-N Boltzmann-randomized greedy seeds",
+      "primary": -0.4441,
+      "status": "no-change",
+      "causal_note": "strong small-budget floor; reg3_250 sc-cap fails at T/4, T/16",
+      "log_path": ".worktrees/attempt-003/LOG.md"
+    },
+    {
+      "id": 4,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "deterministic greedy cost-fn portfolio + budget-hygiene TreeSA ramp",
+      "primary": -0.1143,
+      "status": "improved",
+      "causal_note": "speed win: baseline tc within 0.3 everywhere at T/4; passed holdout",
+      "log_path": ".worktrees/attempt-004/LOG.md"
+    },
+    {
+      "id": 5,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "recursive balanced min-cut builder with Staudt injection",
+      "primary": -0.8109,
+      "status": "failed",
+      "causal_note": "expanders have no balanced separators; reg3_250 fails at all budgets",
+      "log_path": ".worktrees/attempt-005/LOG.md"
+    },
+    {
+      "id": 6,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "order-then-tree interval DP refinement",
+      "primary": -0.3633,
+      "status": "no-change",
+      "causal_note": "DP refines greedy strongly but converged TreeSA trees are already order-optimal",
+      "log_path": ".worktrees/attempt-006/LOG.md"
+    },
+    {
+      "id": 7,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "SA over elimination orders with cluster decode",
+      "primary": -2.4022,
+      "status": "failed",
+      "causal_note": "decoder's monotone merges cannot reach low-width trees; 11 non-pass",
+      "log_path": ".worktrees/attempt-007/LOG.md"
+    },
+    {
+      "id": 8,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "basin hopping: perturb best tree, cold re-anneal",
+      "primary": -0.5479,
+      "status": "no-change",
+      "causal_note": "tc 41-44 vs baseline 47 on reg3_250 when sc permits; sc-cap erased it",
+      "log_path": ".worktrees/attempt-008/LOG.md"
+    },
+    {
+      "id": 9,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "beam search with one-step lookahead",
+      "primary": -1.5411,
+      "status": "failed",
+      "causal_note": "beam diversity cannot cover expander state space; sc blow-ups on reg3",
+      "log_path": ".worktrees/attempt-009/LOG.md"
+    },
+    {
+      "id": 10,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "min-fill/min-degree elimination on the index graph",
+      "primary": -0.4437,
+      "status": "no-change",
+      "causal_note": "width minimization does not transfer to weighted total-flops tc",
+      "log_path": ".worktrees/attempt-010/LOG.md"
+    }
+  ],
+  "reflection": {
+    "review": "10 of 10 planned draft attempts implemented, prechecked, and scored (one\nscored validator run each, serial, single-threaded). 1 of 10 passed the\nGOAL.md bar: attempt-004 (greedy cost-function portfolio + budget-bug-fixed\nTreeSA ramp) achieved the **speed win** \u2014 baseline tc within 0.3 on every\ndev instance at T/4 budget \u2014 and then passed the **holdout** adjudication\n(speed_win=true, generalization_guard=true, all 15 instance\u00d7budget pairs\nvalid, including reg3_300, larger than any dev graph). Scores (mean \u0394tc,\nhigher better; baseline candidate reference \u22120.23):\n\n- 001 subtree-shift SA: \u22120.44 (reg3_250 sc-cap fails at T/4, T/16)\n- 002 wall-clock cooling: \u22120.15 (reg3_250 sc-cap fails at T/4, T/16)\n- 003 Boltzmann greedy seeds: \u22120.44 (same reg3_250 small-budget failure)\n- 004 cost-fn portfolio + fixed ramp: **\u22120.11, speed_win, PASS dev+holdout**\n- 005 min-cut builder: \u22120.81 (reg3_250 fails at all three budgets)\n- 006 order-then-tree DP: \u22120.36 (reg3_250 fails at T/16 only)\n- 007 elimination-order SA: \u22122.40 (11 non-pass incl. grid_4x4, reg3_50)\n- 008 basin hopping: \u22120.55 (reg3_250 sc-cap at all budgets)\n- 009 beam search: \u22121.54 (7 non-pass; reg3_100/250 quality + sc)\n- 010 min-fill line graph: \u22120.44 (reg3_250 small-budget failures)\n\nBudget state: 10/10 attempts used this authorization; authorized_rounds now\n0. Distance to bar: bar MET (speed path). Holdout query budget: 1/1 spent\nthis cycle (on 004, passed). No protocol overrides recorded.",
+    "evidence": "- Bar met by 004: dev speed_win + holdout speed_win with generalization\n  guard, zero errors (reports in `.worktrees/attempt-004/report*.json`).\n- Baseline budgets contain ~4\u00d7 slack (004, confirmed on holdout).\n- reg3 expanders defeat constructive methods (005/007/009 refuted) \u2014\n  blacklist: recursive bisection, elimination-order SA with\n  smallest-intermediate decode, beam search without sc-awareness.\n- Coarse SA moves (subtree-shift, basin-hop perturbation) beat baseline\n  TreeSA by 3\u20136 tc on reg3_250 at full budget (001, 008) \u2014 promoted\n  direction, blocked only by sc handling.\n- sc-cap at small budgets is the systematic killer (5 attempts) \u2014 root\n  cause identified in TreeSA's soft sc_target=20 objective.\n- Holdout: 1 query spent (004, passed). Dev-overfit risk for 004 is low \u2014\n  its mechanism (schedule hygiene) is instance-agnostic and replicated on\n  unseen sizes.",
+    "literature": "The 004 result matches the anytime-protocol point in Gray\u2013Kourtis\n[gray_2020_hyper] (optimizers should be compared as best-so-far curves, and\ndefault budgets are rarely on the knee of the curve); no paper in\n`.knowledge/` claims the specific \"TreeSA defaults overshoot 4\u00d7\" schedule\nresult for OMEinsumContractionOrders-style TreeSA, so the claim appears\nnovel at the engineering-note level, not the algorithmic level. The\n001/008 reg3_250 gains are consistent with the subtree-transfer results of\n[anon_2025_optimizing]; a quality-win write-up would need a head-to-head\nwith cotengra's SA mode (pinned, not yet run \u2014 see CATALOG.md). Shelved\ninsights: none to promote (all six were Selected).",
+    "next": "None planned \u2014 the GOAL.md bar is met and `stage` moves to `done`. If the\nuser prefers the stronger quality claim over the speed claim, re-authorize\nwith: hypothesis \"hard sc-constrained coarse-move SA (subtree-shift +\nbasin-hop) on top of 004's schedule reaches mean \u0394tc \u2265 +1.0\"; attempts:\none improve on 004 (hard sc constraint), one improve on 008 (schedule from\n004), one improve on 001 (sc constraint), plus head-to-head against pinned\ncotengra; abandon if two cycles fail to lift mean \u0394tc above +0.5."
+  },
+  "lessons": [
+    {
+      "observation": "004 passed the speed bar with baseline algorithm + scheduling hygiene; every novel draft scored below it",
+      "root_cause": "baseline TreeSA defaults overshoot: converged tc is reached in <= T/4 on all dev families, so measured budgets contain ~4x slack that only schedule hygiene can harvest",
+      "evidence": "004 per-instance table (T/4 tc == full-budget baseline on 8/9 graphs); 006 LOG (budget-bug fixes moved score more than its DP); holdout replication on unseen sizes",
+      "implication": "honest claim: TreeSA-class quality at 4x less optimizer time; the +1.0 quality bar remains the open research target",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "five SA-family attempts failed only on reg3_250 at reduced budgets, almost always via the sc-cap guard (sc 34-36 vs cap 35)",
+      "root_cause": "TreeSA's soft sc_target=20/weight-1 objective exerts no pressure near sc 33-36, so short anneals emit whatever sc the trajectory has; attempts inherited this objective",
+      "evidence": "identical failure signature across 001/002/003/008/010; 008 LOG: sc-floor tracking halved but did not eliminate violations",
+      "implication": "treat sc as a hard constraint (reject/penalize above baseline_sc+2) in any future search objective",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "all constructive drafts (005 min-cut, 007 elimination-order, 009 beam) matched TreeSA on structured graphs but lost 4-17 tc on reg3, worsening with size",
+      "root_cause": "reg3 graphs are expanders: no balanced separators, no low-width monotone construction; only iterative refinement over full trees finds their low-width structure",
+      "evidence": "005 reg3_250 tc 59 vs 47; 007 plateau 64 vs 47 at 8s; 009 66-73 vs 47 with sc blow-ups",
+      "implication": "blacklist pure constructive methods on expander-dominated suites; use at most as seeds",
+      "confidence": "confirmed"
+    },
+    {
+      "observation": "001 and 008 beat baseline by 3-6 tc on reg3_250 at full budget yet scored negative overall",
+      "root_cause": "their wins were erased by the sc-cap lesson above plus equal weighting of small-budget pairs in the mean",
+      "evidence": "001 LOG (+4.8 at T on reg3_250); 008 LOG (tc 41-44 when sc permits); validator errors confined to sc entries",
+      "implication": "quality-win path plausibly reachable: coarse-move refinement + hard sc constraint + 004's schedule \u2014 top-ranked next-cycle candidate",
+      "confidence": "confirmed"
+    }
+  ],
+  "blacklist_new": [
+    "recursive balanced bisection on random-regular (expander) instances \u2014 no balanced separators (005)",
+    "elimination-order SA with smallest-intermediate cluster decode \u2014 cannot reach low-width trees (007)",
+    "beam search without sc-awareness on expanders \u2014 state diversity insufficient, sc blow-ups (009)",
+    "pure width-minimizing elimination heuristics for weighted total-flops tc \u2014 ties at best (010)"
+  ],
+  "insight_promotions": []
+}

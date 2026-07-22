@@ -1,0 +1,48 @@
+{
+  "records": {
+    "reg3_250": {
+      "tc": 44.28546910452713,
+      "sc": 35.0,
+      "by": "ref:treesa-hygiene",
+      "date": "2026-07-22",
+      "confirmed": true
+    },
+    "sycamore_m20": {
+      "tc": 71.17074512476043,
+      "sc": 53.0,
+      "by": "ref:treesa-hygiene",
+      "date": "2026-07-22",
+      "confirmed": true
+    }
+  },
+  "reference_rows": {
+    "reg3_250": {
+      "treesa-baseline": {
+        "tc": 45.0075758016607,
+        "sc": 33.0,
+        "date": "2026-07-22"
+      },
+      "treesa-hygiene": {
+        "tc": 44.28546910452713,
+        "sc": 35.0,
+        "date": "2026-07-22"
+      }
+    },
+    "sycamore_m20": {
+      "treesa-baseline": {
+        "tc": 72.5853490895431,
+        "sc": 53.0,
+        "date": "2026-07-22"
+      },
+      "treesa-hygiene": {
+        "tc": 71.17074512476043,
+        "sc": 53.0,
+        "date": "2026-07-22"
+      }
+    }
+  },
+  "sc_cap": {
+    "reg3_250": 35.0,
+    "sycamore_m20": 55.0
+  }
+}

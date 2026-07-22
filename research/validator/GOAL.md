@@ -1,45 +1,66 @@
-# Goal — beat-existing-optimizers
+# Goal — beat-existing-optimizers (v2, optimization mode)
 
-**Publishable bar** (approved by user 2026-07-22, "either win counts"):
+**User direction (2026-07-22):** the goal is a better *algorithm*, pursued as
+open-ended optimization — no pass/fail bar. The loop maintains a list of
+candidate algorithms and targets better and better results on two fixed
+instances. Cycle 1's v1 bar (either-win) was met by a schedule-hygiene
+candidate (attempt-004); v2 is hardened so that only algorithm-level changes
+can score.
 
-A candidate optimizer PASSES iff, on the full instance suite with all guards
-satisfied, at least one of:
+## Objective
 
-- **Quality win**: mean Δtc@budget ≥ **+1.0** (log2; ≥2× fewer flops than the
-  TreeSA baseline at matched optimizer wall-clock), where the mean runs over
-  all (instance, budget) pairs with budgets T(g), T(g)/4, T(g)/16 — AND no
-  instance regresses worse than **−0.5** at full budget T(g).
-- **Speed win**: at budget T(g)/4, candidate tc is within **0.3** of the
-  baseline tc on **every** instance (finds baseline-quality trees 4× faster).
+Minimize validator-recomputed **tc** (log2 flops) on the two target
+instances in `research/benchmark/targets/`:
 
-The same bar must hold on the sealed holdout (aggregate booleans only), plus
-the generalization guard: holdout mean Δtc ≥ dev mean Δtc − 1.0.
+- `reg3_250` — random 3-regular, 250 tensors (expander; the hard dev graph)
+- `sycamore_m20` — Sycamore-m20-scale RQC proxy, 561 tensors, 963 indices
 
-Definitions: Δtc(g, b) = tc_baseline(g) − tc_candidate(g, b), tc recomputed
-by the validator's own scorer from the emitted tree (candidate numbers are
-never trusted). T(g) = measured wall-clock of baseline TreeSA (ntrials=1,
-niters=100/50, `RAYON_NUM_THREADS=1`) from `research/database/baselines.json`
-(dev) or the sealed private baselines (holdout). Budgets are floored at
-100 ms to absorb process-launch overhead. Guards (all enforced, see
-`research/topics.md`): valid-tree, sc-cap (sc ≤ baseline sc + 2), held-out
-generalization, resource-cap (single-thread wall-clock; CPU-time check),
-timeouts marked at budget × 1.05.
+at a fixed optimizer budget of **90 s per instance**, single-threaded
+(`RAYON_NUM_THREADS=1`), instance randomly relabeled per run.
 
-Failed/timeout/sc-violating (instance, budget) pairs contribute Δtc = −5.0
-to the mean; any invalid tree rejects the whole candidate.
+## Leaderboard and records
 
-## Attempt contract
+`research/validator/leaderboard.json` holds the best-known tc per instance
+(the *record*), writable only by the validator (attempts are sandbox-denied
+from `research/`). Records are seeded by reference rows measured with the
+same pipeline (best of 3 runs each):
 
-A candidate is an attempt worktree of this repo. The validator invokes:
+- `ref:treesa-baseline` — the unmodified greedy+TreeSA doubling attempt
+- `ref:treesa-hygiene` — attempt-004's schedule-hygiene variant
 
-1. `build.sh` if present, else `cargo build --release --offline --example
-   attempt -p omeco` (sandboxed, no network, 300 s).
-2. `attempt.sh <graph.json> <budget_ms> <out.json>` if present, else
-   `target/release/examples/attempt` with the same arguments — sandboxed,
-   `RAYON_NUM_THREADS=1`, killed at budget × 1.05.
+Because the hygiene reference is in the floor, schedule/parameter tuning
+gains ≈ 0 by construction; only search-mechanism changes can beat the
+record. A run beating a record by > 0.05 triggers **one confirmation run**
+(fresh relabeling); the *worse* of the two is recorded. A scored run's
+`score` = mean over instances of (pre-run record tc − candidate tc).
 
-The attempt must write its best contraction tree in omeco `writejson` format
-to `<out.json>` before the deadline (write early, improve in place —
-anytime). Instances are randomly relabeled/permuted per scored run, so
-memorized answers keyed on input content do not transfer. `validate
-<dir> --precheck` is free and unlimited; scored runs are what count.
+## Rules
+
+1. **Algorithm-level changes only**: batch planning rejects hypotheses whose
+   only change is parameters/schedules; the schedule-only control
+   (attempt-004's binary) must never set a record — it is a standing
+   negative control.
+2. Guards (all enforced as instance failure or rejection): valid tree
+   (validator recomputes tc/sc from topology; candidate numbers never
+   trusted), sc-cap (reference sc + 2 per instance), resource cap
+   (single-thread, CPU-time check), timeout at budget × 1.05, wall limit
+   300 s per scored run.
+3. Termination is the user's decision, not a threshold's.
+
+## Accepted residual risks (user-approved, 2026-07-22)
+
+- No fresh-twin / holdout guard: records on the two fixed instances may in
+  principle be achieved by instance-specific memorization or overfitting;
+  mitigations are per-run relabeling, code review of record-setting
+  attempts at cycle gates, and the confirmation-run rule.
+- References are omeco-only (no cotengra rows yet); records measure
+  progress vs omeco's own best, not external SOTA.
+
+## Attempt contract (unchanged from v1)
+
+Candidate = attempt worktree. Validator runs `build.sh` (else
+`cargo build --release --offline --example attempt -p omeco`), then
+`attempt.sh <graph.json> <budget_ms> <out.json>` (else
+`target/release/examples/attempt`), sandboxed. Write the best tree in omeco
+`writejson` format early and improve it in place (anytime). `validate
+<dir> --precheck` is free and unlimited.

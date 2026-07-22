@@ -1,6 +1,5 @@
 #!/bin/bash
-# In-process multithreaded CPU burn (models a hidden thread pool), then a
-# valid tree from the baseline binary.
+# Hidden in-process parallelism: 3 spin threads burn CPU for the entire run
+# while the baseline binary does the real work single-threaded.
 DIR="$(cd "$(dirname "$0")" && pwd)"
-"$DIR/burner"
-/Users/liujinguo/rcode/omeco/research/validator/bin/baseline_attempt "$1" "$2" "$3"
+exec "$DIR/burner2" /Users/liujinguo/rcode/omeco/research/validator/bin/baseline_attempt "$1" "$2" "$3"
