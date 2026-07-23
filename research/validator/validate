@@ -206,6 +206,8 @@ def _poll_out(op, stop_evt, t0, snapshots):
                 if h != last_hash:
                     snapshots.append((t_rel, data))
                     last_hash = h
+                    if len(snapshots) >= 128:  # bound memory on big instances
+                        del snapshots[1:-1:2]
                 last_stat = key
         except OSError:
             pass
@@ -221,9 +223,18 @@ def _poll_out(op, stop_evt, t0, snapshots):
             return
 
 
+MAX_RESCORED_SNAPSHOTS = 12  # big-instance rescoring cost cap (curves are
+                             # report-only at scale; first+last always kept)
+
+
 def anytime_curve(graph, snapshots, final_secs):
     """Rescore snapshots (skipping partial/garbage writes) into a monotone
     best-so-far curve [(t, tc, sc), ...]."""
+    if len(snapshots) > MAX_RESCORED_SNAPSHOTS:
+        n = len(snapshots)
+        idx = sorted({0, n - 1} | {round(i * (n - 1) / (MAX_RESCORED_SNAPSHOTS - 1))
+                                   for i in range(MAX_RESCORED_SNAPSHOTS)})
+        snapshots = [snapshots[i] for i in idx]
     curve = []
     best = float("inf")
     for t_rel, data in snapshots:
@@ -303,11 +314,18 @@ def run_one(candidate_dir, work_dir, name, graph, budget_ms, errors):
             "detail": f"tc={tc:.3f} sc={sc:.3f}"}
 
 
-def measure(candidate_dir, work, name, graph, budget, errors, rng, k):
+EARLY_ABORT_MARGIN = 0.5  # both first runs this far above the record -> skip run 3
+
+
+def measure(candidate_dir, work, name, graph, budget, errors, rng, k,
+            abort_above=None):
     """k independent runs (fresh relabeling each); median-tc aggregate.
 
     Returns a run_one-shaped dict; for k>1 the median run's tree/curve is the
-    representative, `all_runs` records every run, `seconds` is the total."""
+    representative, `all_runs` records every run, `seconds` is the total.
+    abort_above: if set (candidate runs only, = record tc) and the first two
+    runs both exceed it by EARLY_ABORT_MARGIN, run 3 is skipped and the
+    WORSE of the two is recorded — conservative, cannot create records."""
     runs = []
     for i in range(k):
         res = run_one(candidate_dir, work, f"{name}_r{i + 1}" if k > 1 else name,
@@ -315,6 +333,20 @@ def measure(candidate_dir, work, name, graph, budget, errors, rng, k):
         runs.append(res)
         if res["result"] == "invalid":
             return res  # cheating/contract violation: reject immediately
+        if (k == 3 and i == 1 and abort_above is not None
+                and all(r["result"] == "ok"
+                        and r["tc"] > abort_above + EARLY_ABORT_MARGIN
+                        for r in runs)):
+            worse = max(runs, key=lambda r: r["tc"])
+            agg = dict(worse)
+            agg["detail"] = (f"early-abort worse-of-2 tc={worse['tc']:.3f} "
+                             f"(both runs > record+{EARLY_ABORT_MARGIN}; "
+                             f"run 3 skipped)")
+            agg["all_runs"] = [{"result": r["result"], "tc": r.get("tc"),
+                                "sc": r.get("sc"),
+                                "seconds": round(r["seconds"], 3)} for r in runs]
+            agg["seconds"] = sum(r["seconds"] for r in runs)
+            return agg
     if k == 1:
         return runs[0]
     tcs = sorted((r["tc"] if r["result"] == "ok" else float("inf"), i)
@@ -436,7 +468,10 @@ def main():
                                    "BUDGET_MS"})
             break
         budget = min(BUDGET_MS, remaining * 1000.0 / GRACE / k)
-        res = measure(candidate_dir, work, name, graph, budget, errors, rng, k)
+        pre_rec = lb["records"].get(name)
+        res = measure(candidate_dir, work, name, graph, budget, errors, rng, k,
+                      abort_above=(pre_rec["tc"] if pre_rec and not args.as_reference
+                                   else None))
         entry = {"instance": name, "result": res["result"],
                  "seconds": round(res["seconds"], 3), "detail": res["detail"]}
         if "all_runs" in res:
