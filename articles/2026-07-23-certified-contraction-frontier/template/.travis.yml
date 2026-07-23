@@ -1,0 +1,56 @@
+# Unfortunately, the version of LaTeX that ships on Ubuntu 12.04 (Precise)
+# comes with a *very* old {hyperref} that is incompatabile with several
+# other packages that we depend on.
+sudo: required
+dist: trusty
+
+addons:
+    apt:
+        packages:
+        - texlive-fonts-recommended
+        - texlive-fonts-extra
+        - texlive-latex-recommended
+        - texlive-latex-extra
+        # texlive-bibtex-extra contains the multibib package which is used by
+        # the quantum-bibliographystyle-demo.
+        - texlive-bibtex-extra
+        # Some of the additional packages we depend on,
+        # such as {ltxgrid}, are shipped with the "publishers"
+        # Ubuntu package.
+        - texlive-publishers
+        # {tikz} and PGF are supported by two packages in Trusty.
+        - pgf
+        - texlive-pictures
+        # {xcolor} is required to make the Quantum purple color.
+        - latex-xcolor
+        # {quantumarticle} additionally requires either lmodern or cm-super.
+        # We go with cm-super here due to issues with fonts-lmodern raising
+        # apt errors.
+        - cm-super
+script:
+    # Test whether the template compiles.
+    - pdflatex -interaction=nonstopmode -halt-on-error quantum-template.tex
+    - pdflatex -interaction=nonstopmode -halt-on-error quantum-template.tex
+    # Test whether the view template compiles.
+    - pdflatex -interaction=nonstopmode -halt-on-error quantumview-template.tex
+    - bibtex quantumview-template
+    - pdflatex -interaction=nonstopmode -halt-on-error quantumview-template.tex
+    # Test whether the bst demo compiles.
+    - pdflatex -interaction=nonstopmode -halt-on-error quantum-bibliographystyle-demo.tex
+    # For multibib, bibtex is called on the sub-bib files.
+    - bibtex article
+    - bibtex book
+    - bibtex misc
+    - bibtex repo
+    - bibtex web
+    - bibtex other
+    - pdflatex -interaction=nonstopmode -halt-on-error quantum-bibliographystyle-demo.tex
+    # Test whether the installer works.
+    - bash install.sh
+    # Test whether the template compiles against the installed version.
+    - mkdir _build
+    - cd _build
+    - cp ../quantum-template.tex .
+    - cp ../example-plot.pdf .
+    - pdflatex -interaction=nonstopmode -halt-on-error quantum-template.tex
+    - pdflatex -interaction=nonstopmode -halt-on-error quantum-template.tex
