@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>omeco beat-existing-optimizers — autoresearch cycles</title>
+<title>omeco beat-existing-optimizers — cycle 06</title>
 <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
@@ -75,10 +75,21 @@ footer .disabled { color: #c3c2b7; }
 </head>
 <body>
 <main>
-<h1>omeco beat-existing-optimizers — autoresearch cycles</h1>
-<p class="meta">6 cycles · 30 attempts ·
-14 blacklisted approaches · best mean Δtc vs pre-run records
-6.786 vs bar 0</p>
+<h1>omeco beat-existing-optimizers — cycle 06</h1>
+<p class="meta">attempts 031–031 · 2026-07-23 00:00:00 UTC
+· attempts remaining after this cycle: 0</p>
+<div class="kpis">
+<div class="kpi"><div class="kpi-label">best mean Δtc vs pre-run records this cycle</div>
+<div class="kpi-value">—</div><div class="kpi-note"><span class="delta-flat">no scored attempt</span></div></div>
+<div class="kpi"><div class="kpi-label">bar (GOAL.md v2.1 pure-tc optimization mode)</div>
+<div class="kpi-value">0</div><div class="kpi-note"><strong>bar met</strong></div></div>
+<div class="kpi"><div class="kpi-label">yield</div>
+<div class="kpi-value">0/1</div><div class="kpi-note">attempts improved</div></div>
+<div class="kpi"><div class="kpi-label">holdout</div>
+<div class="kpi-value">—</div>
+<div class="kpi-note">not spent this cycle</div></div>
+</div>
+<h2>Review — what we did</h2>
 <div class="card">
 <figure><figcaption>best-so-far mean Δtc vs pre-run records by cycle
 (higher is better; dashed line = bar)</figcaption>
@@ -112,26 +123,35 @@ footer .disabled { color: #c3c2b7; }
 <text x="633.0" y="25.8" dominant-baseline="middle" fill="#0b0b0b" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">6.786</text>
 </svg>
 </figure>
+
 </div>
-<div class="scroll">
-<table><thead><tr><th>cycle</th><th>date</th><th class="num">attempts</th>
-<th class="num">yield</th><th class="num">best</th><th>holdout</th>
-<th>next</th></tr></thead><tbody><tr><td><a href="cycle-01.html">cycle 01</a></td><td>2026-07-22</td><td class="num">001–010</td><td class="num">1/10</td><td class="num">-0.1143</td><td>spent</td><td class="hyp">None planned — the GOAL.md bar is met and stage moves to done.</td></tr><tr><td><a href="cycle-02.html">cycle 02</a></td><td>2026-07-22</td><td class="num">011–018</td><td class="num">4/8</td><td class="num">6.786</td><td>—</td><td class="hyp">Falsifiable hypothesis for a cycle 3, if authorized: &quot;the 39.9/61.5 basins
-are near the local-search limit; breaking below requires either external
-reference pressure (cotengra rows may reveal deeper basins exist) or
-global-structure methods on sycamore&#x27;s layered geometry.&quot; Sketch: (1) add
-cotengra SA + KaHyPar reference rows (measurement, not an attempt); (2)
-one improve on 015 and one on 017 (unify: population + λ-ramp, the two
-best-variance mechanisms); (3) repeated-scoring debug of 014 to settle its
-variance question; (4) a sycamore-specific draft exploiting circuit
-layering (cut along time slices).</td></tr><tr><td><a href="cycle-03.html">cycle 03</a></td><td>2026-07-22</td><td class="num">019–020</td><td class="num">0/2</td><td class="num">-0.0983</td><td>—</td><td class="hyp">Hypothesis: the 39.95/61.54 frontier is near-optimal; certified lower
-bounds will show a gap &lt; 1 log2.</td></tr><tr><td><a href="cycle-04.html">cycle 04</a></td><td>2026-07-22</td><td class="num">021–024</td><td class="num">0/4</td><td class="num">-0.0308</td><td>—</td><td class="hyp">Paper-driving batch: 026 isoperimetric-profile LB (Theorem 1 + certified
-numbers for both original targets); 027 profile-aware SA vs the
-39.95/61.544 frontier (pre-registered: any confirmed record validates the
-objective; a null + tight LB certifies near-optimality); 028/029
-profile-aware SA vs treesa-inf on the new large targets reg31000 and
-rqc97m24 (references being measured); 030 debug reserve.</td></tr><tr><td><a href="cycle-05.html">cycle 05</a></td><td>2026-07-22</td><td class="num">026–030</td><td class="num">0/5</td><td class="num">-0.1086</td><td>—</td><td class="hyp">None authorized.</td></tr><tr><td><a href="cycle-06.html">cycle 06</a></td><td>2026-07-23</td><td class="num">031–031</td><td class="num">0/1</td><td class="num">—</td><td>—</td><td class="hyp">None planned.</td></tr></tbody></table>
-</div>
+<div class="scroll"><table class="attempts"><thead><tr><th>id</th><th>kind</th><th>hypothesis</th><th class="num">mean Δtc vs pre-run records</th><th>status</th><th>causal note</th></tr></thead><tbody><tr class="prior"><td class="idcell">026</td><td colspan="5">ancestor from an earlier cycle — this batch builds on it below</td></tr><tr><td class="idcell"><span style="padding-left:16px">└ </span><a href="../../.worktrees/attempt-031/LOG.md">031</a></td><td><span class="badge kind-improve">improve</span></td><td class="hyp">the dyadic-window balance-constrained bound is the first to exceed the max-form cap</td><td class="num">—</td><td><span class="chip st-neutral">no-change</span></td><td class="hyp">refuted with proof: all profile-based bounds cap at bisection width (b(141)&lt;=40 certificate); carving-width is the right bound type</td></tr></tbody></table><p class="note">Grouped by lineage: └ rows build on the attempt above; grey rows are earlier-cycle ancestors. Best row shaded. Direction: higher is better. Attempt ids link to the worktree LOG.md (may dangle if pruned).</p></div>
+<p>Single-attempt cycle: 031 (improve, parent 026) formalized, proved, and measured the balance-constrained dyadic-window profile bound. Hypothesis REFUTED decisively: the bound does not exceed the max-form cap on either instance (sycamore HC path-DP 47.0 vs cap 53; reg3 30.3 vs 30). The theorem itself is correct (validated on 3000 random trees; path-DP matches brute force at n=4..9); the refutation is structural, not computational.</p>
+<h2>Lessons we learnt</h2>
+<div class="lessons"><div class="lesson">
+<p class="lesson-obs">all profile-based relaxations land at or below bisection width, below the carving cap <span class="conf conf-confirmed">confirmed</span></p>
+<dl>
+<dt>root cause</dt><dd>log-sum-exp collapse (sum adds &lt;= log2 J over max term) + off-center profile dips (size-141 boundary-40 certificate); joint nested-cut structure is invisible to per-size minima</dd>
+<dt>evidence</dt><dd>031 THEOREM2.md proofs + triple-verified cut certificates; validated on 3000 random trees</dd>
+<dt>implication</dt><dd>b(k) bound family closed with an impossibility observation; certified interval remains [53, 61.544] via the carving argument</dd>
+</dl>
+</div></div>
+<h3>Evidence carried forward</h3>
+<ul>
+<li>Theory package complete: Theorem 1 (sum-form, proven, collapses),</li>
+</ul>
+<p>Theorem 2 (dyadic-window, proven, collapses), impossibility observation (profile bounds ≤ bisection width), carving bound 53 (022), frontier width-optimality (022), profile conservation at the frontier (027).</p>
+<ul>
+<li>b(141) ≤ 40 certificate corrects an assumption from 022's analysis:</li>
+</ul>
+<p>temporal slabs dominate only near balance.</p>
+<ul>
+<li>Research program status: optimizer directions closed (cycles 2–5);</li>
+</ul>
+<p>bound directions closed (026, 031); the write-up is the remaining work.</p><div class="box box-blacklist"><strong>New blacklist entries this cycle</strong><ul><li>any bound computed from the isoperimetric profile b(k) alone — provably capped at bisection width (031)</li></ul></div>
+<h3>Literature check</h3><p>Profile-vs-carving separation for contraction-cost bounds appears novel; carving-width connections exist in the graph-minors literature but not applied to log-sum contraction cost in the project KB. Nothing to add.</p>
+<h2>Next round</h2><p>None planned. Recommendation: proceed to write-up (paper-writer). The paper: certification arc (width-optimality, [53, 61.544], profile conservation, impossibility of profile-based improvement) + the sc_target discovery and library fix + the methodology narrative (three instrument-caught failure modes across six cycles).</p>
+<footer><a href="cycle-05.html">← cycle 05</a><a href="index.html">index</a><span class="disabled">cycle 07 →</span></footer>
 </main>
 </body>
 </html>

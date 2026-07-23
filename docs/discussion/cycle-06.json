@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "cycle": 6,
+  "date_utc": "2026-07-23T00:00:00Z",
+  "project": "omeco beat-existing-optimizers",
+  "attempts_range": [
+    31,
+    31
+  ],
+  "attempts_remaining": 0,
+  "primary_metric": {
+    "name": "mean \u0394tc vs pre-run records",
+    "direction": "max"
+  },
+  "guard_metrics": [],
+  "bar": {
+    "value": 0.0,
+    "source": "GOAL.md v2.1 pure-tc optimization mode"
+  },
+  "best_this_cycle": null,
+  "best_prior": -0.1086,
+  "holdout": {
+    "spent": false,
+    "result": "n/a in v2"
+  },
+  "attempts": [
+    {
+      "id": 31,
+      "kind": "improve",
+      "parent": 26,
+      "hypothesis": "the dyadic-window balance-constrained bound is the first to exceed the max-form cap",
+      "primary": null,
+      "status": "no-change",
+      "causal_note": "refuted with proof: all profile-based bounds cap at bisection width (b(141)<=40 certificate); carving-width is the right bound type",
+      "log_path": ".worktrees/attempt-031/LOG.md"
+    }
+  ],
+  "reflection": {
+    "review": "Single-attempt cycle: 031 (improve, parent 026) formalized, proved, and\nmeasured the balance-constrained dyadic-window profile bound. Hypothesis\nREFUTED decisively: the bound does not exceed the max-form cap on either\ninstance (sycamore HC path-DP 47.0 vs cap 53; reg3 30.3 vs 30). The\ntheorem itself is correct (validated on 3000 random trees; path-DP matches\nbrute force at n=4..9); the refutation is structural, not computational.",
+    "evidence": "- Theory package complete: Theorem 1 (sum-form, proven, collapses),\n  Theorem 2 (dyadic-window, proven, collapses), impossibility observation\n  (profile bounds \u2264 bisection width), carving bound 53 (022), frontier\n  width-optimality (022), profile conservation at the frontier (027).\n- b(141) \u2264 40 certificate corrects an assumption from 022's analysis:\n  temporal slabs dominate only near balance.\n- Research program status: optimizer directions closed (cycles 2\u20135);\n  bound directions closed (026, 031); the write-up is the remaining work.",
+    "literature": "Profile-vs-carving separation for contraction-cost bounds appears novel;\ncarving-width connections exist in the graph-minors literature but not\napplied to log-sum contraction cost in the project KB. Nothing to add.",
+    "next": "None planned. Recommendation: proceed to write-up (paper-writer). The\npaper: certification arc (width-optimality, [53, 61.544], profile\nconservation, impossibility of profile-based improvement) + the sc_target\ndiscovery and library fix + the methodology narrative (three\ninstrument-caught failure modes across six cycles)."
+  },
+  "lessons": [
+    {
+      "observation": "all profile-based relaxations land at or below bisection width, below the carving cap",
+      "root_cause": "log-sum-exp collapse (sum adds <= log2 J over max term) + off-center profile dips (size-141 boundary-40 certificate); joint nested-cut structure is invisible to per-size minima",
+      "evidence": "031 THEOREM2.md proofs + triple-verified cut certificates; validated on 3000 random trees",
+      "implication": "b(k) bound family closed with an impossibility observation; certified interval remains [53, 61.544] via the carving argument",
+      "confidence": "confirmed"
+    }
+  ],
+  "blacklist_new": [
+    "any bound computed from the isoperimetric profile b(k) alone \u2014 provably capped at bisection width (031)"
+  ],
+  "insight_promotions": []
+}
