@@ -14,6 +14,14 @@ seeded by reference rows (baseline TreeSA and the schedule-hygiene variant
 from attempt-004), so schedule/parameter-only changes gain ~0 by
 construction — only algorithm-level changes move the record.
 
+ANYTIME MODE (v2.2, 2026-07-23): the harness polls the anytime out.json on
+its own clock during every run, rescores each distinct snapshot from
+topology, and reports the tc(t) curve, tc@{1,3,10,30}s, and TTF — the first
+time the run is within TTF_EPS of the instance's pre-run tc record. A
+per-instance TTF leaderboard (anytime_records) runs alongside the tc
+records with the same confirm-twice / worse-of-two protocol; a TTF claim
+needs a >=20% speedup. Candidate-declared timestamps are never consulted.
+
 Environment: fallback (no Docker) — sandbox-exec denies network and the
 research/ tree is write-denied to attempts; wall-clock and CPU-time caps
 enforced by this harness. Instances are randomly relabeled per run.
@@ -32,6 +40,7 @@ import resource
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 VALIDATOR_DIR = pathlib.Path(__file__).resolve().parent
@@ -49,6 +58,20 @@ GRACE = 1.05
 RECORD_EPS = 0.05  # minimum improvement to claim a record
 WALL_LIMIT_S = 300  # STATE.md time_limit_seconds per scored run
 FAIL_DELTA = -5.0  # delta contribution of a failed/timeout instance
+
+# ---- v2.2 anytime mode (2026-07-23) ----
+# The attempt contract already requires best-so-far writes to out.json; the
+# harness polls that file on ITS OWN clock (candidate-declared times are never
+# consulted, so checkpoint backdating is impossible by construction), rescores
+# every distinct snapshot from topology, and derives the anytime curve.
+# TTF (time-to-frontier) = first harness time at which the rescored tc is
+# within TTF_EPS of the instance's pre-run record tc. TTF records use the same
+# confirm-twice / worse-of-two protocol as tc records; a claim needs a
+# TTF_RECORD_FACTOR speedup over the standing TTF record.
+POLL_S = 0.2
+TTF_EPS = 0.15
+TTF_RECORD_FACTOR = 0.8  # new ttf must be < record_ttf * factor
+TC_AT_CHECKPOINTS = [1.0, 3.0, 10.0, 30.0]
 
 
 def log(*a):
@@ -143,6 +166,54 @@ def attempt_cmd(candidate_dir, graph_path, budget_ms, out_path):
     return [str(binp), str(graph_path), str(int(budget_ms)), str(out_path)]
 
 
+def _poll_out(op, stop_evt, t0, snapshots):
+    """Harness-clock poller: capture every distinct byte-state of the anytime
+    output file as (t_rel_seconds, bytes). Candidate timestamps are ignored."""
+    last_stat = None
+    last_hash = None
+    while True:
+        try:
+            st = op.stat()
+            key = (st.st_size, st.st_mtime_ns)
+            if key != last_stat:
+                t_rel = time.monotonic() - t0
+                data = op.read_bytes()
+                h = hashlib.sha256(data).hexdigest()
+                if h != last_hash:
+                    snapshots.append((t_rel, data))
+                    last_hash = h
+                last_stat = key
+        except OSError:
+            pass
+        if stop_evt.wait(POLL_S):
+            # one final pass after process exit so the last write is captured
+            try:
+                data = op.read_bytes()
+                h = hashlib.sha256(data).hexdigest()
+                if h != last_hash:
+                    snapshots.append((time.monotonic() - t0, data))
+            except OSError:
+                pass
+            return
+
+
+def anytime_curve(graph, snapshots, final_secs):
+    """Rescore snapshots (skipping partial/garbage writes) into a monotone
+    best-so-far curve [(t, tc, sc), ...]."""
+    curve = []
+    best = float("inf")
+    for t_rel, data in snapshots:
+        try:
+            c_tc, c_sc, _ = score_tree(graph, json.loads(data))
+        except (TreeError, ValueError, KeyError, TypeError, OSError):
+            continue
+        if c_tc < best - 1e-9:
+            best = c_tc
+            curve.append({"t": round(min(t_rel, final_secs), 3),
+                          "tc": round(c_tc, 4), "sc": round(c_sc, 3)})
+    return curve
+
+
 def run_one(candidate_dir, work_dir, name, graph, budget_ms, errors):
     inst_dir = work_dir / f"{name}_{int(budget_ms)}_{int(time.monotonic()*1e3)}"
     inst_dir.mkdir(parents=True, exist_ok=True)
@@ -151,9 +222,17 @@ def run_one(candidate_dir, work_dir, name, graph, budget_ms, errors):
     op = inst_dir / "tree.json"
     deadline = max(budget_ms * GRACE / 1000.0, 0.2)
     cpu0 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    snapshots = []
+    stop_evt = threading.Event()
+    poller = threading.Thread(target=_poll_out,
+                              args=(op, stop_evt, time.monotonic(), snapshots),
+                              daemon=True)
+    poller.start()
     rc, err, secs, timed_out = run_sandboxed(
         attempt_cmd(candidate_dir, gp, budget_ms, op),
         candidate_dir, work_dir, deadline)
+    stop_evt.set()
+    poller.join(timeout=5)
     cpu1 = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu_used = (cpu1.ru_utime + cpu1.ru_stime) - (cpu0.ru_utime + cpu0.ru_stime)
     if cpu_used > secs * 1.3 + 0.2:
@@ -196,7 +275,26 @@ def run_one(candidate_dir, work_dir, name, graph, budget_ms, errors):
                        "hint": "emit omeco writejson format"})
         return {"result": "invalid", "seconds": secs, "detail": f"bad json: {ex}"}
     return {"result": "ok", "seconds": secs, "tc": tc, "sc": sc,
+            "curve": anytime_curve(graph, snapshots, secs),
             "detail": f"tc={tc:.3f} sc={sc:.3f}"}
+
+
+def ttf_of(curve, frontier_tc):
+    """First harness time within TTF_EPS of the frontier tc, else None."""
+    if frontier_tc == float("inf"):
+        return None
+    for pt in curve:
+        if pt["tc"] <= frontier_tc + TTF_EPS:
+            return pt["t"]
+    return None
+
+
+def tc_at_of(curve):
+    out = {}
+    for ckpt in TC_AT_CHECKPOINTS:
+        vals = [pt["tc"] for pt in curve if pt["t"] <= ckpt]
+        out[str(ckpt)] = min(vals) if vals else None
+    return out
 
 
 def main():
@@ -291,8 +389,17 @@ def main():
         rec = lb["records"].get(name)
         rec_tc = rec["tc"] if rec else float("inf")
         delta = (rec_tc - tc) if rec else 0.0
+        # v2.2: anytime metrics — frontier is the PRE-RUN tc record.
+        curve = res.get("curve", [])
+        ttf = ttf_of(curve, rec_tc)
+        art = lb.setdefault("anytime_records", {})
+        arec = art.get(name)
+        arec_ttf = arec["ttf"] if arec else float("inf")
         entry["result"] = "pass"
-        entry["detail"] += f" record={rec_tc if rec else 'none'} delta={delta:+.3f}"
+        entry["anytime"] = {"ttf": ttf, "tc_at": tc_at_of(curve), "curve": curve}
+        entry["detail"] += (f" record={rec_tc if rec else 'none'} delta={delta:+.3f}"
+                            f" ttf={f'{ttf:.1f}s' if ttf is not None else 'inf'}"
+                            f"/{f'{arec_ttf:.1f}s' if arec else 'none'}")
         deltas.append(delta)  # vs pre-run record; positive = beat the record
         # ---- record logic ----
         if args.as_reference:
@@ -301,6 +408,11 @@ def main():
             if prev is None or tc < prev["tc"]:
                 row[args.as_reference] = {"tc": tc, "sc": sc,
                                           "date": time.strftime("%Y-%m-%d")}
+            arow = lb.setdefault("anytime_reference_rows", {}).setdefault(name, {})
+            aprev = arow.get(args.as_reference)
+            if ttf is not None and (aprev is None or ttf < aprev["ttf"]):
+                arow[args.as_reference] = {"ttf": round(ttf, 3),
+                                           "date": time.strftime("%Y-%m-%d")}
             if rec is None or tc < rec_tc:
                 lb["records"][name] = {"tc": tc, "sc": sc,
                                        "by": f"ref:{args.as_reference}",
@@ -308,30 +420,61 @@ def main():
                                        "confirmed": True}
                 report["record_updates"].append(
                     {"instance": name, "tc": tc, "by": f"ref:{args.as_reference}"})
-        elif rec is not None and tc < rec_tc - RECORD_EPS:
-            remaining = WALL_LIMIT_S - (time.monotonic() - start)
-            if remaining > budget / 1000.0 * 0.5:
-                confirm = run_one(candidate_dir, work, name + "_confirm",
-                                  permute_instance(graph, rng),
-                                  min(budget, remaining * 1000.0 / GRACE), errors)
-                if confirm["result"] == "ok":
-                    worse = max(tc, confirm["tc"])
-                    if worse < rec_tc - RECORD_EPS:
-                        lb["records"][name] = {"tc": worse, "sc": max(sc, confirm["sc"]),
-                                               "by": str(candidate_dir.name),
-                                               "date": time.strftime("%Y-%m-%d"),
-                                               "confirmed": True}
-                        report["record_updates"].append(
-                            {"instance": name, "tc": worse,
-                             "by": candidate_dir.name, "confirmed": True})
-                        entry["detail"] += f" NEW RECORD {worse:.3f} (confirmed)"
+            if ttf is not None and (arec is None or ttf < arec_ttf):
+                art[name] = {"ttf": round(ttf, 3), "by": f"ref:{args.as_reference}",
+                             "date": time.strftime("%Y-%m-%d"), "confirmed": True}
+                report["record_updates"].append(
+                    {"instance": name, "ttf": round(ttf, 3),
+                     "by": f"ref:{args.as_reference}"})
+        else:
+            tc_claim = rec is not None and tc < rec_tc - RECORD_EPS
+            # first-ever TTF (arec None -> arec_ttf inf) is claimable too;
+            # the confirmation run still applies.
+            ttf_claim = ttf is not None and ttf < arec_ttf * TTF_RECORD_FACTOR
+            if tc_claim or ttf_claim:
+                remaining = WALL_LIMIT_S - (time.monotonic() - start)
+                if remaining > budget / 1000.0 * 0.5:
+                    confirm = run_one(candidate_dir, work, name + "_confirm",
+                                      permute_instance(graph, rng),
+                                      min(budget, remaining * 1000.0 / GRACE), errors)
+                    if confirm["result"] == "ok":
+                        if tc_claim:
+                            worse = max(tc, confirm["tc"])
+                            if worse < rec_tc - RECORD_EPS:
+                                lb["records"][name] = {
+                                    "tc": worse, "sc": max(sc, confirm["sc"]),
+                                    "by": str(candidate_dir.name),
+                                    "date": time.strftime("%Y-%m-%d"),
+                                    "confirmed": True}
+                                report["record_updates"].append(
+                                    {"instance": name, "tc": worse,
+                                     "by": candidate_dir.name, "confirmed": True})
+                                entry["detail"] += f" NEW RECORD {worse:.3f} (confirmed)"
+                            else:
+                                entry["detail"] += (f" record claim not confirmed "
+                                                    f"(confirm tc={confirm['tc']:.3f})")
+                        if ttf_claim:
+                            c_ttf = ttf_of(confirm.get("curve", []), rec_tc)
+                            worse_ttf = max(ttf, c_ttf) if c_ttf is not None else None
+                            if (worse_ttf is not None
+                                    and worse_ttf < arec_ttf * TTF_RECORD_FACTOR):
+                                art[name] = {"ttf": round(worse_ttf, 3),
+                                             "by": str(candidate_dir.name),
+                                             "date": time.strftime("%Y-%m-%d"),
+                                             "confirmed": True}
+                                report["record_updates"].append(
+                                    {"instance": name, "ttf": round(worse_ttf, 3),
+                                     "by": candidate_dir.name, "confirmed": True})
+                                entry["detail"] += (f" NEW TTF RECORD {worse_ttf:.1f}s "
+                                                    "(confirmed)")
+                            else:
+                                entry["detail"] += (" ttf claim not confirmed "
+                                                    f"(confirm ttf="
+                                                    f"{c_ttf if c_ttf is not None else 'inf'})")
                     else:
-                        entry["detail"] += (f" record claim not confirmed "
-                                            f"(confirm tc={confirm['tc']:.3f})")
+                        entry["detail"] += " record claim: confirmation run failed"
                 else:
-                    entry["detail"] += " record claim: confirmation run failed"
-            else:
-                entry["detail"] += " record claim: unconfirmed (wall limit)"
+                    entry["detail"] += " record claim: unconfirmed (wall limit)"
         report["per_instance"].append(entry)
 
     if rejected:

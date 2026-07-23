@@ -1,14 +1,14 @@
 {
   "records": {
     "reg3_250": {
-      "tc": 39.95029599283971,
+      "tc": 39.883325463011175,
       "sc": 34.0,
       "by": "ref:treesa-inf",
       "date": "2026-07-23",
       "confirmed": true
     },
     "sycamore_m20": {
-      "tc": 61.54428977050287,
+      "tc": 61.521961122584145,
       "sc": 53.0,
       "by": "ref:treesa-inf",
       "date": "2026-07-23",
@@ -32,7 +32,7 @@
   "reference_rows": {
     "reg3_250": {
       "treesa-inf": {
-        "tc": 39.95029599283971,
+        "tc": 39.883325463011175,
         "sc": 34.0,
         "date": "2026-07-23"
       },
@@ -49,7 +49,7 @@
     },
     "sycamore_m20": {
       "treesa-inf": {
-        "tc": 61.54428977050287,
+        "tc": 61.521961122584145,
         "sc": 53.0,
         "date": "2026-07-23"
       },
@@ -79,5 +79,37 @@
       }
     }
   },
-  "sc_cap": {}
+  "sc_cap": {},
+  "anytime_records": {
+    "reg3_250": {
+      "ttf": 20.195,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "sycamore_m20": {
+      "ttf": 39.641,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    }
+  },
+  "anytime_reference_rows": {
+    "reg3_250": {
+      "treesa-inf": {
+        "ttf": 20.195,
+        "date": "2026-07-23"
+      },
+      "cotengra-sa": {
+        "ttf": 62.716,
+        "date": "2026-07-23"
+      }
+    },
+    "sycamore_m20": {
+      "treesa-inf": {
+        "ttf": 39.641,
+        "date": "2026-07-23"
+      }
+    }
+  }
 }

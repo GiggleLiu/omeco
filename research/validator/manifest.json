@@ -132,8 +132,15 @@
         }
       }
     },
-    "note": "re-run after scorer recursion-limit fix (attempt-029 discovery: default limit rejected valid deep trees); iterative leaf walk added"
+    "note": "re-run after scorer recursion-limit fix (attempt-029 discovery: default limit rejected valid deep trees); iterative leaf walk added",
+    "anytime_v22": {
+      "date": "2026-07-23",
+      "unit_tests": "anytime_curve skips partial/garbage snapshots and builds monotone curve; ttf_of band + inf-frontier cases; tc_at_of step semantics — all passed",
+      "live_test": "treesa-inf re-measured with polling: reg3_250 8-point monotone curve, ttf=20.2s seeded; sycamore run correctly yielded ttf=None (band not reached, no row) — poller and scoring verified end-to-end",
+      "anti_backdating": "TTF timestamps are harness-clock poll times of out.json byte-changes; candidate-declared times never read — backdating impossible by construction",
+      "memorization_risk": "instant replay of a stored tree would set TTF~0; inherits accepted no-twins override; mitigations: per-run relabeling + mandatory code review of record-setting attempts at the cycle gate"
+    }
   },
-  "version": 2,
-  "mode": "optimization/leaderboard (v2, user-directed 2026-07-22): no pass/fail; minimize tc on two fixed targets; records in leaderboard.json seeded by best-of-3 reference runs (treesa-baseline, treesa-hygiene); record claims need a confirmation run, worse-of-two recorded"
+  "version": 2.2,
+  "mode": "optimization/leaderboard (v2, user-directed 2026-07-22): no pass/fail; minimize tc on two fixed targets; records in leaderboard.json seeded by best-of-3 reference runs (treesa-baseline, treesa-hygiene); record claims need a confirmation run, worse-of-two recorded. v2.2 (2026-07-23): anytime axis — harness-clocked tc(t) curves, TTF leaderboard (anytime_records) with the same confirmation protocol; see GOAL.md v2.2"
 }

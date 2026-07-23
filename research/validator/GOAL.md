@@ -65,6 +65,31 @@ Candidate = attempt worktree. Validator runs `build.sh` (else
 `writejson` format early and improve it in place (anytime). `validate
 <dir> --precheck` is free and unlimited.
 
+## v2.2 (2026-07-23) — anytime axis (time-to-frontier)
+
+User direction ("push towards a better algorithm ... worth publication"),
+grounded in the topic's own definition: an algorithm wins by better tc *or
+by reaching the same tc faster*. Cycles 1–5 established that final tc at
+90 s is saturated (13 mechanisms, 2 toolchains, budget-independent); the
+open axis is *when* the frontier is reached.
+
+- The harness polls the anytime `out.json` on **its own clock** during every
+  run (candidate-declared times are never consulted; backdating is
+  impossible by construction), rescores each distinct snapshot from
+  topology, and derives the monotone tc(t) curve.
+- **TTF** (time-to-frontier) per instance = first harness time at which the
+  rescored tc ≤ pre-run tc record + 0.15 (the 0.15 band covers observed
+  run-to-run spread of frontier-quality trees).
+- `anytime_records` in the leaderboard holds the best confirmed TTF per
+  instance, seeded from re-measured references (`treesa-inf`,
+  `cotengra-sa`). A TTF claim needs a ≥20% speedup and passes the same
+  confirmation-run / worse-of-two protocol; secondary reporting:
+  tc@{1,3,10,30} s.
+- Memorization risk (a candidate that recognizes the fixed instance and
+  replays a stored tree instantly) inherits the accepted no-twins override;
+  mitigations unchanged: per-run relabeling and mandatory code review of
+  any record-setting attempt at the cycle gate.
+
 ## v2.1 (2026-07-23) — pure-tc objective
 
 User direction: ignore sc entirely — minimize tc only, sc unbounded. The
