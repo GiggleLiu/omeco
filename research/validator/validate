@@ -22,6 +22,13 @@ per-instance TTF leaderboard (anytime_records) runs alongside the tc
 records with the same confirm-twice / worse-of-two protocol; a TTF claim
 needs a >=20% speedup. Candidate-declared timestamps are never consulted.
 
+SCALE MODE (v2.3, 2026-07-23): the scale instances (reg3_1000, rqc_97_m24)
+are ALWAYS scored as the median of 3 independent runs (fresh relabeling
+each; failures count +inf), because single-run variance at n >= 1000
+exceeds real method differences. `--scale` selects them as default targets;
+runs touching a scale instance use a 1200 s wall limit. TTF records are
+primaries-only (scale curves report-only).
+
 Environment: fallback (no Docker) — sandbox-exec denies network and the
 research/ tree is write-denied to attempts; wall-clock and CPU-time caps
 enforced by this harness. Instances are randomly relabeled per run.
@@ -72,6 +79,17 @@ POLL_S = 0.2
 TTF_EPS = 0.15
 TTF_RECORD_FACTOR = 0.8  # new ttf must be < record_ttf * factor
 TC_AT_CHECKPOINTS = [1.0, 3.0, 10.0, 30.0]
+
+# ---- v2.3 scale mode (2026-07-23, user-approved) ----
+# At n >= 1000 single-run variance (+/-1-5 log2) exceeds real method
+# differences (cycle-5 finding), so scale instances are ALWAYS scored as the
+# MEDIAN of 3 independent runs (fresh relabeling each; a failed run counts as
+# +inf, so any failure pushes the median up). Runs touching a scale instance
+# get a raised wall limit. TTF records/claims are disabled on scale instances
+# (report-only) — the anytime board stays a primary-instance metric.
+SCALE_INSTANCES = {"reg3_1000", "rqc_97_m24"}
+SCALE_RUNS = 3
+SCALE_WALL_LIMIT_S = 1200
 
 
 def log(*a):
@@ -279,6 +297,34 @@ def run_one(candidate_dir, work_dir, name, graph, budget_ms, errors):
             "detail": f"tc={tc:.3f} sc={sc:.3f}"}
 
 
+def measure(candidate_dir, work, name, graph, budget, errors, rng, k):
+    """k independent runs (fresh relabeling each); median-tc aggregate.
+
+    Returns a run_one-shaped dict; for k>1 the median run's tree/curve is the
+    representative, `all_runs` records every run, `seconds` is the total."""
+    runs = []
+    for i in range(k):
+        res = run_one(candidate_dir, work, f"{name}_r{i + 1}" if k > 1 else name,
+                      permute_instance(graph, rng), budget, errors)
+        runs.append(res)
+        if res["result"] == "invalid":
+            return res  # cheating/contract violation: reject immediately
+    if k == 1:
+        return runs[0]
+    tcs = sorted((r["tc"] if r["result"] == "ok" else float("inf"), i)
+                 for i, r in enumerate(runs))
+    med_tc, med_i = tcs[len(tcs) // 2]
+    if med_tc == float("inf"):
+        return next(r for r in runs if r["result"] != "ok")
+    med = dict(runs[med_i])
+    spread = ", ".join(f"{t:.3f}" if t != float("inf") else "fail" for t, _ in tcs)
+    med["detail"] = f"median-of-{k} tc={med_tc:.3f} sc={med['sc']:.3f} (runs: {spread})"
+    med["all_runs"] = [{"result": r["result"], "tc": r.get("tc"), "sc": r.get("sc"),
+                        "seconds": round(r["seconds"], 3)} for r in runs]
+    med["seconds"] = sum(r["seconds"] for r in runs)
+    return med
+
+
 def ttf_of(curve, frontier_tc):
     """First harness time within TTF_EPS of the frontier tc, else None."""
     if frontier_tc == float("inf"):
@@ -308,6 +354,10 @@ def main():
                     help="comma-separated instance names to score (default: all "
                          "in targets dir); keeps scored runs inside the wall "
                          "limit now that the target set has grown")
+    ap.add_argument("--scale", action="store_true",
+                    help="score the scale instances (default targets = "
+                         "reg3_1000,rqc_97_m24); scale instances always use "
+                         "median-of-3 runs and the raised wall limit")
     ap.add_argument("--out", default="report.json")
     args = ap.parse_args()
 
@@ -357,24 +407,34 @@ def main():
     deltas = []
     rejected = False
     wanted = set(args.targets.split(",")) if args.targets else None
+    if args.scale and wanted is None:
+        wanted = set(SCALE_INSTANCES)
+    target_names = [p.stem for p in sorted(TARGETS_DIR.glob("*.json"))
+                    if wanted is None or p.stem in wanted]
+    wall_limit = (SCALE_WALL_LIMIT_S
+                  if any(n in SCALE_INSTANCES for n in target_names)
+                  else WALL_LIMIT_S)
     for path in sorted(TARGETS_DIR.glob("*.json")):
         name = path.stem
         if wanted is not None and name not in wanted:
             continue
         graph = json.load(open(path))
-        remaining = WALL_LIMIT_S - (time.monotonic() - start)
-        if remaining < BUDGET_MS / 1000.0 * 0.5:
+        is_scale = name in SCALE_INSTANCES
+        k = SCALE_RUNS if is_scale else 1
+        remaining = wall_limit - (time.monotonic() - start)
+        if remaining < BUDGET_MS / 1000.0 * 0.5 * k:
             errors.append({"where": name,
-                           "what": f"scored-run wall limit {WALL_LIMIT_S}s exhausted "
+                           "what": f"scored-run wall limit {wall_limit}s exhausted "
                                    "before this instance",
                            "hint": "raise time_limit_seconds in STATE.md or lower "
                                    "BUDGET_MS"})
             break
-        budget = min(BUDGET_MS, remaining * 1000.0 / GRACE)
-        res = run_one(candidate_dir, work, name, permute_instance(graph, rng),
-                      budget, errors)
+        budget = min(BUDGET_MS, remaining * 1000.0 / GRACE / k)
+        res = measure(candidate_dir, work, name, graph, budget, errors, rng, k)
         entry = {"instance": name, "result": res["result"],
                  "seconds": round(res["seconds"], 3), "detail": res["detail"]}
+        if "all_runs" in res:
+            entry["all_runs"] = res["all_runs"]
         if res["result"] == "invalid":
             rejected = True
             report["per_instance"].append(entry)
@@ -410,7 +470,8 @@ def main():
                                           "date": time.strftime("%Y-%m-%d")}
             arow = lb.setdefault("anytime_reference_rows", {}).setdefault(name, {})
             aprev = arow.get(args.as_reference)
-            if ttf is not None and (aprev is None or ttf < aprev["ttf"]):
+            if (ttf is not None and not is_scale
+                    and (aprev is None or ttf < aprev["ttf"])):
                 arow[args.as_reference] = {"ttf": round(ttf, 3),
                                            "date": time.strftime("%Y-%m-%d")}
             if rec is None or tc < rec_tc:
@@ -420,7 +481,8 @@ def main():
                                        "confirmed": True}
                 report["record_updates"].append(
                     {"instance": name, "tc": tc, "by": f"ref:{args.as_reference}"})
-            if ttf is not None and (arec is None or ttf < arec_ttf):
+            if (ttf is not None and not is_scale
+                    and (arec is None or ttf < arec_ttf)):
                 art[name] = {"ttf": round(ttf, 3), "by": f"ref:{args.as_reference}",
                              "date": time.strftime("%Y-%m-%d"), "confirmed": True}
                 report["record_updates"].append(
@@ -429,14 +491,15 @@ def main():
         else:
             tc_claim = rec is not None and tc < rec_tc - RECORD_EPS
             # first-ever TTF (arec None -> arec_ttf inf) is claimable too;
-            # the confirmation run still applies.
-            ttf_claim = ttf is not None and ttf < arec_ttf * TTF_RECORD_FACTOR
+            # the confirmation run still applies. TTF claims are primaries-only.
+            ttf_claim = (ttf is not None and not is_scale
+                         and ttf < arec_ttf * TTF_RECORD_FACTOR)
             if tc_claim or ttf_claim:
-                remaining = WALL_LIMIT_S - (time.monotonic() - start)
-                if remaining > budget / 1000.0 * 0.5:
-                    confirm = run_one(candidate_dir, work, name + "_confirm",
-                                      permute_instance(graph, rng),
-                                      min(budget, remaining * 1000.0 / GRACE), errors)
+                remaining = wall_limit - (time.monotonic() - start)
+                if remaining > budget / 1000.0 * 0.5 * k:
+                    confirm = measure(candidate_dir, work, name + "_confirm", graph,
+                                      min(budget, remaining * 1000.0 / GRACE / k),
+                                      errors, rng, k)
                     if confirm["result"] == "ok":
                         if tc_claim:
                             worse = max(tc, confirm["tc"])

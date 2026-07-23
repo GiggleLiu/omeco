@@ -4,8 +4,8 @@
 - topic: beat-existing-optimizers  # slug of the chosen topic once stage >= db
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
-- authorized_rounds: 1     # cycles the loop may run without user review
-- next_attempt: 32         # next .worktrees/attempt-NNN number
+- authorized_rounds: 3     # cycle 7 (in flight) + cycles 8-9 (user: "Yes, 2 rounds", 2026-07-23)
+- next_attempt: 34         # next .worktrees/attempt-NNN number (032/033 in cycle 7)
 - next_cycle: 7            # next reflection cycle number
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
@@ -33,3 +33,11 @@
     lottery). Memorization risk on TTF inherits the accepted "no twins"
     override; mitigations unchanged (per-run relabeling, code review of
     record-setters).
+  - 2026-07-23: cycle 8-9 authorized (user selected scale axis + "propose new
+    algorithms"; 2 rounds). Validator v2.3: scale instances (reg3_1000,
+    rqc_97_m24) scored as MEDIAN-OF-3 independent runs (cycle-5 lesson:
+    single-run variance exceeds method differences at n>=1000); scale scored
+    runs get a raised wall limit (1200 s) to fit 3x90 s per instance —
+    user-approved deviation from the 300 s limit for scale mode only.
+    Planned batch: 034 multilevel V-cycle, 035 racing portfolio, 036 deep
+    seed + cold refine + window-exact repair.
