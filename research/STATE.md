@@ -5,7 +5,9 @@
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
 - authorized_rounds: 2     # cycles 8-9 (user: "Yes, 2 rounds"); cycle 7 reflected 2026-07-24
-- next_attempt: 37         # next .worktrees/attempt-NNN number
+- next_attempt: 47         # next .worktrees/attempt-NNN number (user expanded
+                           # cycle-8 batch: "launch 10 more trials", 2026-07-24
+                           # -> attempts 034-046 in flight)
 - next_cycle: 8            # next reflection cycle number
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
