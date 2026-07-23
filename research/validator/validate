@@ -43,12 +43,12 @@ import math
 import os
 import pathlib
 import random
-import resource
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 VALIDATOR_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = VALIDATOR_DIR.parent.parent
@@ -91,6 +91,11 @@ SCALE_INSTANCES = {"reg3_1000", "rqc_97_m24", "sycamore_53_20_0",
                    "surfacecode_d21", "ksg", "nqueens_28"}
 SCALE_RUNS = 3
 SCALE_WALL_LIMIT_S = 2400
+# v2.4: scale instances are measured in parallel lanes (per-child CPU
+# accounting via os.wait4). Primaries stay serial so TTF timing is never
+# contended. Contended candidate runs vs quiet-seeded reference rows is
+# conservative for record claims.
+LANES = 4
 # Default target groups: a bare scored run covers the primaries; --scale
 # covers a 4-instance cross-family scale group that fits the wall with room
 # for confirmation runs (other instances remain selectable via --targets).
@@ -114,20 +119,60 @@ def sandbox_profile(candidate_dir, work_dir):
 
 
 def run_sandboxed(cmd, candidate_dir, work_dir, timeout_s, env=None):
-    prof = work_dir / "profile.sb"
+    """Run a sandboxed child; lane-safe (v2.4).
+
+    Returns (rc, stderr_tail, wall_secs, timed_out, child_cpu_secs). CPU time
+    comes from the child's own os.wait4 rusage (covers the child and its
+    reaped descendants), so concurrent lanes account independently. stderr is
+    redirected to a file — chatty candidates cannot deadlock a pipe."""
+    tag = f"{threading.get_ident()}_{int(time.monotonic() * 1e3) % 10 ** 9}"
+    prof = work_dir / f"profile_{tag}.sb"
     prof.write_text(sandbox_profile(candidate_dir, work_dir))
+    errf = work_dir / f"stderr_{tag}.log"
     full = ["/usr/bin/sandbox-exec", "-f", str(prof)] + cmd
     e = dict(os.environ)
     e.update(env or {})
     e["RAYON_NUM_THREADS"] = "1"
     start = time.monotonic()
+    with open(errf, "wb") as ef:
+        p = subprocess.Popen(full, cwd=candidate_dir, env=e,
+                             stdout=subprocess.DEVNULL, stderr=ef)
+        timed_out = False
+        ru = None
+        status = 0
+        while True:
+            try:
+                pid, status, ru = os.wait4(p.pid, os.WNOHANG)
+            except ChildProcessError:
+                pid = p.pid  # already reaped (shouldn't happen; be safe)
+                break
+            if pid == p.pid:
+                break
+            if time.monotonic() - start > timeout_s:
+                p.kill()
+                timed_out = True
+                try:
+                    pid, status, ru = os.wait4(p.pid, 0)
+                except ChildProcessError:
+                    pass
+                break
+            time.sleep(0.05)
+    if os.WIFEXITED(status):
+        rc = os.WEXITSTATUS(status)
+    elif os.WIFSIGNALED(status):
+        rc = -os.WTERMSIG(status)
+    else:
+        rc = -1
+    p.returncode = rc  # mark reaped so Popen's destructor doesn't waitpid again
+    secs = time.monotonic() - start
+    cpu = (ru.ru_utime + ru.ru_stime) if ru is not None else 0.0
     try:
-        p = subprocess.run(full, cwd=candidate_dir, env=e, timeout=timeout_s,
-                           capture_output=True, text=True)
-        return p.returncode, (p.stderr or "")[-2000:], time.monotonic() - start, False
-    except subprocess.TimeoutExpired as ex:
-        stderr = ex.stderr.decode() if isinstance(ex.stderr, bytes) else (ex.stderr or "")
-        return -9, stderr[-2000:], time.monotonic() - start, True
+        stderr_tail = errf.read_bytes()[-2000:].decode(errors="replace")
+    except OSError:
+        stderr_tail = ""
+    if timed_out:
+        rc = -9
+    return rc, stderr_tail, secs, timed_out, cpu
 
 
 def permute_instance(graph, rng):
@@ -172,7 +217,7 @@ def build_candidate(candidate_dir, work_dir, errors):
     else:
         cmd = ["/bin/bash", "-c",
                "cargo build --release --offline --example attempt -p omeco"]
-    rc, err, secs, to = run_sandboxed(cmd, candidate_dir, work_dir, 300)
+    rc, err, secs, to, _cpu = run_sandboxed(cmd, candidate_dir, work_dir, 300)
     if to or rc != 0:
         errors.append({"where": "build",
                        "what": f"build {'timed out' if to else f'failed rc={rc}'} "
@@ -256,20 +301,17 @@ def run_one(candidate_dir, work_dir, name, graph, budget_ms, errors):
     json.dump(graph, open(gp, "w"))
     op = inst_dir / "tree.json"
     deadline = max(budget_ms * GRACE / 1000.0, 0.2)
-    cpu0 = resource.getrusage(resource.RUSAGE_CHILDREN)
     snapshots = []
     stop_evt = threading.Event()
     poller = threading.Thread(target=_poll_out,
                               args=(op, stop_evt, time.monotonic(), snapshots),
                               daemon=True)
     poller.start()
-    rc, err, secs, timed_out = run_sandboxed(
+    rc, err, secs, timed_out, cpu_used = run_sandboxed(
         attempt_cmd(candidate_dir, gp, budget_ms, op),
         candidate_dir, work_dir, deadline)
     stop_evt.set()
     poller.join(timeout=5)
-    cpu1 = resource.getrusage(resource.RUSAGE_CHILDREN)
-    cpu_used = (cpu1.ru_utime + cpu1.ru_stime) - (cpu0.ru_utime + cpu0.ru_stime)
     if cpu_used > secs * 1.3 + 0.2:
         errors.append({"where": f"{name}@{int(budget_ms)}ms",
                        "what": f"resource-cap guard: CPU time {cpu_used:.2f}s > "
@@ -452,26 +494,50 @@ def main():
     wall_limit = (SCALE_WALL_LIMIT_S
                   if any(n in SCALE_INSTANCES for n in target_names)
                   else WALL_LIMIT_S)
+    # ---- phase 1: measurements; scale instances run in parallel lanes ----
+    jobs = []
     for path in sorted(TARGETS_DIR.glob("*.json")):
         name = path.stem
-        if wanted is not None and name not in wanted:
+        if name not in wanted:
             continue
-        graph = json.load(open(path))
-        is_scale = name in SCALE_INSTANCES
-        k = SCALE_RUNS if is_scale else 1
+        jobs.append((name, json.load(open(path)), name in SCALE_INSTANCES))
+
+    def _measure_job(name, graph, k, budget):
+        pre = lb["records"].get(name)
+        jrng = random.Random(int.from_bytes(os.urandom(8), "big"))
+        return measure(candidate_dir, work, name, graph, budget, errors, jrng, k,
+                       abort_above=(pre["tc"] if pre and not args.as_reference
+                                    else None))
+
+    results = {}
+    lane_jobs = [(n, g) for n, g, s in jobs if s]
+    if lane_jobs:
+        with ThreadPoolExecutor(max_workers=min(LANES, len(lane_jobs))) as ex:
+            futs = {ex.submit(_measure_job, n, g, SCALE_RUNS, BUDGET_MS): n
+                    for n, g in lane_jobs}
+            for f in futs:
+                results[futs[f]] = f.result()
+    for name, graph, is_scale in jobs:
+        if is_scale:
+            continue
         remaining = wall_limit - (time.monotonic() - start)
-        if remaining < BUDGET_MS / 1000.0 * 0.5 * k:
+        if remaining < BUDGET_MS / 1000.0 * 0.5:
             errors.append({"where": name,
                            "what": f"scored-run wall limit {wall_limit}s exhausted "
                                    "before this instance",
                            "hint": "raise time_limit_seconds in STATE.md or lower "
                                    "BUDGET_MS"})
             break
-        budget = min(BUDGET_MS, remaining * 1000.0 / GRACE / k)
-        pre_rec = lb["records"].get(name)
-        res = measure(candidate_dir, work, name, graph, budget, errors, rng, k,
-                      abort_above=(pre_rec["tc"] if pre_rec and not args.as_reference
-                                   else None))
+        results[name] = _measure_job(name, graph, 1,
+                                     min(BUDGET_MS, remaining * 1000.0 / GRACE))
+
+    # ---- phase 2: leaderboard / record processing, in instance order ----
+    for name, graph, is_scale in jobs:
+        if name not in results:
+            continue
+        res = results[name]
+        k = SCALE_RUNS if is_scale else 1
+        budget = BUDGET_MS
         entry = {"instance": name, "result": res["result"],
                  "seconds": round(res["seconds"], 3), "detail": res["detail"]}
         if "all_runs" in res:
