@@ -648,6 +648,93 @@ pub fn optimize_treesa<L: Label>(
     ))
 }
 
+/// Warm-start context for driving a simulated-annealing loop from a seed tree.
+///
+/// Produced by [`prepare_warm_anneal`]. Holds the mutable [`ExprTree`] together
+/// with the label inverse map (`labels`, id → label), per-id `log2_sizes`, and
+/// the edge count `nedge` needed to build a [`ScratchSpace`]. This lets a caller
+/// (e.g. an example binary) run its own wall-clock-indexed anneal loop over the
+/// public `expr_tree` utilities and convert back with [`warm_exprtree_to_nested`].
+pub struct WarmAnnealCtx<L: Label> {
+    /// The seed tree as a mutable expression tree.
+    pub tree: ExprTree,
+    /// Inverse label map: integer id → original label.
+    pub labels: Vec<L>,
+    /// `log2` of each label's dimension, indexed by integer id.
+    pub log2_sizes: Vec<f64>,
+    /// Number of unique edge labels (bitset capacity for [`ScratchSpace`]).
+    pub nedge: usize,
+}
+
+/// Convert a seed [`NestedEinsum`] into a [`WarmAnnealCtx`] for warm-start SA.
+///
+/// Returns `None` if the seed is a bare leaf (nothing to anneal) or conversion
+/// fails. The resulting [`ExprTree`] carries no cached complexity, so the public
+/// `tree_complexity` recomputes exactly after each in-place mutation.
+///
+/// # Example
+///
+/// ```
+/// use omeco::{EinCode, GreedyMethod, optimize_code};
+/// use omeco::treesa::prepare_warm_anneal;
+/// use std::collections::HashMap;
+///
+/// let code = EinCode::new(
+///     vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+///     vec!['i', 'l'],
+/// );
+/// let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 8), ('l', 4)].into();
+/// let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+/// let ctx = prepare_warm_anneal(&code, &sizes, &seed).unwrap();
+/// assert_eq!(ctx.tree.leaf_count(), 3);
+/// ```
+pub fn prepare_warm_anneal<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    seed: &NestedEinsum<L>,
+) -> Option<WarmAnnealCtx<L>> {
+    let (label_map, labels) = build_label_map(code);
+    let nedge = labels.len();
+    let log2_sizes: Vec<f64> = labels
+        .iter()
+        .map(|l| (size_dict[l] as f64).log2())
+        .collect();
+    let tree = nested_to_expr_tree_inner(seed, &label_map)?;
+    Some(WarmAnnealCtx {
+        tree,
+        labels,
+        log2_sizes,
+        nedge,
+    })
+}
+
+/// Convert an annealed [`ExprTree`] back into a [`NestedEinsum`].
+///
+/// `labels` is the inverse map from [`WarmAnnealCtx`]; the root output is set to
+/// `code.iy` verbatim (issue #13). Inverse of [`prepare_warm_anneal`].
+///
+/// # Example
+///
+/// ```
+/// use omeco::{EinCode, GreedyMethod, optimize_code};
+/// use omeco::treesa::{prepare_warm_anneal, warm_exprtree_to_nested};
+/// use std::collections::HashMap;
+///
+/// let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+/// let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 4)].into();
+/// let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+/// let ctx = prepare_warm_anneal(&code, &sizes, &seed).unwrap();
+/// let back = warm_exprtree_to_nested(&ctx.tree, &code, &ctx.labels);
+/// assert_eq!(back.leaf_count(), 2);
+/// ```
+pub fn warm_exprtree_to_nested<L: Label>(
+    tree: &ExprTree,
+    code: &EinCode<L>,
+    labels: &[L],
+) -> NestedEinsum<L> {
+    expr_tree_to_nested(tree, &code.ixs, labels, &code.iy, 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
