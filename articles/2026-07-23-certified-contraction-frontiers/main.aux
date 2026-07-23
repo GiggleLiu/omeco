@@ -30,24 +30,24 @@
 \@writefile{toc}{\contentsline {paragraph}{Protocol.}{2}{section*.2}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {3}A mis-set default dominates all algorithmic effects}{2}{section.3}\protected@file@percent }
 \newlabel{sec:sctarget}{{3}{2}{A mis-set default dominates all algorithmic effects}{section.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Thirteen mechanisms, two toolchains, one frontier}{2}{section.4}\protected@file@percent }
-\newlabel{sec:frontier}{{4}{2}{Thirteen mechanisms, two toolchains, one frontier}{section.4}{}}
 \citation{gray_2020_hyper}
 \citation{markov_2005_simulating}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Best $\ensuremath  {\mathrm  {tc}}$ reached in 90\,s of single-threaded annealing versus the memory target $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}$ (median of three runs; whiskers span the range). The dashed line marks the frontier value of Sec.~\ref {sec:frontier}; the dotted vertical line marks the natural space cost of optimum-quality trees. Left of that line, quality degrades steeply; at and beyond it, including $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}=\infty $, the frontier is reached. The shipped default is $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}=20$.}}{3}{figure.1}\protected@file@percent }
-\newlabel{fig:sweep}{{1}{3}{Best $\tc $ reached in 90\,s of single-threaded annealing versus the memory target $\scT $ (median of three runs; whiskers span the range). The dashed line marks the frontier value of Sec.~\ref {sec:frontier}; the dotted vertical line marks the natural space cost of optimum-quality trees. Left of that line, quality degrades steeply; at and beyond it, including $\scT =\infty $, the frontier is reached. The shipped default is $\scT =20$}{figure.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5}Certified bounds: width-optimality, the interval, and an impossibility result}{3}{section.5}\protected@file@percent }
-\newlabel{sec:bounds}{{5}{3}{Certified bounds: width-optimality, the interval, and an impossibility result}{section.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Max-form bounds and width-optimality of the frontier}{3}{subsection.5.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Best $\ensuremath  {\mathrm  {tc}}$ reached in 90\,s of single-threaded annealing versus the memory target $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}$ (median of three runs; whiskers span the range). The dashed line marks the frontier value of Sec.~\ref {sec:frontier}; the dotted vertical line marks the natural space cost of optimum-quality trees. The transition is a cliff at the natural value: every smaller target is comparably harmful, and every target at or above it, including $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}=\infty $, reaches the frontier. The shipped default is $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}=20$.}}{3}{figure.1}\protected@file@percent }
+\newlabel{fig:sweep}{{1}{3}{Best $\tc $ reached in 90\,s of single-threaded annealing versus the memory target $\scT $ (median of three runs; whiskers span the range). The dashed line marks the frontier value of Sec.~\ref {sec:frontier}; the dotted vertical line marks the natural space cost of optimum-quality trees. The transition is a cliff at the natural value: every smaller target is comparably harmful, and every target at or above it, including $\scT =\infty $, reaches the frontier. The shipped default is $\scT =20$}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Thirteen mechanisms, two toolchains, one frontier}{3}{section.4}\protected@file@percent }
+\newlabel{sec:frontier}{{4}{3}{Thirteen mechanisms, two toolchains, one frontier}{section.4}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Distance of every scored optimizer from the frontier value (dashed line at zero). Open triangles: the thirteen search mechanisms of this work. Filled symbols: the corrected TreeSA reference ($\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}=\infty $, circle), cotengra's SA refiner (diamond), cotengra's hyper-optimizer (square), and the shipped-default TreeSA (cross).}}{4}{figure.2}\protected@file@percent }
 \newlabel{fig:frontier}{{2}{4}{Distance of every scored optimizer from the frontier value (dashed line at zero). Open triangles: the thirteen search mechanisms of this work. Filled symbols: the corrected TreeSA reference ($\scT =\infty $, circle), cotengra's SA refiner (diamond), cotengra's hyper-optimizer (square), and the shipped-default TreeSA (cross)}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Certified bounds: width-optimality, the interval, and an impossibility result}{4}{section.5}\protected@file@percent }
+\newlabel{sec:bounds}{{5}{4}{Certified bounds: width-optimality, the interval, and an impossibility result}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Max-form bounds and width-optimality of the frontier}{4}{subsection.5.1}\protected@file@percent }
 \newlabel{eq:interval}{{2}{4}{Max-form bounds and width-optimality of the frontier}{equation.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Sum-form bounds and their collapse}{4}{subsection.5.2}\protected@file@percent }
-\newlabel{thm:sum}{{1}{4}{Sum-form profile bound}{theorem.1}{}}
-\newlabel{thm:window}{{2}{4}{Dyadic-window bound}{theorem.2}{}}
 \citation{gray_2020_hyper}
 \@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Lower-bound ladder for both instances. Solid stems with circles are certified (machine-checkable certificates); dashed stems with squares are high-confidence empirical values (explicit cuts found by search; searching harder can only lower them). Every profile-based bound (Theorems~\ref {thm:sum} and \ref {thm:window}) is capped at the bisection width (dotted line, Observation~\ref {obs:cap}); only the balanced/carving cut exceeds it. The solid vertical line is the optimizer frontier.}}{5}{figure.3}\protected@file@percent }
 \newlabel{fig:bounds}{{3}{5}{Lower-bound ladder for both instances. Solid stems with circles are certified (machine-checkable certificates); dashed stems with squares are high-confidence empirical values (explicit cuts found by search; searching harder can only lower them). Every profile-based bound (Theorems~\ref {thm:sum} and \ref {thm:window}) is capped at the bisection width (dotted line, Observation~\ref {obs:cap}); only the balanced/carving cut exceeds it. The solid vertical line is the optimizer frontier}{figure.3}{}}
+\newlabel{thm:sum}{{1}{5}{Sum-form profile bound}{theorem.1}{}}
+\newlabel{thm:window}{{2}{5}{Dyadic-window bound}{theorem.2}{}}
 \newlabel{obs:cap}{{1}{5}{Profile bounds are capped at the bisection width}{observation.1}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {6}Where scale changes the game}{5}{section.6}\protected@file@percent }
 \newlabel{sec:scale}{{6}{5}{Where scale changes the game}{section.6}{}}
@@ -55,15 +55,15 @@
 \newlabel{fig:profiles}{{4}{6}{Isoperimetric profiles. The empirical profile $b(k)$ (solid) dips well below the bisection width (dotted) at off-center sizes; the certified star marks the 141-tensor sycamore\_m20 subset with boundary exactly 40. The spectral bound (dashed) is certified but loose. This dip is what caps all profile-based bounds (Observation~\ref {obs:cap})}{figure.4}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {7}Methodology: a research loop that distrusts itself}{6}{section.7}\protected@file@percent }
 \newlabel{sec:method}{{7}{6}{Methodology: a research loop that distrusts itself}{section.7}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusions}{6}{section.8}\protected@file@percent }
-\newlabel{sec:conclusions}{{8}{6}{Conclusions}{section.8}{}}
 \bibstyle{plain}
 \bibdata{references}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Cost-profile conservation at the frontier. Bars count contractions within $1.0$ (solid) and $2.0$ (hatched) of the largest; boxes give each tree's peak cost and $\ensuremath  {\mathrm  {tc}}$. Trees that lower the peak by one unit acquire several times more near-peak contractions at essentially unchanged $\ensuremath  {\mathrm  {tc}}$.}}{7}{figure.5}\protected@file@percent }
+\newlabel{fig:conservation}{{5}{7}{Cost-profile conservation at the frontier. Bars count contractions within $1.0$ (solid) and $2.0$ (hatched) of the largest; boxes give each tree's peak cost and $\tc $. Trees that lower the peak by one unit acquire several times more near-peak contractions at essentially unchanged $\tc $}{figure.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusions}{7}{section.8}\protected@file@percent }
+\newlabel{sec:conclusions}{{8}{7}{Conclusions}{section.8}{}}
 \bibcite{anon_2025_optimizing}{1}
 \bibcite{dumitrescu_2018_benchmarking}{2}
 \bibcite{gray_2020_hyper}{3}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Cost-profile conservation at the frontier. Bars count contractions within $1.0$ (solid) and $2.0$ (hatched) of the largest; boxes give each tree's peak cost and $\ensuremath  {\mathrm  {tc}}$. Trees that lower the peak by one unit acquire several times more near-peak contractions at essentially unchanged $\ensuremath  {\mathrm  {tc}}$.}}{7}{figure.5}\protected@file@percent }
-\newlabel{fig:conservation}{{5}{7}{Cost-profile conservation at the frontier. Bars count contractions within $1.0$ (solid) and $2.0$ (hatched) of the largest; boxes give each tree's peak cost and $\tc $. Trees that lower the peak by one unit acquire several times more near-peak contractions at essentially unchanged $\tc $}{figure.5}{}}
 \bibcite{ibrahim_2022_constructing}{4}
 \bibcite{kalachev_2021_multi}{5}
 \bibcite{liu_2022_verifying}{6}
@@ -71,10 +71,10 @@
 \bibcite{orgler_2024_optimizing}{8}
 \bibcite{pfeifer_2013_faster}{9}
 \bibcite{staudt_2024_improved}{10}
-\bibcite{strasser_2017_computing}{11}
-\bibcite{tamaki_2017_positive}{12}
 \@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces (a) Converged regime: the frontier on both benchmark instances is unchanged from 90 to 900 seconds. (b) Non-converged regime (reg3\_1000): anytime curves of the restart-ladder reference versus a single continuous anneal; early and late quality trade off, and run-to-run variance (not shown) exceeds the differences.}}{8}{figure.6}\protected@file@percent }
 \newlabel{fig:scale}{{6}{8}{(a) Converged regime: the frontier on both benchmark instances is unchanged from 90 to 900 seconds. (b) Non-converged regime (reg3\_1000): anytime curves of the restart-ladder reference versus a single continuous anneal; early and late quality trade off, and run-to-run variance (not shown) exceeds the differences}{figure.6}{}}
+\bibcite{strasser_2017_computing}{11}
+\bibcite{tamaki_2017_positive}{12}
 \@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Best verified $\ensuremath  {\mathrm  {tc}}$ over the six research-loop cycles. Apparent progress in cycle~2 is reclaimed by the strengthened reference (cycle~2.5); thereafter the frontier is flat while the certified picture (bounds, impossibility) grows. Annotations mark the three instrument-caught failure modes.}}{9}{figure.7}\protected@file@percent }
 \newlabel{fig:timeline}{{7}{9}{Best verified $\tc $ over the six research-loop cycles. Apparent progress in cycle~2 is reclaimed by the strengthened reference (cycle~2.5); thereafter the frontier is flat while the certified picture (bounds, impossibility) grows. Annotations mark the three instrument-caught failure modes}{figure.7}{}}
 \gdef \@abspage@last{9}

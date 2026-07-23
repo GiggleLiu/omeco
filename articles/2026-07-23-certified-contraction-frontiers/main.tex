@@ -151,23 +151,33 @@ high-flop region of tree space.
 
 Figure~\ref{fig:sweep} shows the resulting $\tc$ at a fixed 90-second
 budget as a function of $\scT$. \textbf{This figure is our first main
-result:} lowering $\scT$ below the natural space cost of good trees
-degrades $\tc$ steeply, while raising it---all the way to
-$\scT=\infty$, i.e., deleting the memory objective---costs nothing. The
-harm is one-directional. At the shipped default the damage is $4.3$
-$\log_2$ units on reg3\_250 and $9.7$ on sycamore\_m20: a $20\times$ and
-$800\times$ flop overhead, recovered by a one-line change. An ablation
-within one of our search mechanisms confirms the attribution: holding
-everything else fixed and moving the penalty target to the natural space
-cost moved reg3\_250 from $\tc=56.8$ to $40.0$, while that mechanism's
-novel component contributed $0.002$.
+result}, and the transition it reveals is a cliff, not a slope: every
+target below the natural space cost of good trees is roughly equally
+harmful (medians $45.6$--$47.0$ on reg3\_250, $71$--$77$ on
+sycamore\_m20), quality snaps to the frontier exactly at the natural
+value ($\scT = 34$ and $53$), and stays there unchanged through
+$\scT=\infty$, i.e., with the memory objective deleted. The harm is
+strictly one-directional. Two finer observations: targets just
+\emph{below} the natural value are the worst on sycamore\_m20 (median
+$77.0$ at $\scT=50$, versus $72.1$ at the shipped default of 20),
+consistent with the penalty being most active precisely near the
+boundary it cannot reach; and the natural-value target itself slightly
+outperforms $\scT=\infty$ there ($61.51$ versus $61.67$, non-overlapping
+ranges over three runs), so a correctly set finite target is never worse
+than none. At the shipped default the damage is $4.3$ $\log_2$ units on
+reg3\_250 and $9.7$ on sycamore\_m20: a $20\times$ and $800\times$ flop
+overhead, recovered by a one-line change. An ablation within one of our
+search mechanisms confirms the attribution: holding everything else
+fixed and moving the penalty target to the natural space cost moved
+reg3\_250 from $\tc=56.8$ to $40.0$, while that mechanism's novel
+component contributed $0.002$.
 
 The practical rule is: \emph{never anneal toward a memory target below
-the natural space cost of good trees; in the absence of a real memory
-budget, use no target at all.} The corresponding fix (default
-$\scT=\infty$, with finite values only when a physical memory budget is
-supplied) applies to omeco and, we expect, upstream implementations
-sharing the default.
+the natural space cost of good trees; absent a physical memory budget,
+use the natural value or no target at all.} The corresponding fix
+(default $\scT=\infty$, with finite values only when a real memory
+budget is supplied) applies to omeco and, we expect, upstream
+implementations sharing the default.
 
 \begin{figure}[t]
   \centering
@@ -176,9 +186,10 @@ sharing the default.
   the memory target $\scT$ (median of three runs; whiskers span the
   range). The dashed line marks the frontier value of
   Sec.~\ref{sec:frontier}; the dotted vertical line marks the natural
-  space cost of optimum-quality trees. Left of that line, quality
-  degrades steeply; at and beyond it, including $\scT=\infty$, the
-  frontier is reached. The shipped default is $\scT=20$.}
+  space cost of optimum-quality trees. The transition is a cliff at the
+  natural value: every smaller target is comparably harmful, and every
+  target at or above it, including $\scT=\infty$, reaches the frontier.
+  The shipped default is $\scT=20$.}
   \label{fig:sweep}
 \end{figure}
 
