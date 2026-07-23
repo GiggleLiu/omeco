@@ -1,0 +1,19 @@
+{
+  "status": "scored",
+  "score": null,
+  "per_instance": [
+    {
+      "instance": "precheck_chain_10",
+      "result": "pass",
+      "seconds": 2.127222332987003,
+      "detail": "structure ok (no score revealed)"
+    }
+  ],
+  "errors": [],
+  "record_updates": [],
+  "environment": {
+    "kind": "fallback",
+    "image_or_lock": "sandbox-exec+cargo-lock:26ee90c534230760",
+    "reason": "no Docker on this macOS host; sandbox-exec denies network and research/ writes; harness enforces wall/CPU limits"
+  }
+}

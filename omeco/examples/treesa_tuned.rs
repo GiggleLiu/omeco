@@ -71,9 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let feasible = cc.sc <= cap;
         let best_feasible = best_cc.sc <= cap;
         // Prefer feasible trees; among equally feasible, lower tc wins.
-        if (feasible && !best_feasible)
-            || (feasible == best_feasible && cc.tc < best_cc.tc)
-        {
+        if (feasible && !best_feasible) || (feasible == best_feasible && cc.tc < best_cc.tc) {
             best = tree;
             best_cc = cc;
             writejson(out_path, &best)?;
