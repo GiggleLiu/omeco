@@ -1,0 +1,55 @@
+{
+  "status": "scored",
+  "score": -3.3618,
+  "per_instance": [
+    {
+      "instance": "reg3_1000",
+      "result": "pass",
+      "seconds": 87.386,
+      "detail": "tc=140.779 sc=134.000 record=135.75412004851293 delta=-5.025"
+    },
+    {
+      "instance": "rqc_97_m24",
+      "result": "pass",
+      "seconds": 87.45,
+      "detail": "tc=108.167 sc=101.000 record=106.46849426445668 delta=-1.698"
+    }
+  ],
+  "errors": [],
+  "record_updates": [],
+  "environment": {
+    "kind": "fallback",
+    "image_or_lock": "sandbox-exec+cargo-lock:26ee90c534230760",
+    "reason": "no Docker on this macOS host; sandbox-exec denies network and research/ writes; harness enforces wall/CPU limits"
+  },
+  "leaderboard": {
+    "reg3_250": {
+      "tc": 39.95029599283971,
+      "sc": 34.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "sycamore_m20": {
+      "tc": 61.54428977050287,
+      "sc": 53.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "reg3_1000": {
+      "tc": 135.75412004851293,
+      "sc": 129.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "rqc_97_m24": {
+      "tc": 106.46849426445668,
+      "sc": 97.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    }
+  }
+}
