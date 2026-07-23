@@ -1,0 +1,195 @@
+{
+ "schema_version": 1,
+ "cycle": 8,
+ "date_utc": "2026-07-24T00:00:00Z",
+ "project": "omeco beat-existing-optimizers",
+ "attempts_range": [
+  34,
+  46
+ ],
+ "attempts_remaining": 0,
+ "primary_metric": {
+  "name": "median-of-3 tc vs records (scale); confirmed records",
+  "direction": "max"
+ },
+ "guard_metrics": [],
+ "bar": {
+  "value": 0.0,
+  "source": "GOAL.md v2.2/v2.3 leaderboard mode"
+ },
+ "best_this_cycle": 1.658,
+ "best_prior": -0.0059,
+ "holdout": {
+  "spent": false,
+  "result": "n/a in v2"
+ },
+ "attempts": [
+  {
+   "id": 34,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "multilevel V-cycle: coarse solve + cold uncoarsen refinement beats flat SA at scale",
+   "primary": 1.658,
+   "status": "improved",
+   "causal_note": "CONFIRMED RECORD ksg 37.761 (ref 39.116). Attribution inverted: coarse level is a perturbation; descent = span-gated COLD refinement ratchet; matching coarsener seeds worse than greedy (drop it)",
+   "log_path": ".worktrees/attempt-034/LOG.md"
+  },
+  {
+   "id": 35,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "racing portfolio (successive halving + slope) converts scale variance into expected gain",
+   "primary": 0.097,
+   "status": "no-change",
+   "causal_note": "No record by 0.009 (surfacecode worse-of-two 48.718 vs bar 48.709; both medians beat the reference). Probe leader never won 4/4; slope save decisive once; beats single-anneal control by 22 log2",
+   "log_path": ".worktrees/attempt-035/LOG.md"
+  },
+  {
+   "id": 36,
+   "kind": "improvement",
+   "parent": 30,
+   "hypothesis": "structural sweep seed + cold refine + window repair beats records on layered instances",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED geometrically: any 1-D sweep comb is lower-bounded by boundary width 71-126 >> achievable 39-61; STRUCT-SKIP fired 4/4; window repair re-confirmed inert on peaked incumbents (033 certificate reproduced)",
+   "log_path": ".worktrees/attempt-036/LOG.md"
+  },
+  {
+   "id": 37,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "BFS-separator nested dissection with Staudt injection beats records on planar-ish instances",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "Injection mechanism works (boundary accumulation 83->61.6, max node 83->37) but separator seeds still lose to greedy portfolio; direction closed",
+   "log_path": ".worktrees/attempt-037/LOG.md"
+  },
+  {
+   "id": 38,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "hyperedge VE-seeding beats records on shared-label instances",
+   "primary": 0.093,
+   "status": "improved",
+   "causal_note": "CONFIRMED RECORD dbn_13 29.000 + TTF RECORD 0.2s (VE seed is instant record-quality; 16 log2 over greedy). Same mechanism refuted at 4086 labels (nqueens): VE too slow and lower-quality",
+   "log_path": ".worktrees/attempt-038/LOG.md"
+  },
+  {
+   "id": 39,
+   "kind": "improvement",
+   "parent": 13,
+   "hypothesis": "real-provenance instances carry fusible structure the proxy lacked; simplify-then-anneal wins at matched budget",
+   "primary": 1.236,
+   "status": "improved",
+   "causal_note": "TWO CONFIRMED RECORDS: sycamore_53_20_0 60.169 (ref 60.605), surfacecode_d21 47.824 (ref 48.759). 88.7% shrink on the real circuit; reference wastes budget annealing raw structure",
+   "log_path": ".worktrees/attempt-039/LOG.md"
+  },
+  {
+   "id": 40,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "mass randomized greedy + bandit tuning dominates SA at n~5000 by paths-per-second",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED: quality ceiling 15-208 log2 above records regardless of trials; 1.2 builds/s not hundreds; SA dominates",
+   "log_path": ".worktrees/attempt-040/LOG.md"
+  },
+  {
+   "id": 41,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "spectral recursive bisection finds global cut structure faster than local search",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED decisively (+108 to +153): power iteration cannot converge (gap O(1/n^2)); even perfect bisection geometrically dominated by non-bisection SA trees",
+   "log_path": ".worktrees/attempt-041/LOG.md"
+  },
+  {
+   "id": 42,
+   "kind": "improvement",
+   "parent": 32,
+   "hypothesis": "congestion-softmax boost passes accelerate 032's warm SA at scale",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED by A/B: softmax collapses onto the dominant node on peaky profiles, 40-80% dead traversal, strictly worse on 3/4; helps only flat-profile lattices",
+   "log_path": ".worktrees/attempt-042/LOG.md"
+  },
+  {
+   "id": 43,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "cache-blocked regional SA raises moves/s >=3x at n>=3000",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED both axes: pointer trees have no memory contiguity to exploit (0.54-1.34x); blocking starves global moves (isolation control confirms)",
+   "log_path": ".worktrees/attempt-043/LOG.md"
+  },
+  {
+   "id": 44,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "boundary-MPS combs on detected 2D geometry beat records on lattice instances",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED: instances are non-planar with cutwidth 90-120 (5 layout heuristics verified); comb floor far above balanced-tree records; also exposed GreedyMethod tie-break cascade bug (~82s, 1-in-5 at n~5000)",
+   "log_path": ".worktrees/attempt-044/LOG.md"
+  },
+  {
+   "id": 45,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "annealing vertex-elimination orders explores a different landscape than tree rewrites",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED strongly despite successful O(window) incremental engineering: order landscape is flat (30 improvements / 2.5M cold moves); representation floor ~2x above tree space; all descent came from the tree-space polish",
+   "log_path": ".worktrees/attempt-045/LOG.md"
+  },
+  {
+   "id": 46,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "elite trees occupy complementary basins; non-destructive path-relinking recombines them",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "Mechanism CONFIRMED (20 recombinant wins over better parent; monotone 70-log2 descent over 12 relinks) but pool diversity collapses after ~12 relinks; no record. Lever: diversity maintenance",
+   "log_path": ".worktrees/attempt-046/LOG.md"
+  }
+ ],
+ "reflection": {
+  "review": "13-attempt scale batch on the expanded instance set. FOUR CONFIRMED TC RECORDS + one TTF record, the project's first algorithm-level wins: 039 simplify-then-anneal (real Sycamore 60.169, surfacecode 47.824), 034 span-gated cold V-cycle (ksg 37.761), 038 hyperedge VE-seed (dbn_13 29.000 @ TTF 0.2s). 035 racing missed by 0.009 with its mechanism confirmed. Seven falsifications with root causes; 032/033 measured non-competitive at scale. Attempts now hold 4/10 board records.",
+  "evidence": "- Records confirmed via median-of-3 + confirmation, worse-of-two, quiet machine, per-run relabeling.\n- Mechanism pattern: wins come from exploiting structure OUTSIDE tree-rewrite space (preprocessing, seed representation, budget allocation); all in-space construction variants lost to greedy+anneal.\n- Library findings for the omeco PR: missing simplification front-end; GreedyMethod tie-break cascade at n~5000.\n- Protocol economy: falsified attempts not validator-scored (scorer-verified locally, no claims); deviation noted.",
+  "lessons": "Tuned TreeSA is the descent engine, not the bottleneck: feed it (simplify, structured seeds) and schedule it (span-gating, racing) rather than replace it. Pure-construction seeds fail identically across 5 variants (proxy floors above rewrite-space reach). Concurrency-distorted local numbers are for attribution only; the lanes+medians harness recovers clean signals.",
+  "literature": "Simplification matches gray_2020_hyper's simplify cycle; the quantified matched-budget dominance vs tuned SA (0.44-0.94 log2) and the instant-VE-record TTF framing appear new. Span-gated refinement and racing-over-anneals not in the KB.",
+  "next": "Cycle 9 (final round): 047 composite (route -> simplify -> seed -> span-gated refine -> racing), 052 span-gated deepening, 053 hierarchical VE; innovation wing: 048 replica exchange, 049 consensus-backbone freezing, 050 MCTS on simplified graphs, 051 late-acceptance hill climbing."
+ },
+ "lessons": [
+  {
+   "observation": "records fall only to mechanisms exploiting structure outside tree-rewrite space",
+   "root_cause": "tuned TreeSA is near-optimal within rewrite space (cycles 1-7 certificates); headroom lives in preprocessing, seed representation, and budget allocation",
+   "evidence": "4 records by 3 out-of-space mechanisms; 7 in-space falsifications",
+   "status": "confirmed",
+   "implication": "cycle-9 composite: route -> simplify -> structured seed -> span-gated cold refine -> racing"
+  },
+  {
+   "observation": "pure-construction seeds all lose to greedy+anneal the same way",
+   "root_cause": "constructions optimize proxies (cut, order, width) whose floors exceed balanced rewrite-space search",
+   "evidence": "037/040/041/044/045 independent failures",
+   "status": "confirmed",
+   "implication": "blacklist pure-construction; innovate on acceptance rules, search topology, consensus, and simplification-unlocked search"
+  },
+  {
+   "observation": "13-agent concurrency distorted every local measurement yet scored runs recovered clean signals",
+   "root_cause": "wall-clock contention + OOM pressure; medians + lanes + quiet machine isolate the effect",
+   "evidence": "039/034 local 'ordinary' results became records; 035 local beats became a 0.009 miss",
+   "status": "confirmed",
+   "implication": "local numbers are attribution-only; the harness design is validated"
+  }
+ ],
+ "blacklist_new": [
+  "pure-construction seeding (separator/spectral/comb/mass-greedy/order-anneal) on these families",
+  "congestion-softmax proposals on peaky flop profiles (042)",
+  "cache-blocked regions on pointer-based trees (043)",
+  "caterpillar/comb seeds on cutwidth>=90 networks (036/044)"
+ ],
+ "insight_promotions": []
+}
