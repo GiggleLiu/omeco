@@ -4,9 +4,9 @@
 - topic: beat-existing-optimizers  # slug of the chosen topic once stage >= db
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
-- authorized_rounds: 3     # cycle 7 (in flight) + cycles 8-9 (user: "Yes, 2 rounds", 2026-07-23)
-- next_attempt: 34         # next .worktrees/attempt-NNN number (032/033 in cycle 7)
-- next_cycle: 7            # next reflection cycle number
+- authorized_rounds: 2     # cycles 8-9 (user: "Yes, 2 rounds"); cycle 7 reflected 2026-07-24
+- next_attempt: 37         # next .worktrees/attempt-NNN number
+- next_cycle: 8            # next reflection cycle number
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
   - validator_gate: passed 2026-07-22 (v2)  # pending | passed YYYY-MM-DD
@@ -41,3 +41,10 @@
     user-approved deviation from the 300 s limit for scale mode only.
     Planned batch: 034 multilevel V-cycle, 035 racing portfolio, 036 deep
     seed + cold refine + window-exact repair.
+  - 2026-07-24: user directed import of harder instances from
+    OMEinsumContractionOrdersBenchmark: sycamore_53_20_0 (real Sycamore,
+    3369 tensors), surfacecode_d21 (2203), ksg (5197), nqueens_28 (4252)
+    join the median-of-3 scale set; dbn_13, qft_27 added as small targets.
+    --scale default group = reg3_1000 + sycamore_53_20_0 + surfacecode_d21
+    + ksg; scale wall limit raised 1200 -> 2400 s to fit 4x(3x90 s) plus
+    confirmation runs.

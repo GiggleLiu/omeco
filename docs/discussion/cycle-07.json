@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "cycle": 7,
+  "date_utc": "2026-07-24T00:00:00Z",
+  "project": "omeco beat-existing-optimizers",
+  "attempts_range": [
+    32,
+    33
+  ],
+  "attempts_remaining": 0,
+  "primary_metric": {
+    "name": "TTF (time-to-frontier, harness-clocked) + mean \u0394tc vs pre-run records",
+    "direction": "max"
+  },
+  "guard_metrics": [],
+  "bar": {
+    "value": 0.0,
+    "source": "GOAL.md v2.2 anytime axis (TTF records need >=20% speedup, confirm-twice)"
+  },
+  "best_this_cycle": -0.0423,
+  "best_prior": -0.0059,
+  "holdout": {
+    "spent": false,
+    "result": "n/a in v2"
+  },
+  "attempts": [
+    {
+      "id": 32,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "portfolio seeds + DP boost + warm continuous SA reach the frontier band in <=1/3 of the reference TTF",
+      "primary": -0.0423,
+      "status": "improved",
+      "causal_note": "CONFIRMED TTF RECORD reg3_250 16.1s (ref 20.2s); sycamore TTF 12.4-81.1s spread, no claim; DP boost inert as arrival lever at n>=500 -- schedule shape (linear beta, size-scaled reheats, gated diversity) is the real lever",
+      "log_path": ".worktrees/attempt-032/LOG.md"
+    },
+    {
+      "id": 33,
+      "kind": "draft",
+      "parent": null,
+      "hypothesis": "exact subset-DP repair over <=16-leaf windows lowers tc on frontier-quality incumbents, or certifies window-optimality",
+      "primary": -0.0641,
+      "status": "no-change",
+      "causal_note": "CERTIFICATE: both frontier incumbents exact-optimal on every <=16-leaf window (~86/~182 windows, zero material gains); DP brute-force-verified; dominant contraction spans a constant fraction of the network",
+      "log_path": ".worktrees/attempt-033/LOG.md"
+    }
+  ],
+  "reflection": {
+    "review": "Axis pivot to time-to-frontier (validator v2.2: harness-clocked anytime curves, TTF leaderboard). References: treesa-inf 20.2s/39.6s, cotengra-sa 62.7s/never. 032 set the first non-reference record on the board (reg3_250 TTF 16.1s confirmed); its sycamore arrival beats the reference on median runs but variance blocked the claim. 033 refuted its record hypothesis and delivered the pre-registered fallback: window-exact optimality certificates for both primaries.",
+    "evidence": "- attempt-032 reports 1-3: TTF runs reg3 85.4/3.7/16.1s, sycamore 49.1/12.4/81.1s; tc graze 61.467 rejected by confirmation (61.660).\n- attempt-033: WINDOW-OPT certificates (reg3_250 K=16 ~86 windows, sycamore_m20 K=16 ~182 windows, zero material gains); DP validated on 400 brute-forced sub-networks.\n- Scale set expanded from OMEinsumContractionOrdersBenchmark (real Sycamore 3369t, surfacecode_d21, ksg 5197t, nqueens_28); v2.3 median-of-3 live.",
+    "lessons": "TTF is winnable but heavy-tailed: 20%-bar claims sit near the single-pair confirmation noise floor; target >=2x or move the gate to median-of-k arrival. Arrival time is governed by anneal schedule (linear beta, size-scaled reheats, stagnation-gated diversity), not seed quality -- DP boost inert at n>=500. Frontier trees are now triply locally optimal (O(1) rewrites, order-DP, window-exact).",
+    "next": "Cycle 8 (2 rounds authorized): scale axis on expanded group -- 034 multilevel V-cycle, 035 racing portfolio, 036 deep seed + cold refine + window-exact repair; treesa-inf medians being seeded.",
+    "literature": "Anytime-curve comparison at matched budgets follows [gray_2020_hyper]; harness-clocked TTF with adversarial polling appears new practice. Window-local exact optimality certificates for contraction trees not found in the KB."
+  },
+  "lessons": [
+    {
+      "observation": "frontier trees are exact-optimal on every <=16-leaf window",
+      "root_cause": "the dominant contraction spans a window covering a constant fraction of the network; every small neighborhood is already perfect",
+      "evidence": "033 systematic K=16 sweeps (~86/~182 windows, zero material gains); DP brute-force-verified; scorer-verified splices",
+      "status": "confirmed",
+      "implication": "third level of local optimality for the frontier; heuristic tc chase on converged instances closed"
+    },
+    {
+      "observation": "TTF is winnable but heavy-tailed; 20%-bar claims sit near the confirmation noise floor",
+      "root_cause": "SA basin-entry time is a heavy-tailed random variable; worse-of-two on a single pair is high-variance; reference TTF is min-of-3-seedings, biased low",
+      "evidence": "032 official TTF runs: reg3 85.4/3.7/16.1 s, sycamore 49.1/12.4/81.1 s vs ref 39.6 s",
+      "status": "confirmed",
+      "implication": "future TTF work targets >=2x wins or a median-of-k arrival gate (user decision, queued)"
+    },
+    {
+      "observation": "arrival time is governed by anneal schedule, not seed quality",
+      "root_cause": "linear beta schedules densely cover the freezing range; DP-boosted seeds are forgotten by the time the anneal freezes",
+      "evidence": "032: geometric cooling plateaus 0.1-0.2 above band; DP boost inert at n>=500 (confirms 018/006 for arrival)",
+      "status": "confirmed",
+      "implication": "schedule shape and stagnation-gated diversity are the levers to port into 034/035 at scale"
+    }
+  ],
+  "blacklist_new": [
+    "geometric cooling for pure-tc SA on these families (plateaus above the frontier band; 032)",
+    "interval-DP boost as an arrival-time lever at n>=500 (032, confirming 018/006)"
+  ],
+  "insight_promotions": []
+}

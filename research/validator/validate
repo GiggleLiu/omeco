@@ -87,9 +87,15 @@ TC_AT_CHECKPOINTS = [1.0, 3.0, 10.0, 30.0]
 # +inf, so any failure pushes the median up). Runs touching a scale instance
 # get a raised wall limit. TTF records/claims are disabled on scale instances
 # (report-only) — the anytime board stays a primary-instance metric.
-SCALE_INSTANCES = {"reg3_1000", "rqc_97_m24"}
+SCALE_INSTANCES = {"reg3_1000", "rqc_97_m24", "sycamore_53_20_0",
+                   "surfacecode_d21", "ksg", "nqueens_28"}
 SCALE_RUNS = 3
-SCALE_WALL_LIMIT_S = 1200
+SCALE_WALL_LIMIT_S = 2400
+# Default target groups: a bare scored run covers the primaries; --scale
+# covers a 4-instance cross-family scale group that fits the wall with room
+# for confirmation runs (other instances remain selectable via --targets).
+PRIMARY_DEFAULT = {"reg3_250", "sycamore_m20"}
+SCALE_DEFAULT = {"reg3_1000", "sycamore_53_20_0", "surfacecode_d21", "ksg"}
 
 
 def log(*a):
@@ -407,8 +413,8 @@ def main():
     deltas = []
     rejected = False
     wanted = set(args.targets.split(",")) if args.targets else None
-    if args.scale and wanted is None:
-        wanted = set(SCALE_INSTANCES)
+    if wanted is None:
+        wanted = set(SCALE_DEFAULT) if args.scale else set(PRIMARY_DEFAULT)
     target_names = [p.stem for p in sorted(TARGETS_DIR.glob("*.json"))
                     if wanted is None or p.stem in wanted]
     wall_limit = (SCALE_WALL_LIMIT_S

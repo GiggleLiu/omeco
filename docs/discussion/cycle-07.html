@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>omeco beat-existing-optimizers — autoresearch cycles</title>
+<title>omeco beat-existing-optimizers — cycle 07</title>
 <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
@@ -75,10 +75,21 @@ footer .disabled { color: #c3c2b7; }
 </head>
 <body>
 <main>
-<h1>omeco beat-existing-optimizers — autoresearch cycles</h1>
-<p class="meta">7 cycles · 32 attempts ·
-16 blacklisted approaches · best TTF (time-to-frontier, harness-clocked) + mean Δtc vs pre-run records
-6.786 vs bar 0</p>
+<h1>omeco beat-existing-optimizers — cycle 07</h1>
+<p class="meta">attempts 032–033 · 2026-07-24 00:00:00 UTC
+· attempts remaining after this cycle: 0</p>
+<div class="kpis">
+<div class="kpi"><div class="kpi-label">best TTF (time-to-frontier, harness-clocked) + mean Δtc vs pre-run records this cycle</div>
+<div class="kpi-value">-0.0423</div><div class="kpi-note"><span class="delta-flat">▼ -0.0364 vs prior best -0.0059</span></div></div>
+<div class="kpi"><div class="kpi-label">bar (GOAL.md v2.2 anytime axis (TTF records need &gt;=20% speedup, confirm-twice))</div>
+<div class="kpi-value">0</div><div class="kpi-note"><strong>bar met</strong></div></div>
+<div class="kpi"><div class="kpi-label">yield</div>
+<div class="kpi-value">1/2</div><div class="kpi-note">attempts improved</div></div>
+<div class="kpi"><div class="kpi-label">holdout</div>
+<div class="kpi-value">—</div>
+<div class="kpi-note">not spent this cycle</div></div>
+</div>
+<h2>Review — what we did</h2>
 <div class="card">
 <figure><figcaption>best-so-far TTF (time-to-frontier, harness-clocked) + mean Δtc vs pre-run records by cycle
 (higher is better; dashed line = bar)</figcaption>
@@ -114,26 +125,42 @@ footer .disabled { color: #c3c2b7; }
 <text x="633.0" y="25.8" dominant-baseline="middle" fill="#0b0b0b" font-size="12" font-weight="600" font-variant-numeric="tabular-nums">6.786</text>
 </svg>
 </figure>
+
 </div>
-<div class="scroll">
-<table><thead><tr><th>cycle</th><th>date</th><th class="num">attempts</th>
-<th class="num">yield</th><th class="num">best</th><th>holdout</th>
-<th>next</th></tr></thead><tbody><tr><td><a href="cycle-01.html">cycle 01</a></td><td>2026-07-22</td><td class="num">001–010</td><td class="num">1/10</td><td class="num">-0.1143</td><td>spent</td><td class="hyp">None planned — the GOAL.md bar is met and stage moves to done.</td></tr><tr><td><a href="cycle-02.html">cycle 02</a></td><td>2026-07-22</td><td class="num">011–018</td><td class="num">4/8</td><td class="num">6.786</td><td>—</td><td class="hyp">Falsifiable hypothesis for a cycle 3, if authorized: &quot;the 39.9/61.5 basins
-are near the local-search limit; breaking below requires either external
-reference pressure (cotengra rows may reveal deeper basins exist) or
-global-structure methods on sycamore&#x27;s layered geometry.&quot; Sketch: (1) add
-cotengra SA + KaHyPar reference rows (measurement, not an attempt); (2)
-one improve on 015 and one on 017 (unify: population + λ-ramp, the two
-best-variance mechanisms); (3) repeated-scoring debug of 014 to settle its
-variance question; (4) a sycamore-specific draft exploiting circuit
-layering (cut along time slices).</td></tr><tr><td><a href="cycle-03.html">cycle 03</a></td><td>2026-07-22</td><td class="num">019–020</td><td class="num">0/2</td><td class="num">-0.0983</td><td>—</td><td class="hyp">Hypothesis: the 39.95/61.54 frontier is near-optimal; certified lower
-bounds will show a gap &lt; 1 log2.</td></tr><tr><td><a href="cycle-04.html">cycle 04</a></td><td>2026-07-22</td><td class="num">021–024</td><td class="num">0/4</td><td class="num">-0.0308</td><td>—</td><td class="hyp">Paper-driving batch: 026 isoperimetric-profile LB (Theorem 1 + certified
-numbers for both original targets); 027 profile-aware SA vs the
-39.95/61.544 frontier (pre-registered: any confirmed record validates the
-objective; a null + tight LB certifies near-optimality); 028/029
-profile-aware SA vs treesa-inf on the new large targets reg31000 and
-rqc97m24 (references being measured); 030 debug reserve.</td></tr><tr><td><a href="cycle-05.html">cycle 05</a></td><td>2026-07-22</td><td class="num">026–030</td><td class="num">0/5</td><td class="num">-0.1086</td><td>—</td><td class="hyp">None authorized.</td></tr><tr><td><a href="cycle-06.html">cycle 06</a></td><td>2026-07-23</td><td class="num">031–031</td><td class="num">0/1</td><td class="num">—</td><td>—</td><td class="hyp">None planned.</td></tr><tr><td><a href="cycle-07.html">cycle 07</a></td><td>2026-07-24</td><td class="num">032–033</td><td class="num">1/2</td><td class="num">-0.0423</td><td>—</td><td class="hyp">Cycle 8 (2 rounds authorized): scale axis on expanded group -- 034 multilevel V-cycle, 035 racing portfolio, 036 deep seed + cold refine + window-exact repair; treesa-inf medians being seeded.</td></tr></tbody></table>
-</div>
+<div class="scroll"><table class="attempts"><thead><tr><th>id</th><th>kind</th><th>hypothesis</th><th class="num">TTF (time-to-frontier, harness-clocked) + mean Δtc vs pre-run records</th><th>status</th><th>causal note</th></tr></thead><tbody><tr class="best"><td class="idcell"><a href="../../.worktrees/attempt-032/LOG.md">032</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">portfolio seeds + DP boost + warm continuous SA reach the frontier band in &lt;=1/3 of the reference TTF</td><td class="num">-0.0423</td><td><span class="chip st-good">improved</span></td><td class="hyp">CONFIRMED TTF RECORD reg3_250 16.1s (ref 20.2s); sycamore TTF 12.4-81.1s spread, no claim; DP boost inert as arrival lever at n&gt;=500 -- schedule shape (linear beta, size-scaled reheats, gated diversity) is the real lever</td></tr><tr><td class="idcell"><a href="../../.worktrees/attempt-033/LOG.md">033</a></td><td><span class="badge kind-draft">draft</span></td><td class="hyp">exact subset-DP repair over &lt;=16-leaf windows lowers tc on frontier-quality incumbents, or certifies window-optimality</td><td class="num">-0.0641</td><td><span class="chip st-neutral">no-change</span></td><td class="hyp">CERTIFICATE: both frontier incumbents exact-optimal on every &lt;=16-leaf window (~86/~182 windows, zero material gains); DP brute-force-verified; dominant contraction spans a constant fraction of the network</td></tr></tbody></table><p class="note">Grouped by lineage: └ rows build on the attempt above; grey rows are earlier-cycle ancestors. Best row shaded. Direction: higher is better. Attempt ids link to the worktree LOG.md (may dangle if pruned).</p></div>
+<p>Axis pivot to time-to-frontier (validator v2.2: harness-clocked anytime curves, TTF leaderboard). References: treesa-inf 20.2s/39.6s, cotengra-sa 62.7s/never. 032 set the first non-reference record on the board (reg3_250 TTF 16.1s confirmed); its sycamore arrival beats the reference on median runs but variance blocked the claim. 033 refuted its record hypothesis and delivered the pre-registered fallback: window-exact optimality certificates for both primaries.</p>
+<h2>Lessons we learnt</h2>
+<div class="lessons"><div class="lesson">
+<p class="lesson-obs">frontier trees are exact-optimal on every &lt;=16-leaf window </p>
+<dl>
+<dt>root cause</dt><dd>the dominant contraction spans a window covering a constant fraction of the network; every small neighborhood is already perfect</dd>
+<dt>evidence</dt><dd>033 systematic K=16 sweeps (~86/~182 windows, zero material gains); DP brute-force-verified; scorer-verified splices</dd>
+<dt>implication</dt><dd>third level of local optimality for the frontier; heuristic tc chase on converged instances closed</dd>
+</dl>
+</div><div class="lesson">
+<p class="lesson-obs">TTF is winnable but heavy-tailed; 20%-bar claims sit near the confirmation noise floor </p>
+<dl>
+<dt>root cause</dt><dd>SA basin-entry time is a heavy-tailed random variable; worse-of-two on a single pair is high-variance; reference TTF is min-of-3-seedings, biased low</dd>
+<dt>evidence</dt><dd>032 official TTF runs: reg3 85.4/3.7/16.1 s, sycamore 49.1/12.4/81.1 s vs ref 39.6 s</dd>
+<dt>implication</dt><dd>future TTF work targets &gt;=2x wins or a median-of-k arrival gate (user decision, queued)</dd>
+</dl>
+</div><div class="lesson">
+<p class="lesson-obs">arrival time is governed by anneal schedule, not seed quality </p>
+<dl>
+<dt>root cause</dt><dd>linear beta schedules densely cover the freezing range; DP-boosted seeds are forgotten by the time the anneal freezes</dd>
+<dt>evidence</dt><dd>032: geometric cooling plateaus 0.1-0.2 above band; DP boost inert at n&gt;=500 (confirms 018/006 for arrival)</dd>
+<dt>implication</dt><dd>schedule shape and stagnation-gated diversity are the levers to port into 034/035 at scale</dd>
+</dl>
+</div></div>
+<h3>Evidence carried forward</h3>
+<ul>
+<li>attempt-032 reports 1-3: TTF runs reg3 85.4/3.7/16.1s, sycamore 49.1/12.4/81.1s; tc graze 61.467 rejected by confirmation (61.660).</li>
+<li>attempt-033: WINDOW-OPT certificates (reg3_250 K=16 ~86 windows, sycamore_m20 K=16 ~182 windows, zero material gains); DP validated on 400 brute-forced sub-networks.</li>
+<li>Scale set expanded from OMEinsumContractionOrdersBenchmark (real Sycamore 3369t, surfacecode_d21, ksg 5197t, nqueens_28); v2.3 median-of-3 live.</li>
+</ul><div class="box box-blacklist"><strong>New blacklist entries this cycle</strong><ul><li>geometric cooling for pure-tc SA on these families (plateaus above the frontier band; 032)</li><li>interval-DP boost as an arrival-time lever at n&gt;=500 (032, confirming 018/006)</li></ul></div>
+<h3>Literature check</h3><p>Anytime-curve comparison at matched budgets follows [gray_2020_hyper]; harness-clocked TTF with adversarial polling appears new practice. Window-local exact optimality certificates for contraction trees not found in the KB.</p>
+<h2>Next round</h2><p>Cycle 8 (2 rounds authorized): scale axis on expanded group -- 034 multilevel V-cycle, 035 racing portfolio, 036 deep seed + cold refine + window-exact repair; treesa-inf medians being seeded.</p>
+<footer><a href="cycle-06.html">← cycle 06</a><a href="index.html">index</a><span class="disabled">cycle 08 →</span></footer>
 </main>
 </body>
 </html>
