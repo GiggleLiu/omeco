@@ -1,0 +1,163 @@
+{
+ "reg3_250": {
+  "n": 250,
+  "lambda2": 0.20359755963905732,
+  "dyadic_spec": 9.711907406772596,
+  "dyadic_emp": 27.001431088541636,
+  "pathdp_spec": 12.237959997735993,
+  "pathdp_emp": 30.324198770761946,
+  "maxform_spec": 11.355857486428063,
+  "maxform_spec_k": 84,
+  "maxform_emp": 30,
+  "maxform_emp_k": 86,
+  "cap": 30,
+  "frontier_tc": 39.95,
+  "frontier_sc": 34,
+  "frontier_pathsum": 37.343277824583225,
+  "dyadic_detail_emp": [
+   [
+    1,
+    63,
+    125,
+    27,
+    65
+   ],
+   [
+    2,
+    32,
+    62,
+    17,
+    33
+   ],
+   [
+    3,
+    16,
+    31,
+    11,
+    17
+   ],
+   [
+    4,
+    8,
+    15,
+    6,
+    8
+   ],
+   [
+    5,
+    4,
+    7,
+    4,
+    4
+   ],
+   [
+    6,
+    2,
+    3,
+    2,
+    2
+   ]
+  ],
+  "pathdp_path_emp": [
+   250,
+   172,
+   86,
+   45,
+   24,
+   13,
+   8,
+   4,
+   2
+  ],
+  "cap_exceeded_dyadic_emp": false,
+  "cap_exceeded_pathdp_emp": true
+ },
+ "sycamore_m20": {
+  "n": 561,
+  "lambda2": 0.04618087551112894,
+  "dyadic_spec": 5.522765324428092,
+  "dyadic_emp": 40.0000880961579,
+  "pathdp_spec": 6.94477595725449,
+  "pathdp_emp": 47.01124911976187,
+  "maxform_spec": 5.757215813720741,
+  "maxform_spec_k": 187,
+  "maxform_emp": 47,
+  "maxform_emp_k": 208,
+  "cap": 53,
+  "frontier_tc": 61.544,
+  "frontier_sc": 53,
+  "frontier_pathsum": 59.24225523913043,
+  "dyadic_detail_emp": [
+   [
+    1,
+    141,
+    280,
+    40,
+    141
+   ],
+   [
+    2,
+    71,
+    140,
+    26,
+    71
+   ],
+   [
+    3,
+    36,
+    70,
+    15,
+    36
+   ],
+   [
+    4,
+    18,
+    35,
+    9,
+    18
+   ],
+   [
+    5,
+    9,
+    17,
+    5,
+    9
+   ],
+   [
+    6,
+    5,
+    8,
+    3,
+    5
+   ],
+   [
+    7,
+    3,
+    4,
+    2,
+    3
+   ],
+   [
+    8,
+    2,
+    2,
+    2,
+    2
+   ]
+  ],
+  "pathdp_path_emp": [
+   561,
+   393,
+   208,
+   104,
+   52,
+   26,
+   13,
+   7,
+   4,
+   2
+  ],
+  "cap_exceeded_dyadic_emp": false,
+  "cap_exceeded_pathdp_emp": false
+ }
+}
