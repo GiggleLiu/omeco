@@ -152,7 +152,14 @@ def _parse_trace(path):
 
 
 def fig10_waist_surgery():
-    w_sc, tr_sc = _parse_trace(DATA / "waist_trace_surfacecode.log")
+    # panel (a) pools waist-vs-alternative calls from all fresh runs; panel (b)
+    # shows run 2 (final 47.44, representative of the official median 47.377;
+    # runs ended 47.90/47.44/47.46 -- stated in the caption).
+    w_sc, _ = _parse_trace(DATA / "waist_trace_surfacecode.log")
+    for extra in ["waist_trace_surfacecode2.log", "waist_trace_surfacecode3.log"]:
+        w, _ = _parse_trace(DATA / extra)
+        w_sc += w
+    _, tr_sc = _parse_trace(DATA / "waist_trace_surfacecode2.log")
     w_ksg, _ = _parse_trace(DATA / "waist_trace_ksg.log")
 
     fig, axes = plt.subplots(1, 2, figsize=(9, 3.6))
@@ -182,7 +189,10 @@ def fig10_waist_surgery():
     ax.scatter([t for t, _ in acc], [c for _, c in acc], marker="*", s=140,
                color=RED, zorder=3, label="accepted waist rebuild")
     ax.axhline(47.824, color=BLACK, lw=2.0, ls=":")
-    ax.text(2, 47.87, "previous record 47.824", fontsize=8)
+    ax.text(30, 47.85, "pre-surgery record 47.824", fontsize=8)
+    ax.axhline(47.377, color=RED, lw=1.6, ls="-.")
+    ax.text(2, 47.31, "official median with surgery 47.377", fontsize=8, color=RED)
+    ax.set_ylim(47.2, None)
     ax.set_xlabel("wall-clock time  [s]")
     ax.set_ylabel(r"surface code d=21   tc  [log$_2$ flops]")
     ax.legend(loc="upper right", frameon=False)

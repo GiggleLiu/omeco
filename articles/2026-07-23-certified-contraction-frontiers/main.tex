@@ -14,6 +14,8 @@
 \usepackage{hyperref}
 \usepackage{booktabs}
 \usepackage{authblk}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
 \newcommand{\affiliation}[1]{\affil{#1}}
 
 \newtheorem{theorem}{Theorem}
@@ -455,6 +457,129 @@ certificates, and cycle reports) ships with the code.
   certified picture (bounds, impossibility) grows. Annotations mark the
   three instrument-caught failure modes.}
   \label{fig:timeline}
+\end{figure}
+
+\section{How the results were found: steered autonomous research}
+\label{sec:roadmap}
+
+The findings of this paper were produced by an autonomous research loop
+(machine-proposed hypotheses, isolated implementations, hardened scoring)
+that was \emph{steered} by a small number of human decisions. Because the
+loop retained every artifact, the causal path from the opening question to
+each main result can be reconstructed exactly. Figure~\ref{fig:roadmap}
+shows that path left to right: the top row quotes the steering prompts,
+the middle row shows only the attempts that carried results forward
+(50 of the 56 attempts served as controls, falsifications, or dead
+branches feeding Sec.~\ref{sec:method}), and each arrow states why the
+transition happened.
+
+Three properties of this trajectory are worth stating explicitly.
+\emph{First, every pivot was forced by a measurement, not chosen freely.}
+The move from tc-optimization to the anytime axis happened because
+thirteen mechanisms and a second toolchain had converged on one frontier
+that was then certified locally optimal three independent ways; the move
+to scale happened because time-to-frontier proved heavy-tailed at the
+claim threshold; the move to global-information mechanisms happened
+because every search-control variant had failed with a structural cause
+while every input-level variant had won. \emph{Second, the human
+contributions were few but load-bearing}: the demand for a strengthened
+reference (which produced the tuning result of Sec.~\ref{sec:sctarget}),
+the switch to real-provenance instances (which unlocked the
+simplification pillar---the same mechanism had been correctly measured
+as useless on the pre-simplified proxy two cycles earlier), and the
+question ``can global information help the local search escape?'' (which
+became waist surgery). \emph{Third, retests are cheap when provenance
+changes}: attempt 013's null on the synthetic proxy and attempt 039's
+records on the real circuit are the same mechanism measured on different
+inputs, and only the pre-registered instance provenance made the
+contradiction interpretable rather than embarrassing.
+
+\begin{figure}[p]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+      font=\small,
+      steer/.style={draw=black!50, fill=black!4, rounded corners=2pt,
+        text width=30mm, align=flush left, inner sep=5pt, font=\itshape\footnotesize},
+      work/.style={draw, thick, fill=white, rounded corners=2pt,
+        text width=30mm, align=flush left, inner sep=5pt, font=\footnotesize},
+      res/.style={draw, very thick, fill=blue!6, rounded corners=2pt,
+        text width=30mm, align=flush left, inner sep=5pt, font=\footnotesize},
+      why/.style={font=\scriptsize\itshape, align=center, text width=26mm},
+      flow/.style={-{Stealth[length=3mm]}, very thick},
+      down/.style={-{Stealth[length=2mm]}, black!50}]
+
+    % stage 1
+    \node[steer] (s1) {``an algorithm that wins on complexity---or on
+      speed at equal complexity''};
+    \node[work, below=4mm of s1] (w1) {\textbf{naive gate} (cycle 1)\\
+      attempt 004 ``wins'' by schedule hygiene alone---no algorithmic
+      content};
+    % stage 2
+    \node[steer, right=9mm of s1] (s2) {``is the reference badly tuned?
+      strengthen it''\\``algorithm-level changes only; optimize, no
+      pass/fail''};
+    \node[res, below=4mm of s2] (w2) {\textbf{tuning + certificates}
+      (cycles 2--6)\\ $\scT$ cliff $\Rightarrow$ tuned reference
+      reclaims all $800\times$ ``wins'' \textbf{[MR1]}\\ 13 mechanisms
+      tie; window-exact optimality (033)};
+    % stage 3
+    \node[steer, right=9mm of s2] (s3) {``I need publishable
+      \emph{algorithm} research''};
+    \node[work, below=4mm of s3] (w3) {\textbf{anytime axis} (cycle 7)\\
+      harness-clocked time-to-frontier; attempt 032 record
+      16.1\,s vs 20.2\,s; arrival is heavy-tailed};
+    % stage 4
+    \node[steer, right=9mm of s3] (s4) {``scale, median-of-3''\\``add
+      harder \emph{real} instances''\\``launch 10 more trials''};
+    \node[res, below=4mm of s4] (w4) {\textbf{real instances} (cycle 8)\\
+      039 simplify-then-anneal: 2 records \textbf{[MR2]} (retest of
+      013's proxy null)\\ 034 span-gated (ksg), 038 VE seed (dbn);
+      7 falsifications seed the taxonomy \textbf{[MR4]}};
+    % stage 5
+    \node[steer, right=9mm of s4] (s5) {``compose the winners; also try
+      more \emph{innovative} algorithms''};
+    \node[res, below=4mm of s5] (w5) {\textbf{composite} (cycle 9)\\
+      047: three records in one run (incl.\ reg3-1000, the first
+      expander fall)\\ 050: Sycamore 59.91\\ search-control wing
+      falsified structurally};
+    % stage 6
+    \node[steer, right=9mm of s5] (s6) {``can \emph{global} information
+      help the local search escape?''\\``borrow from Tamaki?''};
+    \node[res, below=4mm of s6] (w6) {\textbf{waist surgery} (cycle 10)\\
+      054: three records; the SA waist is \emph{never} a globally
+      minimal cut \textbf{[MR3]}\\ 055/056 close the recombination and
+      exact-enumeration families};
+
+    \foreach \i in {1,...,6} {\draw[down] (s\i) -- (w\i);}
+
+    \draw[flow] (w1) -- node[circle, draw, fill=white, inner sep=1pt,
+      font=\scriptsize\bfseries] {1} (w2);
+    \draw[flow] (w2) -- node[circle, draw, fill=white, inner sep=1pt,
+      font=\scriptsize\bfseries] {2} (w3);
+    \draw[flow] (w3) -- node[circle, draw, fill=white, inner sep=1pt,
+      font=\scriptsize\bfseries] {3} (w4);
+    \draw[flow] (w4) -- node[circle, draw, fill=white, inner sep=1pt,
+      font=\scriptsize\bfseries] {4} (w5);
+    \draw[flow] (w5) -- node[circle, draw, fill=white, inner sep=1pt,
+      font=\scriptsize\bfseries] {5} (w6);
+  \end{tikzpicture}}
+  \caption{The research roadmap, left to right. Top row (grey): the
+  human steering prompts, essentially verbatim. Bottom row: the
+  result-carrying attempts only (shaded boxes contain main results);
+  50 of 56 attempts are controls and falsifications that feed the
+  mechanism taxonomy and Sec.~\ref{sec:method}. Each numbered arrow is a
+  transition forced by a measurement: (1) the gate was passed without an
+  algorithm, so the gate was hardened and references ratcheted; (2) tc
+  saturated and was certified locally optimal, so the objective axis
+  changed to arrival time; (3) speed gains sat at the confirmation noise
+  floor while scale budgets were non-converged, so the regime changed;
+  (4) the winning mechanisms proved complementary, so they were composed
+  while exploration continued; (5) every win injected global information
+  as \emph{input} while every search-control variant failed, so global
+  information was aimed directly at the local search's blind spot---the
+  dominant cut.}
+  \label{fig:roadmap}
 \end{figure}
 
 \section{Conclusions}

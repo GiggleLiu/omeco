@@ -55,14 +55,18 @@
 \newlabel{fig:profiles}{{4}{6}{Isoperimetric profiles. The empirical profile $b(k)$ (solid) dips well below the bisection width (dotted) at off-center sizes; the certified star marks the 141-tensor sycamore\_m20 subset with boundary exactly 40. The spectral bound (dashed) is certified but loose. This dip is what caps all profile-based bounds (Observation~\ref {obs:cap})}{figure.4}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {7}Methodology: a research loop that distrusts itself}{6}{section.7}\protected@file@percent }
 \newlabel{sec:method}{{7}{6}{Methodology: a research loop that distrusts itself}{section.7}{}}
-\bibstyle{plain}
-\bibdata{references}
 \@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Cost-profile conservation at the frontier. Bars count contractions within $1.0$ (solid) and $2.0$ (hatched) of the largest; boxes give each tree's peak cost and $\ensuremath  {\mathrm  {tc}}$. Trees that lower the peak by one unit acquire several times more near-peak contractions at essentially unchanged $\ensuremath  {\mathrm  {tc}}$.}}{7}{figure.5}\protected@file@percent }
 \newlabel{fig:conservation}{{5}{7}{Cost-profile conservation at the frontier. Bars count contractions within $1.0$ (solid) and $2.0$ (hatched) of the largest; boxes give each tree's peak cost and $\tc $. Trees that lower the peak by one unit acquire several times more near-peak contractions at essentially unchanged $\tc $}{figure.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusions}{7}{section.8}\protected@file@percent }
-\newlabel{sec:conclusions}{{8}{7}{Conclusions}{section.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}How the results were found: steered autonomous research}{7}{section.8}\protected@file@percent }
+\newlabel{sec:roadmap}{{8}{7}{How the results were found: steered autonomous research}{section.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Conclusions}{7}{section.9}\protected@file@percent }
+\newlabel{sec:conclusions}{{9}{7}{Conclusions}{section.9}{}}
+\bibstyle{plain}
+\bibdata{references}
 \bibcite{anon_2025_optimizing}{1}
 \bibcite{dumitrescu_2018_benchmarking}{2}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces (a) Converged regime: the frontier on both benchmark instances is unchanged from 90 to 900 seconds. (b) Non-converged regime (reg3\_1000): anytime curves of the restart-ladder reference versus a single continuous anneal; early and late quality trade off, and run-to-run variance (not shown) exceeds the differences.}}{8}{figure.6}\protected@file@percent }
+\newlabel{fig:scale}{{6}{8}{(a) Converged regime: the frontier on both benchmark instances is unchanged from 90 to 900 seconds. (b) Non-converged regime (reg3\_1000): anytime curves of the restart-ladder reference versus a single continuous anneal; early and late quality trade off, and run-to-run variance (not shown) exceeds the differences}{figure.6}{}}
 \bibcite{gray_2020_hyper}{3}
 \bibcite{ibrahim_2022_constructing}{4}
 \bibcite{kalachev_2021_multi}{5}
@@ -71,10 +75,10 @@
 \bibcite{orgler_2024_optimizing}{8}
 \bibcite{pfeifer_2013_faster}{9}
 \bibcite{staudt_2024_improved}{10}
-\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces (a) Converged regime: the frontier on both benchmark instances is unchanged from 90 to 900 seconds. (b) Non-converged regime (reg3\_1000): anytime curves of the restart-ladder reference versus a single continuous anneal; early and late quality trade off, and run-to-run variance (not shown) exceeds the differences.}}{8}{figure.6}\protected@file@percent }
-\newlabel{fig:scale}{{6}{8}{(a) Converged regime: the frontier on both benchmark instances is unchanged from 90 to 900 seconds. (b) Non-converged regime (reg3\_1000): anytime curves of the restart-ladder reference versus a single continuous anneal; early and late quality trade off, and run-to-run variance (not shown) exceeds the differences}{figure.6}{}}
 \bibcite{strasser_2017_computing}{11}
 \bibcite{tamaki_2017_positive}{12}
 \@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Best verified $\ensuremath  {\mathrm  {tc}}$ over the six research-loop cycles. Apparent progress in cycle~2 is reclaimed by the strengthened reference (cycle~2.5); thereafter the frontier is flat while the certified picture (bounds, impossibility) grows. Annotations mark the three instrument-caught failure modes.}}{9}{figure.7}\protected@file@percent }
 \newlabel{fig:timeline}{{7}{9}{Best verified $\tc $ over the six research-loop cycles. Apparent progress in cycle~2 is reclaimed by the strengthened reference (cycle~2.5); thereafter the frontier is flat while the certified picture (bounds, impossibility) grows. Annotations mark the three instrument-caught failure modes}{figure.7}{}}
-\gdef \@abspage@last{9}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces The research roadmap, left to right. Top row (grey): the human steering prompts, essentially verbatim. Bottom row: the result-carrying attempts only (shaded boxes contain main results); 50 of 56 attempts are controls and falsifications that feed the mechanism taxonomy and Sec.~\ref {sec:method}. Each numbered arrow is a transition forced by a measurement: (1) the gate was passed without an algorithm, so the gate was hardened and references ratcheted; (2) tc saturated and was certified locally optimal, so the objective axis changed to arrival time; (3) speed gains sat at the confirmation noise floor while scale budgets were non-converged, so the regime changed; (4) the winning mechanisms proved complementary, so they were composed while exploration continued; (5) every win injected global information as \emph  {input} while every search-control variant failed, so global information was aimed directly at the local search's blind spot---the dominant cut.}}{10}{figure.8}\protected@file@percent }
+\newlabel{fig:roadmap}{{8}{10}{The research roadmap, left to right. Top row (grey): the human steering prompts, essentially verbatim. Bottom row: the result-carrying attempts only (shaded boxes contain main results); 50 of 56 attempts are controls and falsifications that feed the mechanism taxonomy and Sec.~\ref {sec:method}. Each numbered arrow is a transition forced by a measurement: (1) the gate was passed without an algorithm, so the gate was hardened and references ratcheted; (2) tc saturated and was certified locally optimal, so the objective axis changed to arrival time; (3) speed gains sat at the confirmation noise floor while scale budgets were non-converged, so the regime changed; (4) the winning mechanisms proved complementary, so they were composed while exploration continued; (5) every win injected global information as \emph {input} while every search-control variant failed, so global information was aimed directly at the local search's blind spot---the dominant cut}{figure.8}{}}
+\gdef \@abspage@last{10}
