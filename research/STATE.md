@@ -4,14 +4,12 @@
 - topic: beat-existing-optimizers  # slug of the chosen topic once stage >= db
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
-- authorized_rounds: 2     # cycle 9 (scoring in progress) + cycle 10 (user
-                           # 2026-07-24: "queue the waist surgery batch" +
-                           # Tamaki transfer — 054 waist surgery, 055
-                           # diversity-maintained recombination, 056 PID-style
-                           # boundary-capped block DP); cycle 8 reflected
-                           # 2026-07-24
-- next_attempt: 54         # cycle-9 batch = 047-053
-- next_cycle: 9            # next reflection cycle number
+- authorized_rounds: 1     # cycle 10 (user 2026-07-24: waist surgery batch +
+                           # Tamaki transfer — 054/055/056); cycle 9 reflected
+                           # 2026-07-24 (HTML renders pending: ~/Documents
+                           # TCC-blocked; md/json canonical)
+- next_attempt: 57         # cycle-10 batch = 054-056
+- next_cycle: 10           # next reflection cycle number
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
   - validator_gate: passed 2026-07-22 (v2)  # pending | passed YYYY-MM-DD

@@ -1,0 +1,135 @@
+{
+ "schema_version": 1,
+ "cycle": 9,
+ "date_utc": "2026-07-24T12:00:00Z",
+ "project": "omeco beat-existing-optimizers",
+ "attempts_range": [
+  47,
+  53
+ ],
+ "attempts_remaining": 0,
+ "primary_metric": {
+  "name": "median-of-3 tc vs records; confirmed records",
+  "direction": "max"
+ },
+ "guard_metrics": [],
+ "bar": {
+  "value": 0.0,
+  "source": "GOAL.md v2.2/v2.3 leaderboard mode"
+ },
+ "best_this_cycle": 1.2289,
+ "best_prior": 1.658,
+ "holdout": {
+  "spent": false,
+  "result": "n/a in v2"
+ },
+ "attempts": [
+  {
+   "id": 47,
+   "kind": "improvement",
+   "parent": 39,
+   "hypothesis": "one composite (route -> simplify -> seed -> coarsened-arm racing over span-gated cold V-cycles) dominates every specialist",
+   "primary": 1.2289,
+   "status": "improved",
+   "causal_note": "THREE CONFIRMED RECORDS in one run: reg3_1000 131.154 (expander family's first fall, -2.76), ksg 37.087, sycamore_53 60.104; first positive-mean scored run. Surfacecode confirmation coin-flip lost; dbn relabeling anomaly recorded",
+   "log_path": ".worktrees/attempt-047/LOG.md"
+  },
+  {
+   "id": 48,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "replica-exchange tempering escapes basins via state swaps down the ladder",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED at scale: swap acceptance -> 0% as per-node energy gaps grow with n; degenerates to M independent anneals at 1/M throughput. Mechanism real at n=250 (descent fingerprint). Also exposed eins-metadata bug in ExprTree conversion",
+   "log_path": ".worktrees/attempt-048/LOG.md"
+  },
+  {
+   "id": 49,
+   "kind": "draft",
+   "parent": 46,
+   "hypothesis": "consensus-backbone freezing re-anneals only the disagreement region",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED on claim: fires in a transient sweet spot (consensus 0.2-0.45, e.g. reg3 172.8->144.3) then pool collapses to full agreement; rqc touch 106.39 did not survive medians (106.83)",
+   "log_path": ".worktrees/attempt-049/LOG.md"
+  },
+  {
+   "id": 50,
+   "kind": "draft",
+   "parent": 39,
+   "hypothesis": "simplification unlocks MCTS/UCT lookahead on reduced networks",
+   "primary": 0.218,
+   "status": "improved",
+   "causal_note": "MCTS FALSIFIED (depth 3 of ~380 at 8-25 rollouts/s) but its simplify-pipeline ablation set the SYCAMORE RECORD 59.911 with the campaign's tightest medians \u2014 third independent replication of the simplify mechanism",
+   "log_path": ".worktrees/attempt-050/LOG.md"
+  },
+  {
+   "id": 51,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "late-acceptance hill climbing replaces the temperature schedule",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED in SA's favor: LAHC never cools on plateau-dominated landscapes (acceptance pinned 0.93-0.99); explicit linear schedules are load-bearing; DLAS > LAHC but < SA",
+   "log_path": ".worktrees/attempt-051/LOG.md"
+  },
+  {
+   "id": 52,
+   "kind": "improvement",
+   "parent": 34,
+   "hypothesis": "dropping the coarsener and spending the freed budget on basin-hopping cycles beats 034",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "Partial locally (reg3_1000 132.78 signal) but 047 absorbed and exceeded it (131.15); corrected 034's attribution \u2014 warm coarse anneal is load-bearing, coarsener wins as a racing-arm seed, not standalone",
+   "log_path": ".worktrees/attempt-052/LOG.md"
+  },
+  {
+   "id": 53,
+   "kind": "improvement",
+   "parent": 38,
+   "hypothesis": "bounded cheap-first VE peel scales the hyperedge mechanism to large label sets",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED with mechanism boundary: peel is fast (22-260ms at 4086 labels) but freezing the periphery/core split destroys interleaved optima \u2014 VE is intrinsically small-hypergraph",
+   "log_path": ".worktrees/attempt-053/LOG.md"
+  }
+ ],
+ "reflection": {
+  "review": "Composite + innovation cycle. 047 took three records in one run including reg3_1000 (first expander fall in 53 attempts) and produced the first positive-mean scored run; 050's ablation pushed the real-Sycamore record to 59.911 (third simplify replication). Five falsifications with structural mechanism boundaries. Attempts now hold 5/10 tc records + 2 TTF records.",
+  "evidence": "- Board: 047 reg3_1000 131.154 + ksg 37.087; 050 sycamore_53 59.911; 039 surfacecode 47.824; 038 dbn 29.000; refs hold primaries, rqc, nqueens, qft.\n- Composite dominates specialists: complementary mechanisms on orthogonal axes; racing arbitrates instance-dependent choices.\n- Search-control globality (tempering/MCTS/acceptance) fails structurally at scale; input-level globality (simplify/seeds/cuts) keeps winning.\n- Sycamore march 60.61->59.91 with shrinking variance: simplified core not exhausted.",
+  "lessons": "Compose mechanisms, don't multiply search controllers. Temperature schedules are load-bearing. Tempering needs ladder density that scale forbids. VE bounded to small hypergraphs. Coarsened seeds belong inside racing.",
+  "literature": "Tempering freeze-out consistent with ladder-density theory, quantified here for contraction trees; LAHC failure consistent with its plateau-vs-rugged success profile; composite architecture and the Sycamore march appear novel.",
+  "next": "Cycle 10: 054 waist surgery (global FM cut of the dominant contraction), 055 diversity-maintained recombination (waist-signature floor), 056 PID-style boundary-capped block DP (Tamaki transfer; completion = certified width-constrained optimum)."
+ },
+ "lessons": [
+  {
+   "observation": "the composite dominates its ingredient specialists",
+   "root_cause": "mechanisms are complementary on orthogonal axes (input/seed/gating/allocation); racing arbitrates instance-dependent choices no fixed router got right",
+   "evidence": "3 records in one run; +1.23 mean; every held record matched or beaten except one confirmation coin-flip",
+   "status": "confirmed",
+   "implication": "the composite is the paper's algorithm; specialists become ablations"
+  },
+  {
+   "observation": "search-control globality fails at scale; input globality wins",
+   "root_cause": "tempering ladders freeze (energy gaps grow with n), MCTS lookahead can't reach depth, acceptance rules can't replace schedules on plateau landscapes",
+   "evidence": "048/050/051 structural falsifications vs 039/047/050 records",
+   "status": "confirmed",
+   "implication": "cycle-10 injects globality at input/move level (waist cuts, block DP)"
+  },
+  {
+   "observation": "real-Sycamore record marched 60.61->59.91 with shrinking variance",
+   "root_cause": "the simplified 381-tensor core landscape is much better-conditioned than the raw network",
+   "evidence": "039/047/050 successive confirmed records; 050 medians within 0.05",
+   "status": "confirmed",
+   "implication": "056's exact block DP has a real shot at a certified optimum there"
+  }
+ ],
+ "blacklist_new": [
+  "replica-exchange tempering at n >= 1000 (ladder freeze-out; 048)",
+  "LAHC/DLAS acceptance on contraction-tree landscapes (051)",
+  "VE peeling of large label sets (053)",
+  "MCTS with >= 40ms rollouts on 300+-deep horizons (050)"
+ ],
+ "insight_promotions": []
+}
