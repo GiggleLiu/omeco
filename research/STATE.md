@@ -52,3 +52,14 @@
     --scale default group = reg3_1000 + sycamore_53_20_0 + surfacecode_d21
     + ksg; scale wall limit raised 1200 -> 2400 s to fit 4x(3x90 s) plus
     confirmation runs.
+  - 2026-07-25: measurement moved to remote host `huawei` (2-core Ubuntu ECS,
+    dedicated/quiet) after repeated local interruptions — full 305-job paper
+    campaign rerun there same-machine (research/paper_data/runs_huawei/),
+    matched-budget Julia ladder v2 running through the benchmark repo harness.
+  - 2026-07-25: user directed next batch: show the new methods work better on
+    inference tasks from ~/.julia/dev/TensorInference — "handle the hard
+    instances properly". 65 uai2014 MAR instances exported (validator schema,
+    faithful to TensorNetworkModel full-card construction); 5 s hardness scan
+    ranked DBN/linkage hardest; 200-job batch (10 hard instances x
+    {ref,a038,a050,a054} x 5 reps x 90 s) + Julia baselines (incl.
+    TensorInference default TreeSA) chained on huawei after the ladder.
