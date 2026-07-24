@@ -5,9 +5,11 @@
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
 - authorized_rounds: 2     # cycle 9 (scoring in progress) + cycle 10 (user
-                           # 2026-07-24: "queue the waist surgery batch" —
-                           # 054 waist surgery, 055 diversity-maintained
-                           # recombination); cycle 8 reflected 2026-07-24
+                           # 2026-07-24: "queue the waist surgery batch" +
+                           # Tamaki transfer — 054 waist surgery, 055
+                           # diversity-maintained recombination, 056 PID-style
+                           # boundary-capped block DP); cycle 8 reflected
+                           # 2026-07-24
 - next_attempt: 54         # cycle-9 batch = 047-053
 - next_cycle: 9            # next reflection cycle number
 - gates:
