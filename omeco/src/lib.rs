@@ -146,6 +146,7 @@ pub mod slicer;
 pub mod treesa;
 pub mod treewidth;
 pub mod utils;
+pub mod waist_surgery;
 
 #[cfg(test)]
 pub mod test_utils;
@@ -172,6 +173,7 @@ pub use treesa::{
 pub use treewidth::{
     optimize_treewidth, EliminationAlgorithm, EliminationOrder, Treewidth, TreewidthError,
 };
+pub use waist_surgery::{refine as waist_refine, WaistReport};
 
 use std::collections::HashMap;
 
