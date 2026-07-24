@@ -14,7 +14,7 @@ use crate::utils::fast_log2sumexp2;
 use crate::Label;
 use rand::prelude::*;
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Configuration for the TreeSA optimizer.
 #[derive(Debug, Clone)]
@@ -519,42 +519,117 @@ fn node_sc(out_dims: &[usize], log2_sizes: &[f64]) -> f64 {
 }
 
 /// Convert an ExprTree back to a NestedEinsum.
-/// The `openedges` parameter specifies the final output indices for the root node.
+///
+/// Every internal node's output index set is derived from the tree topology by
+/// **outside-occurrence counting** — a label is an output of a node iff it occurs
+/// in a tensor outside the node's subtree or is a final-output (open) label —
+/// rather than trusting the `out_dims` cached on the tree. The cached `out_dims`
+/// can disagree with the topology for labels that appear in more than two tensors
+/// (hypergraph edges), which would make [`crate::contraction_complexity`] and any
+/// topology-derived scorer report different costs for the same tree. Deriving the
+/// outputs from occurrence counts keeps the emitted `eins` bodies consistent with
+/// the topology in all cases. `inverse_map` is retained for signature stability
+/// but no longer consulted. The `openedges` parameter fixes the root output
+/// (issue #13).
 fn expr_tree_to_nested<L: Label>(
     tree: &ExprTree,
     original_ixs: &[Vec<L>],
-    inverse_map: &[L],
+    _inverse_map: &[L],
+    openedges: &[L],
+    _level: usize,
+) -> NestedEinsum<L> {
+    // Global occurrence count of every label across all original tensors.
+    let mut global_count: HashMap<L, usize> = HashMap::new();
+    for ix in original_ixs {
+        for l in ix {
+            *global_count.entry(l.clone()).or_insert(0) += 1;
+        }
+    }
+    let open_set: HashSet<L> = openedges.iter().cloned().collect();
+    expr_tree_to_nested_counted(tree, original_ixs, &open_set, &global_count, openedges, 0).0
+}
+
+/// Recursive worker for [`expr_tree_to_nested`]. Returns the converted subtree,
+/// the multiset of label occurrence counts within the subtree, and the subtree's
+/// output labels (the labels it exposes to its parent).
+fn expr_tree_to_nested_counted<L: Label>(
+    tree: &ExprTree,
+    original_ixs: &[Vec<L>],
+    open_set: &HashSet<L>,
+    global_count: &HashMap<L, usize>,
     openedges: &[L],
     level: usize,
-) -> NestedEinsum<L> {
+) -> (NestedEinsum<L>, HashMap<L, usize>, Vec<L>) {
     match tree {
-        ExprTree::Leaf(info) => NestedEinsum::leaf(info.tensor_id.unwrap_or(0)),
-        ExprTree::Node { left, right, info } => {
-            let left_nested =
-                expr_tree_to_nested(left, original_ixs, inverse_map, openedges, level + 1);
-            let right_nested =
-                expr_tree_to_nested(right, original_ixs, inverse_map, openedges, level + 1);
+        ExprTree::Leaf(info) => {
+            let tid = info.tensor_id.unwrap_or(0);
+            let labels = original_ixs.get(tid).cloned().unwrap_or_default();
+            let mut within: HashMap<L, usize> = HashMap::new();
+            for l in &labels {
+                *within.entry(l.clone()).or_insert(0) += 1;
+            }
+            (NestedEinsum::leaf(tid), within, labels)
+        }
+        ExprTree::Node { left, right, .. } => {
+            let (left_nested, left_within, left_out) = expr_tree_to_nested_counted(
+                left,
+                original_ixs,
+                open_set,
+                global_count,
+                openedges,
+                level + 1,
+            );
+            let (right_nested, right_within, right_out) = expr_tree_to_nested_counted(
+                right,
+                original_ixs,
+                open_set,
+                global_count,
+                openedges,
+                level + 1,
+            );
 
-            // At level 0 (root), use openedges; otherwise use computed output
+            // Merge the two subtrees' occurrence counts.
+            let mut within = left_within;
+            for (l, c) in right_within {
+                *within.entry(l).or_insert(0) += c;
+            }
+
+            // At the root use openedges verbatim (issue #13). Otherwise a label is
+            // an output iff it still occurs outside this subtree (within < global)
+            // or is an open/output label. Iterate children outputs for a stable,
+            // Ord-free ordering.
             let iy: Vec<L> = if level == 0 {
                 openedges.to_vec()
             } else {
-                info.out_dims
-                    .iter()
-                    .map(|&i| inverse_map[i].clone())
-                    .collect()
+                let mut out: Vec<L> = Vec::new();
+                for l in left_out.iter().chain(right_out.iter()) {
+                    if out.contains(l) {
+                        continue;
+                    }
+                    let w = within.get(l).copied().unwrap_or(0);
+                    let g = global_count.get(l).copied().unwrap_or(0);
+                    if open_set.contains(l) || w < g {
+                        out.push(l.clone());
+                    }
+                }
+                out
             };
 
-            // Get input labels from children
-            let left_labels = get_child_labels(&left_nested, original_ixs);
-            let right_labels = get_child_labels(&right_nested, original_ixs);
-
-            let eins = EinCode::new(vec![left_labels, right_labels], iy);
-            NestedEinsum::node(vec![left_nested, right_nested], eins)
+            let eins = EinCode::new(vec![left_out, right_out], iy.clone());
+            (
+                NestedEinsum::node(vec![left_nested, right_nested], eins),
+                within,
+                iy,
+            )
         }
     }
 }
 
+/// Return the labels a converted child exposes to its parent: a leaf exposes its
+/// original tensor indices, a node exposes its `eins` output. No longer used by
+/// the conversion itself (which now returns child outputs directly), but retained
+/// for its existing unit tests.
+#[cfg(test)]
 fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>]) -> Vec<L> {
     match nested {
         NestedEinsum::Leaf { tensor_index } => {
@@ -1246,6 +1321,72 @@ mod tests {
 
         let labels = get_child_labels(&nested, &original_ixs);
         assert!(labels.is_empty()); // Should return default empty vec
+    }
+
+    /// Regression test for the eins-metadata inconsistency bug.
+    ///
+    /// `expr_tree_to_nested` used to trust each node's cached `out_dims`. For a
+    /// label appearing in more than two tensors, a stale `out_dims` on an
+    /// intermediate node produces `eins` bodies that under-report the cost: the
+    /// label is dropped from a subtree's output, so the parent contraction never
+    /// "sees" it and [`crate::contraction_complexity`] disagrees with the
+    /// topology-derived scorer. Here we build a network where label `0` appears in
+    /// all four tensors (a hypergraph edge) and hand-build an `ExprTree` whose two
+    /// intermediate nodes carry *wrong* `out_dims` that omit `0`. The conversion
+    /// must still emit a topology-consistent tree: label `0` must be contracted at
+    /// the root, so its cost is counted exactly once.
+    #[test]
+    fn test_expr_tree_to_nested_ignores_stale_out_dims_on_hyperedge() {
+        use crate::contraction_complexity;
+        // Labels 0..=4; 0 occurs in every tensor (4-way hyperedge), 1..=4 are open.
+        let original_ixs: Vec<Vec<usize>> = vec![vec![0, 1], vec![0, 2], vec![0, 3], vec![0, 4]];
+        let openedges = vec![1, 2, 3, 4];
+        // Label id == bit index here, so inverse_map is the identity 0..=4.
+        let inverse_map: Vec<usize> = vec![0, 1, 2, 3, 4];
+
+        // Subtree A = (t0, t1) with DELIBERATELY WRONG out_dims [1,2] (drops 0).
+        let a = ExprTree::node(
+            ExprTree::leaf(vec![0, 1], 0),
+            ExprTree::leaf(vec![0, 2], 1),
+            vec![1, 2],
+        );
+        // Subtree B = (t2, t3) with wrong out_dims [3,4] (drops 0).
+        let b = ExprTree::node(
+            ExprTree::leaf(vec![0, 3], 2),
+            ExprTree::leaf(vec![0, 4], 3),
+            vec![3, 4],
+        );
+        let root = ExprTree::node(a, b, vec![1, 2, 3, 4]);
+
+        let nested = expr_tree_to_nested(&root, &original_ixs, &inverse_map, &openedges, 0);
+
+        // Each intermediate node must keep label 0 (it occurs outside its subtree).
+        if let NestedEinsum::Node { args, .. } = &nested {
+            for child in args {
+                if let NestedEinsum::Node { eins, .. } = child {
+                    assert!(
+                        eins.iy.contains(&0),
+                        "intermediate node dropped the shared hyperedge label 0: {:?}",
+                        eins.iy
+                    );
+                }
+            }
+        } else {
+            panic!("expected a root node");
+        }
+
+        // With all dims 2, the three nodes cost: A over {0,1,2} = 2^3, B over
+        // {0,3,4} = 2^3, root over {0,1,2,3,4} = 2^5 (label 0 is contracted here).
+        // Total tc = log2(2^3 + 2^3 + 2^5) = log2(48) ~= 5.585. Trusting the stale
+        // out_dims would drop 0 from the root union, giving the wrong log2(32) = 5.0.
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 2), (2, 2), (3, 2), (4, 2)].into();
+        let cc = contraction_complexity(&nested, &sizes, &original_ixs);
+        let expected = (48.0_f64).log2();
+        assert!(
+            (cc.tc - expected).abs() < 1e-9,
+            "topology tc should be {expected}, got {} (stale out_dims would under-report as 5.0)",
+            cc.tc
+        );
     }
 
     #[test]
