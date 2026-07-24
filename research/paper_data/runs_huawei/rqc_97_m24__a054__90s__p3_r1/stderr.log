@@ -1,0 +1,22 @@
+probe: instance=rqc_97_m24 n_orig=1238 n=957 fusible=0.2270 nlabels=1904 t=6ms
+seed_greedy tc=163.0226 t=553ms
+t=21438ms iter=1 WAIST cost=125.0000 best_alt=97.0000 gap=28.0000 tried=5 sep_labels=97 clique_frac=0.01
+t=22435ms iter=1 REBUILD ACCEPT new_tc=110.2710 (was 125.0000)
+t=41414ms iter=1 incumb=110.2710 ratchet=107.1848 best=107.1848 since_improve=0
+t=41454ms iter=2 WAIST cost=101.0000 best_alt=89.0000 gap=12.0000 tried=5 sep_labels=89 clique_frac=0.01
+t=42077ms iter=2 REBUILD reject new_tc=131.0000 (was 107.1848)
+t=42789ms iter=2 incumb=107.1848 ratchet=107.1977 best=107.1848 since_improve=1
+t=42826ms iter=3 WAIST cost=101.0000 best_alt=94.0000 gap=7.0000 tried=5 sep_labels=94 clique_frac=0.01
+t=43522ms iter=3 REBUILD reject new_tc=144.0037 (was 107.1848)
+t=51888ms iter=3 incumb=107.1848 ratchet=107.0841 best=107.0799 since_improve=0
+t=51915ms iter=4 WAIST cost=101.0000 best_alt=82.0000 gap=19.0000 tried=5 sep_labels=82 clique_frac=0.01
+t=52329ms iter=4 REBUILD reject new_tc=137.0014 (was 107.0841)
+t=63427ms iter=4 incumb=107.0841 ratchet=106.9982 best=106.9982 since_improve=0
+t=63448ms iter=5 WAIST cost=101.0000 best_alt=94.0000 gap=7.0000 tried=5 sep_labels=94 clique_frac=0.01
+t=63946ms iter=5 REBUILD reject new_tc=124.0013 (was 106.9982)
+t=84402ms iter=5 incumb=106.9982 ratchet=106.8858 best=106.8858 since_improve=0
+t=84448ms iter=6 WAIST cost=101.0000 best_alt=93.0000 gap=8.0000 tried=5 sep_labels=93 clique_frac=0.01
+t=85099ms iter=6 REBUILD reject new_tc=132.0000 (was 106.8858)
+t=87413ms iter=6 incumb=106.8858 ratchet=106.8540 best=106.8540 since_improve=0
+t_final=88424ms tc_reduced=106.8540 tc_full=110.2196 leaves=1238
+surgery summary: calls=6 cheaper_cuts=6 rebuild_accepts=1 waist_min_hits=0
