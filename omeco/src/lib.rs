@@ -163,7 +163,10 @@ pub use greedy::{optimize_greedy, ContractionTree, GreedyMethod, GreedyResult};
 pub use label::Label;
 pub use score::ScoreFunction;
 pub use slicer::{slice_code, CodeSlicer, Slicer, TreeSASlicer};
-pub use treesa::{optimize_treesa, Initializer, TreeSA};
+pub use treesa::{
+    optimize_treesa, prepare_warm_anneal, warm_exprtree_to_nested, Initializer, TreeSA,
+    WarmAnnealCtx,
+};
 pub use treewidth::{
     optimize_treewidth, EliminationAlgorithm, EliminationOrder, Treewidth, TreewidthError,
 };
