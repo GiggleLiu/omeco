@@ -1,0 +1,93 @@
+{
+ "schema_version": 1,
+ "cycle": 10,
+ "date_utc": "2026-07-24T18:00:00Z",
+ "project": "omeco beat-existing-optimizers",
+ "attempts_range": [
+  54,
+  56
+ ],
+ "attempts_remaining": 0,
+ "primary_metric": {
+  "name": "median-of-3 tc vs records; confirmed records",
+  "direction": "max"
+ },
+ "guard_metrics": [],
+ "bar": {
+  "value": 0.0,
+  "source": "GOAL.md v2.2/v2.3 leaderboard mode"
+ },
+ "best_this_cycle": 0.4217,
+ "best_prior": 1.2289,
+ "holdout": {
+  "spent": false,
+  "result": "n/a in v2"
+ },
+ "attempts": [
+  {
+   "id": 54,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "global FM improvement of the waist cut + two-sided rebuild jumps between bipartitions SA cannot reach",
+   "primary": 0.4217,
+   "status": "improved",
+   "causal_note": "THREE CONFIRMED RECORDS (ksg 36.963, surfacecode 47.404, reg3_1000 131.068); sycamore missed the bar by 0.001; rqc base median beat, confirmation failed. Inversion: the frontier waist is NEVER a globally minimal cut (hundreds of calls, zero WAIST-MIN) \u2014 cuts are sparse, not near-clique; fixing pays exactly on separable networks",
+   "log_path": ".worktrees/attempt-054/LOG.md"
+  },
+  {
+   "id": 55,
+   "kind": "improvement",
+   "parent": 46,
+   "hypothesis": "a diversity-maintained elite pool extends the productive-relink window past the collapse point",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED with the machinery working: distance floor held at max, reinjection functioning, and wins STILL died at relink 7-12 \u2014 basin complementarity is a small reservoir independent of pool policy; recombination family (046-049-055) closed",
+   "log_path": ".worktrees/attempt-055/LOG.md"
+  },
+  {
+   "id": 56,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "Tamaki's positive-instance principle transfers: few feasible low-boundary blocks -> completed exact DP on simplified real instances",
+   "primary": null,
+   "status": "no-change",
+   "causal_note": "FALSIFIED: states explode past 1e5-1e6 within a few bits of min_w on all 6 instances (oracle-certified exact DP, 400 brute-forced graphs). Byproduct: connectivity-restricted block fusion is provably WRONG (outer-product counterexample)",
+   "log_path": ".worktrees/attempt-056/LOG.md"
+  }
+ ],
+ "reflection": {
+  "review": "Global-information batch. 054 waist surgery became the campaign's second pillar: three confirmed records (ksg, surfacecode, reg3_1000) with airtight rebuild attribution, plus the inversion that SA-refined waists are ALWAYS globally improvable (fixing them pays exactly on separable networks). 055 closed the recombination family with a three-attempt causal chain; 056 falsified the Tamaki transfer with oracle-certified blow-up curves. Final board: attempts hold 5/10 tc records + 2/3 TTF records.",
+  "evidence": "- 054 report: records confirmed median-of-3 + worse-of-two on quiet machine; fixed-work sub-anneals collapsed variance 0.8->0.08 bits.\n- 055: distance floor held at 6 throughout, wins died at relink 7-12 anyway.\n- 056: BLOCK-DP-CURVE lines on 6 instances; oracle test 400 graphs; outer-product counterexample.\n- rqc_97_m24 repelled its third mechanism (base median beat, confirm failed).",
+  "lessons": "Global information wins as moves-over-incumbent (surgery) or input (simplification); loses as search control, enumeration, or population policy. Expander vs separable networks now cleanly characterizes where local search suffices. rqc/nqueens need a bounds thread, not more optimizer attempts.",
+  "literature": "FM surgery on an SA-optimal tree's dominant cut (vs FM tree CONSTRUCTION, which failed in 005/037/041) appears novel; block-DP blow-up quantifies folklore; outer-product counterexample sharpens netcon pruning claims.",
+  "next": "None authorized \u2014 rounds exhausted. Recommend write-up: two-pillar algorithm story + composite + 20 mechanism-bounded negatives; optional bounds thread and omeco PR."
+ },
+ "lessons": [
+  {
+   "observation": "the SA frontier's waist is never a globally minimal balanced cut",
+   "root_cause": "one-leaf rewrites cannot jump between bipartitions; FM on the tensor graph finds 3-12-bit-cheaper cuts every call",
+   "evidence": "054: hundreds of surgery calls, zero WAIST-MIN, on all 6 instances",
+   "status": "confirmed",
+   "implication": "waist surgery is a real transferable mechanism; where it pays is characterized by separability"
+  },
+  {
+   "observation": "basin complementarity is a small reservoir (~10 recombinations), independent of pool diversity",
+   "root_cause": "re-diversified elites are individually good but no longer complementary to the incumbent's remaining slack",
+   "evidence": "055: floor held at max, wins died at relink 7-12 as in 046/049",
+   "status": "confirmed",
+   "implication": "recombination family closed; budget belongs in per-elite descent"
+  },
+  {
+   "observation": "the PID 'few feasible blocks' premise fails for flop minimization",
+   "root_cause": "low-open-boundary connected subsets are astronomically many just above min_w, unlike low-width separators in treewidth",
+   "evidence": "056 blow-up curves on 6 instances with an oracle-certified DP",
+   "status": "confirmed",
+   "implication": "exact-method boundary quantified; certification of the new records needs bounds, not enumeration"
+  }
+ ],
+ "blacklist_new": [
+  "pool-policy variations for recombination (055 closes the family)",
+  "boundary-capped block enumeration above min_w (056)"
+ ],
+ "insight_promotions": []
+}
