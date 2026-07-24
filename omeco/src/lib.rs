@@ -139,6 +139,7 @@ pub mod greedy;
 pub mod incidence_list;
 pub mod json;
 pub mod label;
+pub mod preprocess;
 pub mod score;
 pub mod simplifier;
 pub mod slicer;
@@ -161,6 +162,7 @@ pub use eincode::{log2_size_dict, uniform_size_dict, EinCode, NestedEinsum, Slic
 pub use exhaustive::{optimize_exhaustive, ExhaustiveSearch, ExhaustiveSearchError};
 pub use greedy::{optimize_greedy, ContractionTree, GreedyMethod, GreedyResult};
 pub use label::Label;
+pub use preprocess::{simplify, simplify_then_optimize, splice, Simplified, SimplifyReport};
 pub use score::ScoreFunction;
 pub use slicer::{slice_code, CodeSlicer, Slicer, TreeSASlicer};
 pub use treesa::{
