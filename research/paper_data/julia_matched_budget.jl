@@ -1,61 +1,52 @@
-# Matched-budget (90 s) Julia OMECO baselines on the paper instances.
-# Best-of-restarts within the budget per optimizer; pure-tc objective for
-# TreeSA (sc_target = Inf) to match the paper's protocol; HyperND/Treewidth
-# are deterministic-ish one-shots looped best-of.
-# Usage: julia --project=/Users/liujinguo/jcode/OMEinsumContractionOrdersBenchmark \
-#          research/paper_data/julia_matched_budget.jl <instance.json> <budget_s> <out.json>
+# Matched-budget Julia OMECO baselines, run THROUGH the benchmark repo's own
+# harness (runner.jl / run_one) so results land in examples/*/results/ in the
+# published schema and are directly comparable to the published rows.
+#
+# Design: a cost ladder of configs per optimizer; the analysis step selects,
+# per optimizer, the best tc among rows with time_elapsed <= the paper budget
+# (90 s). Includes TreeSA at BOTH the shipped sc_target=20 default and the
+# pure-tc setting (sc_target = 1e3 ~ unbounded) — measuring the sc_target
+# cliff on the reference Julia implementation itself.
+#
+# Usage:
+#   julia --project=/Users/liujinguo/jcode/OMEinsumContractionOrdersBenchmark \
+#     research/paper_data/julia_matched_budget.jl
 
-using OMEinsumContractionOrders, OMEinsumContractionOrders.JSON, KaHyPar
-using OMEinsumContractionOrders: MF, MMD, AMF
+const BENCH = "/Users/liujinguo/jcode/OMEinsumContractionOrdersBenchmark"
+include(joinpath(BENCH, "runner.jl"))
 
-function load_instance(path)
-    js = JSON.parsefile(path)
-    ixs = [Vector{Int}(ix) for ix in js["ixs"]]
-    iy = Vector{Int}(js["iy"])
-    sizes = Dict([(Base.parse(Int, k) => Int(v)) for (k, v) in js["sizes"]])
-    return OMEinsumContractionOrders.EinCode(ixs, iy), sizes
-end
-
-function best_within(code, sizes, budget_s, mkopt)
-    deadline = time() + budget_s
-    best_tc, best_sc, runs = Inf, Inf, 0
-    while time() < deadline
-        optcode = optimize_code(code, sizes, mkopt(runs))
-        cc = OMEinsumContractionOrders.contraction_complexity(optcode, sizes)
-        runs += 1
-        if cc.tc < best_tc
-            best_tc, best_sc = cc.tc, cc.sc
-        end
+function paper_optimizers()
+    opts = Any[]
+    for ntrials in (1, 4, 8), sct in (20.0, 1000.0)
+        push!(opts, TreeSA(sc_target=sct, ntrials=ntrials, niters=50,
+                           βs=0.01:0.05:15.0))
     end
-    return best_tc, best_sc, runs
+    push!(opts, HyperND())
+    for alg in (MF(), AMF(), MMD())
+        push!(opts, Treewidth(alg=alg))
+    end
+    return opts
 end
 
-function main()
-    inst_path, budget_s, out_path = ARGS[1], Base.parse(Float64, ARGS[2]), ARGS[3]
-    code, sizes = load_instance(inst_path)
-    results = Dict{String,Any}()
-    # warm up JIT on a tiny budget first
-    optimize_code(code, sizes, GreedyMethod())
+# Paper instances only (superset of config.toml; d=9..17 for the family trend)
+const PAPER_INSTANCES = [
+    ("quantumcircuit", "sycamore_53_20_0.json"),
+    ("qec", "surfacecode_d=21.json"),
+    ("qec", "surfacecode_d=17.json"),
+    ("qec", "surfacecode_d=13.json"),
+    ("qec", "surfacecode_d=9.json"),
+    ("independentset", "ksg.json"),
+    ("inference", "DBN_13.json"),
+    ("nqueens", "nqueens_n=28.json"),
+    ("einsumorg", "qc_qft_27.json"),
+]
 
-    for (name, mkopt) in [
-        ("TreeSA_scinf", r -> TreeSA(sc_target=1000.0, ntrials=1, niters=30,
-                                     βs=0.01:0.05:15.0)),
-        ("HyperND", r -> HyperND()),
-        ("Treewidth_MF", r -> Treewidth(alg=MF())),
-    ]
+for (problem, inst) in PAPER_INSTANCES
+    for opt in paper_optimizers()
         try
-            tc, sc, runs = best_within(code, sizes, budget_s, mkopt)
-            results[name] = Dict("tc" => tc, "sc" => sc, "restarts" => runs)
-            @info "$name: tc=$tc sc=$sc restarts=$runs"
+            run_one(joinpath(BENCH, "examples", problem, "codes", inst), opt)
         catch e
-            results[name] = Dict("error" => sprint(showerror, e))
-            @warn "$name failed" exception = e
+            @warn "failed" inst opt exception = e
         end
     end
-    open(out_path, "w") do io
-        JSON.print(io, Dict("instance" => inst_path, "budget_s" => budget_s,
-                            "results" => results), 1)
-    end
 end
-
-main()
