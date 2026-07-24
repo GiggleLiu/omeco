@@ -189,10 +189,10 @@ def fig10_waist_surgery():
     ax.scatter([t for t, _ in acc], [c for _, c in acc], marker="*", s=140,
                color=RED, zorder=3, label="accepted waist rebuild")
     ax.axhline(47.824, color=BLACK, lw=2.0, ls=":")
-    ax.text(30, 47.85, "pre-surgery record 47.824", fontsize=8)
+    ax.text(86, 47.93, "pre-surgery record 47.824", fontsize=8, ha="right")
     ax.axhline(47.377, color=RED, lw=1.6, ls="-.")
-    ax.text(2, 47.31, "official median with surgery 47.377", fontsize=8, color=RED)
-    ax.set_ylim(47.2, None)
+    ax.text(2, 47.24, "official median with surgery 47.377", fontsize=8, color=RED)
+    ax.set_ylim(47.12, None)
     ax.set_xlabel("wall-clock time  [s]")
     ax.set_ylabel(r"surface code d=21   tc  [log$_2$ flops]")
     ax.legend(loc="upper right", frameon=False)
