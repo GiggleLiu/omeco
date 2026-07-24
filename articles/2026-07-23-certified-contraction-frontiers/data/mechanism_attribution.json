@@ -1,0 +1,59 @@
+{
+  "_provenance": "Curated from attempt LOG.md files (scorer-verified numbers) and official validator reports; 2026-07-24. Sources: attempts 039, 050, 047, 054, 034, 038, 032, and cycle-08/09/10 reflections.",
+  "simplification": {
+    "shrink": {
+      "sycamore_53_20_0": {"n_raw": 3369, "n_reduced": 381, "frac": 0.887},
+      "surfacecode_d21": {"n_raw": 2203, "n_reduced": 761, "frac": 0.655},
+      "nqueens_28": {"n_raw": 4252, "frac": 0.339},
+      "dbn_13": {"n_raw": 572, "n_reduced": 484, "frac": 0.154},
+      "qft_27": {"n_raw": 405, "n_reduced": 376, "frac": 0.072},
+      "reg3_1000": {"n_raw": 1000, "frac": 0.0}
+    },
+    "matched_budget_ab_sycamore_53": {
+      "with_simplify_tc": 61.27,
+      "without_simplify_tc": 76.0,
+      "note": "attempt-039 local A/B, same 90 s budget, same anneal (loaded machine; official medians below)"
+    },
+    "sycamore_record_march": [
+      {"tc": 60.605, "by": "ref:treesa-inf", "when": "reference seeding"},
+      {"tc": 60.169, "by": "attempt-039", "when": "cycle 8"},
+      {"tc": 60.104, "by": "attempt-047", "when": "cycle 9"},
+      {"tc": 59.911, "by": "attempt-050", "when": "cycle 9"}
+    ]
+  },
+  "waist_surgery": {
+    "always_improvable": {
+      "instances": 6,
+      "surgery_calls": "hundreds per run",
+      "waist_min_hits": 0,
+      "cut_gap_bits": {"surfacecode_d21": [3, 12], "ksg": [9, 11]},
+      "clique_frac": [0.01, 0.05],
+      "note": "FM found a strictly cheaper comparable-balance cut on EVERY call; improved cuts are sparse, not near-clique (attempt-054)"
+    },
+    "base_vs_surgery_plateau": {
+      "surfacecode_d21": {"ratchet_only": 49.6, "with_surgery_median": 47.377},
+      "ksg": {"ratchet_only": 50.0, "with_surgery_median": 36.776}
+    },
+    "fixed_work_variance": {"time_boxed_spread_bits": 0.8, "fixed_work_spread_bits": 0.08}
+  },
+  "ve_seed": {
+    "dbn_13": {"seed_tc": 28.79, "greedy_tc": 44.7, "ttf_s": 0.205,
+               "label_count": 44, "label_degree": 24},
+    "boundary": "falsified at 4086 labels (nqueens, attempts 038/053): VE peel freezes the periphery/core interleaving"
+  },
+  "falsified_mechanisms": [
+    {"name": "BFS/planar separators (construction)", "attempt": "037", "cause": "seeds lose to greedy portfolio even with Staudt injection"},
+    {"name": "spectral bisection (construction)", "attempt": "041", "cause": "power iteration cannot converge (gap ~1/n^2); perfect bisection still dominated"},
+    {"name": "boundary-MPS combs", "attempt": "036/044", "cause": "cutwidth 90-126 lower-bounds any comb, far above balanced-tree records"},
+    {"name": "mass randomized greedy", "attempt": "040", "cause": "quality ceiling 15-208 bits; 1.2 builds/s at n=5197"},
+    {"name": "elimination-order annealing", "attempt": "045", "cause": "flat landscape (30 improvements / 2.5M cold moves); representation floor ~2x above tree space"},
+    {"name": "congestion-softmax targeting", "attempt": "042", "cause": "collapses onto dominant node on peaky profiles; 40-80% dead traversal"},
+    {"name": "cache-blocked regional SA", "attempt": "043", "cause": "pointer trees have no memory contiguity; blocking starves global moves"},
+    {"name": "replica-exchange tempering", "attempt": "048", "cause": "swap acceptance -> 0% at scale (energy gaps grow with n)"},
+    {"name": "late-acceptance hill climbing", "attempt": "051", "cause": "never cools on plateau-dominated landscapes; schedules are load-bearing"},
+    {"name": "MCTS over prefixes", "attempt": "050", "cause": "depth 3 of ~380 at 8-25 rollouts/s"},
+    {"name": "path-relinking / consensus / diversity pools", "attempt": "046/049/055", "cause": "basin complementarity drains after ~10 recombinations regardless of pool policy"},
+    {"name": "Tamaki block DP", "attempt": "056", "cause": "feasible low-boundary blocks explode past 1e5-1e6 within bits of min_w (oracle-certified DP)"},
+    {"name": "window-exact splice (<=16 leaves)", "attempt": "033", "cause": "frontier trees window-exact-optimal; dominant window spans a constant fraction"}
+  ]
+}
