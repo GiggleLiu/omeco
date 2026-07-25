@@ -715,7 +715,18 @@ and annealing-family methods---ours leading on all four---hold the
 frontier. \emph{Third, the regime boundary is a structure property, not
 a size property}: the DBN networks have 44--66 shared labels of high
 degree (elimination's sweet spot), while linkage networks are sparse
-with a thousand variables. A portfolio that probes elimination first
+with a thousand variables. The hard families are not a quirk of our
+selection: an early triage in the package's own issue tracker found 105
+of the 142 UAI-2014 instances failing, and explicitly asked whether the
+contraction-order optimizer was leaving the DBN and pedigree families
+far from the treewidth optimum \cite{roa_2022_ti_issue15}. The
+reference tree decompositions posted there (Tamaki's solver) let us
+answer that question with an external anchor: on all four dense
+instances in our hard set the best elimination-method space cost equals
+the reference treewidth exactly ($\sct = 21/20/22/20$ against largest
+bags $22/21/23/21$ on DBN\_12/14/16 and Grids\_15), so the
+$12$--$30$-bit default gap is measured against a certified-width
+frontier, not merely against the best order we happened to find. A portfolio that probes elimination first
 (milliseconds) and falls back to the annealing pipeline otherwise
 captures the frontier everywhere we measured; the simplification pass
 (Sec.~\ref{sec:simplify}) additionally absorbs the per-variable unity
