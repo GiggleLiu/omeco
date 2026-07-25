@@ -1,0 +1,68 @@
+{
+ "rows": [
+  {
+   "instance": "sycamore_53_20_0",
+   "label": "Sycamore\n53q m=20\n(3369)",
+   "delta": 0.694,
+   "mechanism": "simplify-then-anneal",
+   "record_tc": 59.911,
+   "sc": 52.0
+  },
+  {
+   "instance": "surfacecode_d21",
+   "label": "surface code\nd=21\n(2203)",
+   "delta": 1.3542,
+   "mechanism": "waist surgery",
+   "record_tc": 47.404,
+   "sc": 40.0
+  },
+  {
+   "instance": "ksg",
+   "label": "king graph\nIS (5197)",
+   "delta": 2.1529,
+   "mechanism": "waist surgery",
+   "record_tc": 36.963,
+   "sc": 30.0
+  },
+  {
+   "instance": "reg3_1000",
+   "label": "random\n3-regular\n(1000)",
+   "delta": 2.8421,
+   "mechanism": "waist surgery",
+   "record_tc": 131.068,
+   "sc": 124.0
+  },
+  {
+   "instance": "dbn_13",
+   "label": "DBN\ninference\n(572)",
+   "delta": 0.0927,
+   "mechanism": "VE seed",
+   "record_tc": 29.0,
+   "sc": 24.0
+  },
+  {
+   "instance": "rqc_97_m24",
+   "label": "RQC 97q\nm=24\n(1238)",
+   "delta": 0.0,
+   "mechanism": "reference",
+   "record_tc": 106.468,
+   "sc": 97.0
+  },
+  {
+   "instance": "nqueens_28",
+   "label": "28-queens\n(4252)",
+   "delta": 0.0,
+   "mechanism": "reference",
+   "record_tc": 121.368,
+   "sc": 115.0
+  },
+  {
+   "instance": "qft_27",
+   "label": "QFT-27\n(405)",
+   "delta": 0.0,
+   "mechanism": "reference",
+   "record_tc": 29.61,
+   "sc": 27.0
+  }
+ ]
+}

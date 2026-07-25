@@ -1,0 +1,94 @@
+{
+ "rows": [
+  {
+   "instance": "uai_DBN_12",
+   "label": "DBN\n12",
+   "default": 15.806,
+   "elim": 0.0,
+   "treesa": 6.706,
+   "ours": 0.716
+  },
+  {
+   "instance": "uai_DBN_14",
+   "label": "DBN\n14",
+   "default": 14.549,
+   "elim": 0.0,
+   "treesa": 5.611,
+   "ours": 0.58
+  },
+  {
+   "instance": "uai_DBN_16",
+   "label": "DBN\n16",
+   "default": 16.569,
+   "elim": 0.0,
+   "treesa": 8.981,
+   "ours": 0.749
+  },
+  {
+   "instance": "uai_linkage_13",
+   "label": "link.\n13",
+   "default": 22.611,
+   "elim": 10.993,
+   "treesa": 0.025,
+   "ours": 0.0
+  },
+  {
+   "instance": "uai_linkage_15",
+   "label": "link.\n15",
+   "default": 30.451,
+   "elim": 15.356,
+   "treesa": 0.057,
+   "ours": 0.0
+  },
+  {
+   "instance": "uai_linkage_17",
+   "label": "link.\n17",
+   "default": 21.716,
+   "elim": 11.113,
+   "treesa": 0.063,
+   "ours": 0.0
+  },
+  {
+   "instance": "uai_linkage_23",
+   "label": "link.\n23",
+   "default": 18.361,
+   "elim": 3.668,
+   "treesa": 0.575,
+   "ours": 0.0
+  },
+  {
+   "instance": "uai_CSP_11",
+   "label": "CSP\n11",
+   "default": 15.363,
+   "elim": 0.396,
+   "treesa": 0.508,
+   "ours": 0.0
+  },
+  {
+   "instance": "uai_Grids_15",
+   "label": "Grids\n15",
+   "default": 6.028,
+   "elim": 2.297,
+   "treesa": 0.0,
+   "ours": 0.038
+  },
+  {
+   "instance": "uai_Promedus_14",
+   "label": "Prom.\n14",
+   "default": 11.92,
+   "elim": 2.884,
+   "treesa": 0.067,
+   "ours": 0.0
+  }
+ ],
+ "regimes": {
+  "dbn": [
+   0,
+   2
+  ],
+  "linkage": [
+   3,
+   6
+  ]
+ }
+}

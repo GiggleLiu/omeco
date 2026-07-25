@@ -1,0 +1,57 @@
+{
+ "shrink": [
+  {
+   "instance": "sycamore_53_20_0",
+   "label": "Sycamore\n53q",
+   "frac": 0.887
+  },
+  {
+   "instance": "surfacecode_d21",
+   "label": "surface\ncode d21",
+   "frac": 0.655
+  },
+  {
+   "instance": "nqueens_28",
+   "label": "28-queens",
+   "frac": 0.339
+  },
+  {
+   "instance": "dbn_13",
+   "label": "DBN",
+   "frac": 0.154
+  },
+  {
+   "instance": "qft_27",
+   "label": "QFT-27",
+   "frac": 0.072
+  },
+  {
+   "instance": "reg3_1000",
+   "label": "reg3\n1000",
+   "frac": 0.0
+  }
+ ],
+ "march": [
+  {
+   "tc": 60.605,
+   "by": "ref:treesa-inf",
+   "when": "reference seeding"
+  },
+  {
+   "tc": 60.169,
+   "by": "attempt-039",
+   "when": "cycle 8"
+  },
+  {
+   "tc": 60.104,
+   "by": "attempt-047",
+   "when": "cycle 9"
+  },
+  {
+   "tc": 59.911,
+   "by": "attempt-050",
+   "when": "cycle 9"
+  }
+ ],
+ "ab_without_simplify": 76.0
+}

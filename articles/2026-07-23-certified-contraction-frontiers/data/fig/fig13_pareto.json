@@ -1,0 +1,641 @@
+{
+ "note": "all points same machine (huawei 2-core server), single-threaded",
+ "instances": {
+  "sycamore_53_20_0": {
+   "points": [
+    {
+     "family": "julia-treesa",
+     "config": "sc1000-nt4",
+     "tc": 61.352,
+     "sc": 55.0,
+     "t": 157.818
+    },
+    {
+     "family": "treewidth",
+     "config": "AMF",
+     "tc": 86.002,
+     "sc": 67.0,
+     "t": 0.093
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc20-nt8",
+     "tc": 73.0,
+     "sc": 52.0,
+     "t": 273.147
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc20-nt1",
+     "tc": 70.016,
+     "sc": 55.0,
+     "t": 33.55
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc1000-nt8",
+     "tc": 61.372,
+     "sc": 53.0,
+     "t": 318.789
+    },
+    {
+     "family": "hypernd",
+     "config": "",
+     "tc": 74.394,
+     "sc": 54.0,
+     "t": 1.335
+    },
+    {
+     "family": "treewidth",
+     "config": "MMD",
+     "tc": 103.0,
+     "sc": 73.0,
+     "t": 0.143
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc1000-nt1",
+     "tc": 64.489,
+     "sc": 58.0,
+     "t": 39.956
+    },
+    {
+     "family": "treewidth",
+     "config": "MF",
+     "tc": 87.046,
+     "sc": 63.0,
+     "t": 0.077
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc20-nt4",
+     "tc": 74.0,
+     "sc": 52.0,
+     "t": 137.331
+    },
+    {
+     "family": "ours-simplify",
+     "config": "900s",
+     "tc": 59.864,
+     "sc": 52.0,
+     "t": 873.1
+    },
+    {
+     "family": "ours-treesa",
+     "config": "90s",
+     "tc": 60.683,
+     "sc": 52.0,
+     "t": 76.3
+    },
+    {
+     "family": "ours-simplify",
+     "config": "90s",
+     "tc": 61.242,
+     "sc": 53.0,
+     "t": 87.3
+    },
+    {
+     "family": "ours-surgery",
+     "config": "300s",
+     "tc": 59.855,
+     "sc": 52.0,
+     "t": 291.3
+    },
+    {
+     "family": "ours-treesa",
+     "config": "300s",
+     "tc": 60.894,
+     "sc": 53.0,
+     "t": 233.7
+    },
+    {
+     "family": "ours-surgery",
+     "config": "90s",
+     "tc": 59.869,
+     "sc": 52.0,
+     "t": 87.6
+    },
+    {
+     "family": "ours-treesa",
+     "config": "90s",
+     "tc": 61.499,
+     "sc": 53.0,
+     "t": 76.7
+    },
+    {
+     "family": "ours-treesa",
+     "config": "300s",
+     "tc": 61.384,
+     "sc": 53.0,
+     "t": 237.1
+    },
+    {
+     "family": "ours-surgery",
+     "config": "90s",
+     "tc": 60.099,
+     "sc": 52.0,
+     "t": 87.5
+    },
+    {
+     "family": "ours-surgery",
+     "config": "300s",
+     "tc": 59.856,
+     "sc": 52.0,
+     "t": 291.4
+    },
+    {
+     "family": "ours-surgery",
+     "config": "900s",
+     "tc": 59.852,
+     "sc": 52.0,
+     "t": 873.3
+    },
+    {
+     "family": "ours-treesa",
+     "config": "900s",
+     "tc": 60.48,
+     "sc": 52.0,
+     "t": 716.6
+    },
+    {
+     "family": "ours-treesa",
+     "config": "900s",
+     "tc": 60.503,
+     "sc": 53.0,
+     "t": 723.7
+    },
+    {
+     "family": "ours-surgery",
+     "config": "900s",
+     "tc": 59.86,
+     "sc": 52.0,
+     "t": 873.3
+    },
+    {
+     "family": "ours-simplify",
+     "config": "300s",
+     "tc": 59.86,
+     "sc": 52.0,
+     "t": 291.1
+    },
+    {
+     "family": "ours-simplify",
+     "config": "900s",
+     "tc": 59.857,
+     "sc": 52.0,
+     "t": 873.0
+    },
+    {
+     "family": "ours-simplify",
+     "config": "900s",
+     "tc": 59.851,
+     "sc": 52.0,
+     "t": 873.0
+    },
+    {
+     "family": "ours-simplify",
+     "config": "90s",
+     "tc": 61.165,
+     "sc": 53.0,
+     "t": 88.2
+    },
+    {
+     "family": "ours-surgery",
+     "config": "90s",
+     "tc": 59.856,
+     "sc": 52.0,
+     "t": 87.5
+    },
+    {
+     "family": "ours-surgery",
+     "config": "300s",
+     "tc": 59.903,
+     "sc": 52.0,
+     "t": 291.3
+    },
+    {
+     "family": "ours-treesa",
+     "config": "300s",
+     "tc": 60.675,
+     "sc": 52.0,
+     "t": 239.4
+    },
+    {
+     "family": "ours-simplify",
+     "config": "90s",
+     "tc": 61.456,
+     "sc": 53.0,
+     "t": 87.8
+    },
+    {
+     "family": "ours-treesa",
+     "config": "90s",
+     "tc": 61.128,
+     "sc": 53.0,
+     "t": 79.2
+    },
+    {
+     "family": "ours-treesa",
+     "config": "900s",
+     "tc": 60.738,
+     "sc": 53.0,
+     "t": 721.4
+    },
+    {
+     "family": "ours-surgery",
+     "config": "900s",
+     "tc": 59.852,
+     "sc": 52.0,
+     "t": 873.2
+    },
+    {
+     "family": "ours-simplify",
+     "config": "300s",
+     "tc": 59.855,
+     "sc": 52.0,
+     "t": 291.0
+    },
+    {
+     "family": "ours-simplify",
+     "config": "300s",
+     "tc": 60.122,
+     "sc": 52.0,
+     "t": 291.1
+    },
+    {
+     "family": "cotengra",
+     "config": "hyper+sa 90s",
+     "tc": 62.914,
+     "sc": 55.0,
+     "t": 91.5
+    },
+    {
+     "family": "cotengra",
+     "config": "hyper+sa 90s",
+     "tc": 66.032,
+     "sc": 58.0,
+     "t": 85.5
+    },
+    {
+     "family": "cotengra",
+     "config": "hyper+sa 90s",
+     "tc": 67.316,
+     "sc": 61.0,
+     "t": 88.3
+    }
+   ],
+   "front": [
+    {
+     "tc": 59.851,
+     "t": 873.0
+    },
+    {
+     "tc": 59.855,
+     "t": 291.0
+    },
+    {
+     "tc": 59.856,
+     "t": 87.5
+    },
+    {
+     "tc": 60.683,
+     "t": 76.3
+    },
+    {
+     "tc": 64.489,
+     "t": 39.956
+    },
+    {
+     "tc": 70.016,
+     "t": 33.55
+    },
+    {
+     "tc": 74.394,
+     "t": 1.335
+    },
+    {
+     "tc": 86.002,
+     "t": 0.093
+    },
+    {
+     "tc": 87.046,
+     "t": 0.077
+    }
+   ]
+  },
+  "surfacecode_d21": {
+   "points": [
+    {
+     "family": "julia-treesa",
+     "config": "sc1000-nt4",
+     "tc": 49.08,
+     "sc": 40.0,
+     "t": 108.757
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc20-nt4",
+     "tc": 57.004,
+     "sc": 40.0,
+     "t": 99.866
+    },
+    {
+     "family": "treewidth",
+     "config": "MMD",
+     "tc": 64.397,
+     "sc": 49.0,
+     "t": 0.063
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc20-nt1",
+     "tc": 57.171,
+     "sc": 40.0,
+     "t": 23.878
+    },
+    {
+     "family": "treewidth",
+     "config": "MF",
+     "tc": 58.215,
+     "sc": 45.0,
+     "t": 0.055
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc20-nt8",
+     "tc": 55.099,
+     "sc": 40.0,
+     "t": 193.71
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc1000-nt1",
+     "tc": 48.983,
+     "sc": 40.0,
+     "t": 27.921
+    },
+    {
+     "family": "hypernd",
+     "config": "",
+     "tc": 56.324,
+     "sc": 40.0,
+     "t": 0.825
+    },
+    {
+     "family": "treewidth",
+     "config": "AMF",
+     "tc": 60.477,
+     "sc": 45.0,
+     "t": 0.059
+    },
+    {
+     "family": "julia-treesa",
+     "config": "sc1000-nt8",
+     "tc": 48.753,
+     "sc": 40.0,
+     "t": 218.672
+    },
+    {
+     "family": "ours-treesa",
+     "config": "900s",
+     "tc": 47.39,
+     "sc": 40.0,
+     "t": 747.5
+    },
+    {
+     "family": "ours-simplify",
+     "config": "900s",
+     "tc": 47.378,
+     "sc": 40.0,
+     "t": 873.0
+    },
+    {
+     "family": "ours-treesa",
+     "config": "900s",
+     "tc": 47.377,
+     "sc": 40.0,
+     "t": 753.7
+    },
+    {
+     "family": "ours-surgery",
+     "config": "300s",
+     "tc": 47.373,
+     "sc": 40.0,
+     "t": 291.2
+    },
+    {
+     "family": "ours-surgery",
+     "config": "300s",
+     "tc": 47.377,
+     "sc": 40.0,
+     "t": 291.3
+    },
+    {
+     "family": "ours-surgery",
+     "config": "900s",
+     "tc": 47.365,
+     "sc": 40.0,
+     "t": 873.2
+    },
+    {
+     "family": "ours-surgery",
+     "config": "900s",
+     "tc": 47.416,
+     "sc": 40.0,
+     "t": 873.3
+    },
+    {
+     "family": "ours-treesa",
+     "config": "90s",
+     "tc": 47.721,
+     "sc": 40.0,
+     "t": 54.5
+    },
+    {
+     "family": "ours-surgery",
+     "config": "90s",
+     "tc": 47.387,
+     "sc": 40.0,
+     "t": 87.8
+    },
+    {
+     "family": "ours-treesa",
+     "config": "300s",
+     "tc": 47.411,
+     "sc": 40.0,
+     "t": 220.1
+    },
+    {
+     "family": "ours-treesa",
+     "config": "90s",
+     "tc": 48.769,
+     "sc": 40.0,
+     "t": 55.0
+    },
+    {
+     "family": "ours-simplify",
+     "config": "300s",
+     "tc": 47.377,
+     "sc": 40.0,
+     "t": 291.1
+    },
+    {
+     "family": "ours-simplify",
+     "config": "90s",
+     "tc": 48.797,
+     "sc": 40.0,
+     "t": 87.8
+    },
+    {
+     "family": "ours-surgery",
+     "config": "90s",
+     "tc": 47.375,
+     "sc": 40.0,
+     "t": 87.5
+    },
+    {
+     "family": "ours-treesa",
+     "config": "300s",
+     "tc": 48.266,
+     "sc": 40.0,
+     "t": 215.7
+    },
+    {
+     "family": "ours-simplify",
+     "config": "900s",
+     "tc": 47.422,
+     "sc": 40.0,
+     "t": 873.0
+    },
+    {
+     "family": "ours-simplify",
+     "config": "900s",
+     "tc": 47.373,
+     "sc": 40.0,
+     "t": 873.1
+    },
+    {
+     "family": "ours-treesa",
+     "config": "900s",
+     "tc": 47.364,
+     "sc": 40.0,
+     "t": 760.7
+    },
+    {
+     "family": "ours-surgery",
+     "config": "300s",
+     "tc": 47.464,
+     "sc": 40.0,
+     "t": 291.2
+    },
+    {
+     "family": "ours-surgery",
+     "config": "900s",
+     "tc": 47.374,
+     "sc": 40.0,
+     "t": 873.2
+    },
+    {
+     "family": "ours-treesa",
+     "config": "300s",
+     "tc": 47.368,
+     "sc": 40.0,
+     "t": 219.0
+    },
+    {
+     "family": "ours-simplify",
+     "config": "90s",
+     "tc": 48.64,
+     "sc": 40.0,
+     "t": 87.4
+    },
+    {
+     "family": "ours-treesa",
+     "config": "90s",
+     "tc": 48.659,
+     "sc": 40.0,
+     "t": 80.8
+    },
+    {
+     "family": "ours-simplify",
+     "config": "300s",
+     "tc": 47.463,
+     "sc": 40.0,
+     "t": 291.1
+    },
+    {
+     "family": "ours-simplify",
+     "config": "90s",
+     "tc": 48.805,
+     "sc": 40.0,
+     "t": 87.7
+    },
+    {
+     "family": "ours-surgery",
+     "config": "90s",
+     "tc": 47.404,
+     "sc": 40.0,
+     "t": 87.5
+    },
+    {
+     "family": "ours-simplify",
+     "config": "300s",
+     "tc": 47.373,
+     "sc": 40.0,
+     "t": 291.0
+    },
+    {
+     "family": "cotengra",
+     "config": "hyper+sa 90s",
+     "tc": 61.706,
+     "sc": 44.0,
+     "t": 120.0
+    },
+    {
+     "family": "cotengra",
+     "config": "hyper+sa 90s",
+     "tc": 54.026,
+     "sc": 40.0,
+     "t": 82.8
+    },
+    {
+     "family": "cotengra",
+     "config": "hyper+sa 90s",
+     "tc": 53.882,
+     "sc": 46.0,
+     "t": 90.5
+    }
+   ],
+   "front": [
+    {
+     "tc": 47.364,
+     "t": 760.7
+    },
+    {
+     "tc": 47.368,
+     "t": 219.0
+    },
+    {
+     "tc": 47.375,
+     "t": 87.5
+    },
+    {
+     "tc": 47.721,
+     "t": 54.5
+    },
+    {
+     "tc": 48.983,
+     "t": 27.921
+    },
+    {
+     "tc": 56.324,
+     "t": 0.825
+    },
+    {
+     "tc": 58.215,
+     "t": 0.055
+    }
+   ]
+  }
+ }
+}

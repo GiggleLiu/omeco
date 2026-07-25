@@ -1,0 +1,54 @@
+{
+ "rows": [
+  {
+   "label": "spectral balanced cut",
+   "reg3_250": 11.36,
+   "sycamore_m20": 5.76,
+   "certified": true
+  },
+  {
+   "label": "line-graph tw (minor cert.)",
+   "reg3_250": 18.0,
+   "sycamore_m20": 22.0,
+   "certified": true
+  },
+  {
+   "label": "Thm 1 sum-form (spectral)",
+   "reg3_250": 13.14,
+   "sycamore_m20": 9.84,
+   "certified": true
+  },
+  {
+   "label": "Thm 1 sum-form (empirical)",
+   "reg3_250": 30.81,
+   "sycamore_m20": 47.17,
+   "certified": false
+  },
+  {
+   "label": "Thm 2 dyadic-window (emp.)",
+   "reg3_250": 27.0,
+   "sycamore_m20": 40.0,
+   "certified": false
+  },
+  {
+   "label": "Thm 2 path-DP (emp.)",
+   "reg3_250": 30.32,
+   "sycamore_m20": 47.01,
+   "certified": false
+  },
+  {
+   "label": "balanced/carving cut",
+   "reg3_250": 30.0,
+   "sycamore_m20": 53.0,
+   "certified": false
+  }
+ ],
+ "caps": {
+  "reg3_250": 30.0,
+  "sycamore_m20": 47.0
+ },
+ "frontier": {
+  "reg3_250": 39.95,
+  "sycamore_m20": 61.544
+ }
+}
