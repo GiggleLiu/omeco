@@ -330,9 +330,11 @@ def fig13():
     extra = _pareto_extra_points()
     for inst in src["instances"]:
         pts = src["instances"][inst] + extra.get(inst, [])
-        # one algorithm, one series: merge both TreeSA implementations
+        # TreeSA series = the published Julia implementation only; our
+        # port's runs are dropped from this figure (same algorithm)
+        pts = [pt for pt in pts if pt["family"] != "ours-treesa"]
         for pt in pts:
-            if pt["family"] in ("julia-treesa", "ours-treesa"):
+            if pt["family"] == "julia-treesa":
                 pt["family"] = "treesa"
         src["instances"][inst] = pts
     for inst, pts in src["instances"].items():

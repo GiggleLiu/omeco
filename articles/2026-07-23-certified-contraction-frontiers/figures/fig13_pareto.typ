@@ -11,7 +11,7 @@
 // (family key, legend label, mark, color, filled?)
 #let fams = (
   ("julia-greedy", "GreedyMethod (Julia)", "o", red, true),
-  ("treesa", "TreeSA (all configs, both impls.)", "o", purple, true),
+  ("treesa", "TreeSA (Julia, 14 configs)", "o", purple, true),
   ("hypernd", "HyperND (Julia)", "square", blue, true),
   ("treewidth", "Treewidth (Julia, 9 back-ends)", "triangle", orange, true),
   ("cotengra", "cotengra hyper+SA", "+", black, true),
