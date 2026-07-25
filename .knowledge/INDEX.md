@@ -1,6 +1,6 @@
-# omeco — references
+# contraction-order-optimization — references
 
-Generated 2026-07-22. Reading list and full-text harness for the beat-existing-optimizers autoresearch topic.
+Generated 2026-07-25. Built by /survey on 2026-07-25 (landscape + cross-method + lineage + cross-vocabulary strategies).
 
 Search this KB from its parent with `rg --hidden -g '!.raw' "term" .knowledge/`, or run `rg --hidden -g '!.raw' "term" .` from inside the KB. The `.raw/` subdir holds the original PDFs / clones / HTML and is gitignored.
 
