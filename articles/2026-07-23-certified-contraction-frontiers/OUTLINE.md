@@ -1,9 +1,25 @@
-# Telegram outline — story A' (question-led; executed 2026-07-25)
+# Telegram outline — algorithm-led (executed 2026-07-25, v3)
 
-Target: Quantum, regular article. User-selected story: "When can tuned
-simulated annealing be beaten at tensor-network contraction ordering?"
-Supersedes the certification-led outline (v0.1, preserved in git history).
-This file reflects the structure as drafted in main.tex.
+Target: Quantum, regular article. User-selected story: introduce a new
+algorithm. Title: "Global cut surgery for tensor-network contraction
+ordering". Supersedes the question-led outline (v2) and the
+certification-led outline (v0.1), both in git history.
+
+Main text: §1 intro (SA strongest + certifiably optimal where converged
+-> the frozen-waist blind spot -> the algorithm) · §2 setup/protocol ·
+§3 tuning the incumbent (prerequisite) · §4 the frozen waist is never a
+minimal cut (motivating measurement, fig10a) · §5 the algorithm (loop
+details; §5.1 simplification preprocessing fig9; §5.2 seeding/anytime) ·
+§6 evaluation (records fig8+fig10b, Pareto fig13, distributions/family
+fig11, external Table 2, honest boundaries) · §7 inference application
+fig12 · §8 conclusions.
+Appendices (incremental-idea material per user directive): A certified
+null (13-mechanism convergence figs 2, bounds Thms 1-2 + impossibility,
+figs 3-5) · B falsified-mechanism taxonomy (Table 3) · C methodology ·
+D roadmap (7-stage TikZ).
+
+--- previous outline (v2, for reference) ---
+
 
 Figures (as numbered in the source):
 fig1 sc_target cliff · fig2 frontier convergence · fig3 bounds ladder ·

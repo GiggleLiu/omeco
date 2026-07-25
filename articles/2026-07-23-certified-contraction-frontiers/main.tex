@@ -25,8 +25,7 @@
 \newcommand{\sct}{\ensuremath{\mathrm{sc}}}
 \newcommand{\scT}{\ensuremath{\mathrm{sc}_{\mathrm{target}}}}
 
-\title{When can tuned simulated annealing be beaten\\
-at tensor-network contraction ordering?}
+\title{Global cut surgery for tensor-network contraction ordering}
 
 \author{Jinguo Liu}
 \affiliation{Advanced Materials Thrust, The Hong Kong University of Science and Technology (Guangzhou)}
@@ -36,37 +35,39 @@ at tensor-network contraction ordering?}
 
 \begin{abstract}
 Simulated-annealing tree refiners are the strongest general-purpose
-optimizers of tensor-network contraction orders, but published comparisons
-rarely establish when a tuned annealer can be beaten at all. We answer
-this question on ten benchmark networks---random regular graphs, quantum
-circuits including the real 53-qubit Sycamore network, surface-code
-syndrome networks, and counting and inference networks---under a hardened
-protocol: matched single-threaded budgets, independent rescoring of every
-tree from its topology, per-run instance relabeling, and confirmation-based
-records. Four results emerge. First, tuning dominates mechanism design:
-one shipped default (a memory target of $2^{20}$) costs $20\times$ to
-$2100\times$ in flops, and until it is fixed, no comparison between
-optimizers is meaningful. Second, on small converged instances the tuned
-annealer cannot be beaten: thirteen mechanically distinct search paradigms
-and an independent toolchain tie its frontier, which we certify
-width-optimal with the optimum localized to $[53, 61.5]$ on the circuit
-proxy, and we prove that no bound computable from the isoperimetric
-profile can close the interval. Third, on large structured instances the
-annealer is beaten by two mechanisms that inject global information as
-\emph{input} rather than as search control: rank-non-increasing
-simplification (which removes up to $89\%$ of tensors and yields a
-$2^{16}$ improvement on Sycamore) and waist surgery (bounded
-Fiduccia--Mattheyses improvement of the dominant contraction's
-bipartition, which sets records on three instances). Behind the latter
-lies a structural finding: across hundreds of instrumented calls the
-annealer's dominant cut is \emph{never} a locally minimal balanced cut.
-Fourth, on probabilistic-inference networks the frontier splits into two
-regimes---elimination methods win dense Bayesian networks while annealing
-wins pedigree linkage---and shipped defaults of an inference package sit
-$12$--$30$ bits above that frontier. All records survive a same-machine
-matched-budget re-measurement against the reference Julia implementation,
-and every claim ships with machine-checkable artifacts from the 56-attempt
-steered autonomous research loop that produced it.
+optimizers of tensor-network contraction orders, yet late in every run
+they freeze: the dominant contraction---the tree's \emph{waist}, the
+single bipartition that carries most of the total cost---stops moving,
+because local tree rewrites can only cross between distinct good
+bipartitions through long uphill sequences. We report a structural
+measurement that turns this freeze into an algorithmic target: across 835
+instrumented converged states on real benchmark networks, the annealer's
+waist is \emph{never} a locally minimal balanced cut---a bounded
+Fiduccia--Mattheyses pass on the tensor hypergraph finds a strictly
+cheaper cut of comparable balance on every single call, by $3$--$12$ bits.
+We introduce \emph{global cut surgery}, an algorithm that exploits this
+blind spot: extract the waist bipartition, improve it as a graph cut
+(ignoring the tree), cold-rebuild the two sides with fixed-work
+sub-anneals, splice, and accept on measured cost; an exact
+rank-non-increasing simplification pass runs as preprocessing. On a
+ten-instance benchmark including the 53-qubit Sycamore circuit,
+surface-code syndrome networks, and counting and inference networks,
+surgery sets records on three instances, separates fully from tuned
+annealing's run distribution on surface code $d{=}21$, holds the entire
+high-quality wall of the same-machine time-quality Pareto front, and its
+advantage grows with problem scale. The algorithm's necessity is
+certified from both sides: on small converged instances we prove the
+annealing frontier width-optimal (optimum in $[53, 61.5]$ on a circuit
+proxy) so no search-control change can win, and twenty falsified
+alternative mechanisms show that global information helps only when
+injected as \emph{input}---a simplified network, a better cut---never as
+search control. On probabilistic-inference networks the method's scope is
+mapped honestly: annealing-family methods (ours leading) win sparse
+pedigree-linkage networks while elimination orderings win dense Bayesian
+networks, and the defaults of a shipped inference package sit $12$--$30$
+bits above either. All algorithms, validators, and the audit trail of the
+56-attempt steered autonomous research campaign that produced them are
+released with the paper.
 \end{abstract}
 
 
@@ -86,38 +87,65 @@ machinery from the parameterized-algorithms community
 \cite{dumitrescu_2018_benchmarking, tamaki_2017_positive}, and exact
 methods for small networks \cite{pfeifer_2013_faster}. Among these, tuned
 simulated annealing over contraction trees is in practice the strongest
-general-purpose refiner. Yet the field's comparisons are relative---an
-optimizer is good if it beats another optimizer---and they leave the
-practical question unanswered: \emph{when, and by what kind of mechanism,
-can a well-tuned annealer actually be beaten?}
+general-purpose refiner: as we show below, thirteen mechanically distinct
+search paradigms and an independent toolchain all converge onto its
+frontier, and on small instances that frontier is \emph{certifiably}
+locally optimal. Improving on it therefore requires attacking a
+structural weakness, not a better schedule.
 
-This paper answers that question empirically and, where possible,
-certifiably. The answer has four parts, in increasing order of what they
-demand from a challenger. (i)~Before any mechanism matters, the incumbent
-must be tuned: a single shipped default costs more than every algorithmic
-effect we measured combined (Sec.~\ref{sec:sctarget}). (ii)~On small
-instances where the tuned annealer converges, it cannot be beaten at
-all---we certify its frontier width-optimal and prove an impossibility
-result for an entire family of lower-bound techniques
-(Sec.~\ref{sec:null}). (iii)~On large structured instances it \emph{can}
-be beaten, by exactly two mechanism families, both of which inject global
-structure as input to the local search rather than replacing its control
-loop: structural simplification (Sec.~\ref{sec:simplify}) and waist
-surgery (Sec.~\ref{sec:waist}). (iv)~On probabilistic-inference networks
-the answer bifurcates by graph structure: annealing itself is beaten by
-elimination orderings on dense Bayesian networks, while annealing wins
-pedigree-linkage networks by equally large margins
-(Sec.~\ref{sec:inference}).
+This paper identifies such a weakness and builds the algorithm that
+exploits it. The weakness is the annealer's \emph{waist}: with the total
+cost a log-sum-exp over all contractions, the converged tree's cost is
+dominated by its single most expensive contraction, which induces a
+bipartition of all tensors. Local tree rewrites move one leaf at a time
+and can cross between distinct good bipartitions of the same size only
+through long, individually uphill move sequences, so late in the schedule
+the waist freezes. Our motivating measurement
+(Sec.~\ref{sec:frozenwaist}) is that this frozen cut is not merely hard
+to improve locally---\emph{it is never a locally minimal balanced cut of
+the tensor graph at all}. Across 835 instrumented calls on converged
+states of real benchmark networks, a bounded Fiduccia--Mattheyses pass
+found a strictly cheaper cut of comparable balance every single time.
 
-Every comparison behind these claims is matched-budget and adversarially
-validated (Sec.~\ref{sec:setup}), the records are re-measured on a single
-quiet machine against the reference Julia implementation
-(Sec.~\ref{sec:board}), and the negative results---twenty falsified
-mechanisms with measured root causes---are reported with the same care as
-the wins (Sec.~\ref{sec:taxonomy}). Figures~\ref{fig:sweep}
-and~\ref{fig:board} summarize the tuning result and the record board; the
-reader who consults only those two figures and
-Table~\ref{tab:external} will have the paper's core content.
+\emph{Global cut surgery} (Sec.~\ref{sec:algorithm}) turns that
+observation into an optimizer: extract the waist bipartition from the
+incumbent tree; improve it as a pure graph-cut problem, ignoring the
+tree; if a cheaper comparable-balance cut exists, promote it to the tree
+top, cold-rebuild each side with fixed-work sub-anneals, splice, and
+accept only if the independently rescored total cost drops; iterate on
+the (possibly moved) waist. An exact rank-non-increasing simplification
+pass---which removes up to $89\%$ of the tensors of real-provenance
+networks before any search begins---runs as preprocessing.
+
+We evaluate the algorithm under a hardened protocol (matched
+single-threaded budgets, independent rescoring of every tree from its
+topology, per-run relabeling, confirmation-based records;
+Sec.~\ref{sec:setup}) and re-measure every headline comparison on a
+single dedicated machine against the reference Julia implementation, its
+published benchmark suite, and cotengra (Sec.~\ref{sec:eval}). Surgery
+sets records on three of ten instances, its run distribution separates
+fully from tuned annealing's on surface code $d{=}21$, it holds the
+entire high-quality wall of the time-quality Pareto front, and its
+advantage grows with surface-code distance. Its boundaries are reported
+with the same care: random 3-regular expanders yield the advantage back
+at long budgets, and two instances repel it entirely.
+
+Three further results frame the algorithm's necessity and scope. First,
+the incumbent must be tuned before being beaten: a single shipped
+default (an aspirational memory target) costs $20\times$--$2100\times$,
+more than any mechanism difference we measured
+(Sec.~\ref{sec:sctarget}). Second, on small converged instances nothing
+can win: we certify the annealing frontier width-optimal, localize the
+optimum to $[53, 61.5]$ on the circuit proxy, and prove that bounds
+computable from the isoperimetric profile can go no further
+(Appendix~\ref{app:null})---which is precisely why the gains must come from
+changing the \emph{input} rather than the search. Twenty falsified
+alternative mechanisms sharpen the same lesson (Appendix~\ref{app:taxonomy}).
+Third, on probabilistic-inference workloads the method's scope splits by
+structure: annealing-family methods, ours leading, win sparse pedigree
+networks, while elimination orderings win dense Bayesian networks, and
+the shipped defaults of TensorInference.jl sit $12$--$30$ bits above the
+frontier either way (Sec.~\ref{sec:inference}).
 
 \section{Setup and evaluation protocol}
 \label{sec:setup}
@@ -136,7 +164,9 @@ indices), the two standard quality measures are the total time cost
 a log-sum-exp over all $|V|-1$ contractions, and the space cost $\sct$,
 the $\log_2$ size of the largest intermediate tensor. All numbers in this
 paper are $\log_2$ quantities; a difference of $1.0$ is a factor of two
-in flops.
+in flops. Equation~\eqref{eq:tc} is the root of everything that follows:
+because $\tc$ is a log-sum-exp, the converged tree's cost is carried
+almost entirely by its most expensive contraction---the \emph{waist}.
 
 Table~\ref{tab:instances} lists the ten benchmark instances. Two are
 closed synthetic networks used for the certification study (a 250-tensor
@@ -174,7 +204,7 @@ qft\_27 & 405 & --- & 27-qubit QFT, 27 open indices \\
 \end{tabular}
 \caption{Benchmark instances. The first two are the closed synthetic
 networks of the certification study
-(Sec.~\ref{sec:null}); the rest are imported real-provenance benchmark
+(Appendix~\ref{app:null}); the rest are imported real-provenance benchmark
 networks. Ten additional UAI-2014 inference instances are introduced in
 Sec.~\ref{sec:inference}.}
 \label{tab:instances}
@@ -207,36 +237,35 @@ ladder of the reference Julia implementation
 one/four/eight restarts, HyperND, and three treewidth back-ends) run
 through that benchmark suite's own harness, and the inference batch of
 Sec.~\ref{sec:inference}. Every cross-method statement in
-Secs.~\ref{sec:board} and~\ref{sec:inference} is same-machine and
+Secs.~\ref{sec:eval} and~\ref{sec:inference} is same-machine and
 matched-budget.
 
-\section{Tuning before beating: a mis-set default dominates all
-algorithmic effects}
+\section{Tuning the incumbent: a prerequisite}
 \label{sec:sctarget}
 
-The TreeSA-family annealers \cite{kalachev_2021_multi} optimize a
-composite objective in which the space cost is pulled toward a target
-$\scT$, with a penalty active whenever $\sct > \scT$. The implementation
-we study (omeco, a Rust re-implementation aligned with
-OMEinsumContractionOrders.jl) inherited the shipped default
-$\scT = 20$. On instances whose good trees have naturally larger
-intermediates---the optimum-quality trees on our two closed instances
-have $\sct = 34$ and $53$---this default is not merely unhelpful. It
-actively drags the search into a low-memory, high-flop region of tree
-space.
+Beating an untuned incumbent is not evidence of algorithmic progress, and
+the incumbent here ships untuned. The TreeSA-family annealers
+\cite{kalachev_2021_multi} optimize a composite objective in which the
+space cost is pulled toward a target $\scT$, with a penalty active
+whenever $\sct > \scT$. The implementation we study (omeco, a Rust
+re-implementation aligned with OMEinsumContractionOrders.jl) inherited
+the shipped default $\scT = 20$. On instances whose good trees have
+naturally larger intermediates---the optimum-quality trees on our two
+closed instances have $\sct = 34$ and $53$---this default is not merely
+unhelpful. It actively drags the search into a low-memory, high-flop
+region of tree space.
 
 Figure~\ref{fig:sweep} shows the resulting $\tc$ at a fixed 90-second
-budget as a function of $\scT$. \textbf{This figure is our first main
-result}, and the transition it reveals is a cliff, not a slope: every
-target below the natural space cost of good trees is roughly equally
-harmful (medians $45.6$--$47.0$ on reg3\_250, $71$--$77$ on
-sycamore\_m20), quality snaps to the frontier exactly at the natural
+budget as a function of $\scT$. The transition it reveals is a cliff,
+not a slope: every target below the natural space cost of good trees is
+roughly equally harmful (medians $45.6$--$47.0$ on reg3\_250, $71$--$77$
+on sycamore\_m20), quality snaps to the frontier exactly at the natural
 value ($\scT = 34$ and $53$), and stays there unchanged through
 $\scT=\infty$, i.e., with the memory objective deleted. The harm is
 strictly one-directional. At the shipped default the damage is $4.3$
 $\log_2$ units on reg3\_250 and $9.7$ on sycamore\_m20 ($20\times$ and
 $800\times$); on the real Sycamore network it reaches $11.1$ units
-($2100\times$, Sec.~\ref{sec:board}). The cliff is visible in
+($2100\times$, Sec.~\ref{sec:eval}). The cliff is visible in
 \emph{published} data as well: the benchmark suite of
 OMEinsumContractionOrders.jl reports Julia TreeSA at $\tc=71.0$ on the
 real Sycamore network with its shipped $\scT=20$, within $1.6$ of our
@@ -247,8 +276,7 @@ The practical rule is: \emph{never anneal toward a memory target below
 the natural space cost of good trees; absent a physical memory budget,
 use the natural value or no target at all.} Every comparison in the
 remainder of this paper is against the annealer with this fix
-applied---the \emph{tuned reference}. Beating an untuned incumbent is
-not evidence of algorithmic progress.
+applied---the \emph{tuned reference}.
 
 \begin{figure}[t]
   \centering
@@ -256,7 +284,7 @@ not evidence of algorithmic progress.
   \caption{Best $\tc$ reached in 90\,s of single-threaded annealing versus
   the memory target $\scT$ (median of three runs; whiskers span the
   range). The dashed line marks the converged frontier of
-  Sec.~\ref{sec:null}; the dotted vertical line marks the natural
+  Appendix~\ref{app:null}; the dotted vertical line marks the natural
   space cost of optimum-quality trees. The transition is a cliff at the
   natural value: every smaller target is comparably harmful, and every
   target at or above it, including $\scT=\infty$, reaches the frontier.
@@ -264,14 +292,439 @@ not evidence of algorithmic progress.
   \label{fig:sweep}
 \end{figure}
 
-\section{Where the tuned annealer cannot be beaten: a certified null}
+\paragraph{Why not better search control.}
+Before targeting the waist, we verified that no search-control change can
+win where the tuned annealer converges: thirteen mechanically distinct
+search paradigms and an independent toolchain (cotengra) all land within
+$0.35$ of its frontier on the two closed instances, the frontier is
+certifiably width-optimal with the optimum localized to $[53, 61.544]$
+on the circuit proxy, and we prove that every lower bound computable
+from the isoperimetric profile is capped below the balanced-cut value.
+The full certification --- the thirteen-mechanism convergence, two
+sum-form bound theorems, and the impossibility result --- is given in
+Appendix~\ref{app:null}, and twenty further falsified mechanisms are
+taxonomized in Appendix~\ref{app:taxonomy}. The lesson they encode is
+uniform: global information helps only when injected as \emph{input},
+never as search control. The remaining question is where such an input
+exists, and the answer is the waist.
+
+\section{The frozen waist is never a minimal cut}
+\label{sec:frozenwaist}
+
+Every converged annealed tree has a waist: by \eqref{eq:tc} its cost is
+dominated by the argmax-cost contraction, whose leaf set $A$ (against
+complement $B$) is a bipartition of all tensors, and whose cost is
+essentially the weight of the cut $(A,B)$ in the tensor hypergraph.
+Local tree moves---rotations, single-subtree transfers---perturb this
+bipartition one leaf at a time; crossing to a \emph{different} good
+bipartition of comparable balance requires a long sequence of
+individually uphill steps, which a cooled annealer will never take. We
+also know the freeze is not repairable by small exact windows: exhaustive
+splicing of all subtrees up to 16 leaves leaves frontier trees unchanged
+(they are window-exact optimal, Appendix~\ref{app:taxonomy}), while the
+dominant contraction spans a constant fraction of the network.
+
+The question is whether the frozen waist is actually good \emph{as a
+cut}. We instrumented every surgery call of the algorithm of
+Sec.~\ref{sec:algorithm} on its two record runs: at each converged
+incumbent, extract the waist bipartition and run a bounded
+Fiduccia--Mattheyses (FM) search for a cheaper cut of comparable balance
+on the tensor hypergraph, recording the incumbent's cut weight, the best
+alternative found, and the structure of the improved cut.
+
+Figure~\ref{fig:waist}a shows all 835 pooled calls on two instances, and
+\textbf{this figure is the paper's motivating result}: every single
+point lies strictly below the diagonal. \emph{The annealer's waist is
+never a locally minimal balanced cut}---bounded FM finds a strictly
+cheaper cut of comparable balance on every call, by margins of $3$--$12$
+bits. The improved cuts are sparse rather than near-clique (clique
+fraction $0.01$--$0.05$): genuine alternative separators, not degenerate
+rearrangements of the same one. The blind spot is structural and
+persistent: it does not shrink as the incumbent improves, and it recurs
+at the new waist after every accepted repair. An optimizer that can see
+cuts globally therefore always has a move available exactly where the
+annealer is most stuck.
+
+\section{The algorithm: global cut surgery}
+\label{sec:algorithm}
+
+Global cut surgery operationalizes the observation of
+Sec.~\ref{sec:frozenwaist}. The optimizer maintains an incumbent
+contraction tree produced by a standard annealing engine, and
+interleaves, at every outer iteration, a surgery step that treats the
+waist as a graph problem:
+
+\begin{enumerate}
+\item \textbf{Extract.} Locate the argmax-cost node of the incumbent
+  (costs recomputed exactly from the index dimensions); its leaf set
+  $A$ versus complement $B$ is the waist bipartition.
+\item \textbf{Improve the cut, not the tree.} Run bounded
+  Fiduccia--Mattheyses passes on the tensor hypergraph, with gain
+  defined as the exact reduction in summed $\log_2$ dimensions of the
+  straddling labels (open output labels are excluded---they are
+  invariant), and balance constrained to $|A| \pm 18\%$. The search is
+  seeded from the incumbent cut plus four boundary-BFS alternative
+  bipartitions (one from the highest-degree tensor, three from random
+  starts), so it can jump to a different separator rather than only
+  polish the current one.
+\item \textbf{Rebuild cold, with fixed work.} If a strictly cheaper cut
+  of comparable balance was found, promote it to the tree top: each side
+  becomes an independent, much smaller ordering problem (its open
+  indices are the new cut plus its external labels, computed by
+  outside-occurrence counting so the rebuilt tree's top node matches the
+  independent scorer exactly). Anneal each side from scratch with a
+  \emph{fixed-work} budget (three V-cycles, linear schedules), join, and
+  splice into the incumbent.
+\item \textbf{Accept on measurement.} Adopt the rebuilt tree only if its
+  independently recomputed total cost improves; then iterate---the waist
+  typically moves, and surgery repeats at the new waist until no
+  improving cut is found or the budget ends.
+\end{enumerate}
+
+Two design choices matter beyond the loop itself. \emph{Fixed work, not
+fixed time}: giving each rebuild a deterministic amount of annealing
+work (rather than a wall-clock slice) collapses run-to-run spread from
+$0.8$ to $0.08$ bits---the algorithm's variance behavior is set by the
+rebuild policy, not by the machine. \emph{Surgery needs its base engine,
+and vice versa}: an ablation that keeps only the ratchet base engine
+plateaus far above the full algorithm (surface-code $d{=}21$: $49.6$
+ratchet-only versus $47.38$ with surgery; king graph: $50.0$ versus
+$36.8$), while surgery without a competent annealed incumbent has
+nothing worth repairing. All knobs scale with instance size; nothing is
+tuned per instance.
+
+\subsection{Preprocessing: exact simplification}
+\label{sec:simplify}
+
+Real-provenance networks carry large amounts of
+\emph{rank-non-increasing} structure: tensors whose contraction with a
+neighbor can never increase any intermediate rank (rank-1 spiders,
+dangling legs, series chains). Before any search, a preprocessing pass
+contracts this structure away greedily; the optimizer runs on the
+reduced network, and the contracted fragments are spliced back into the
+final tree as fixed subtrees. The pass is exact and costs milliseconds.
+
+Its effect is largest exactly where synthetic benchmarks never look
+(Fig.~\ref{fig:simplify}a): $88.7\%$ of the real Sycamore network's 3369
+tensors are removed before annealing begins ($3369 \to 381$), $65.5\%$
+of surface-code $d{=}21$, $33.9\%$ of nqueens\_28---and $0\%$ of the
+random 3-regular control, which is why the identical mechanism, correctly
+measured as useless on the pre-simplified synthetic proxy two cycles
+earlier, was nearly discarded. A matched-budget ablation on the real
+Sycamore network isolates the contribution: the same anneal reaches
+$\tc = 61.3$ with simplification and $76.0$ without it, a $2^{14.7}$
+($\sim\!27000\times$) difference from preprocessing alone.
+Figure~\ref{fig:simplify}b shows the resulting record march: three
+successive simplify-then-anneal implementations drove the Sycamore
+record $60.605 \to 60.169 \to 60.104 \to 59.911$.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig9_simplification.pdf}
+  \caption{The preprocessing pass. (a)~Fraction of tensors removed by
+  the exact rank-non-increasing pass; the random-regular control is
+  untouched at $0\%$. (b)~The Sycamore 53q record march: the tuned
+  reference (leftmost) and three successive simplify-then-anneal
+  attempts. The same anneal without simplification reaches $76.0$ (off
+  scale): preprocessing, not search, carries this improvement.}
+  \label{fig:simplify}
+\end{figure}
+
+\subsection{Seeding and anytime behavior}
+\label{sec:anytime}
+
+The pipeline emits its incumbent eagerly (atomic writes), so it is an
+anytime optimizer, and its construction stage is pluggable. Two
+components earn their place. \emph{Elimination seeds}: on hypergraph-like
+instances with few, high-degree labels, seeding the annealer with a
+min-fill variable-elimination order gives it a start ($\tc = 28.8$ at
+$0.2$\,s on the DBN instance) that greedy construction ($44.7$) cannot
+approach; the mechanism's boundary is equally sharp---at 4086 labels the
+VE peel freezes and the seed is useless. \emph{Racing}: arms with
+budget-fraction linear schedules, composed by a router, produced three
+records in a single run during development; a probe-leader policy never
+won. Harness-clocked time-to-frontier records exist as well ($16.1$\,s to
+the reg3\_250 frontier versus $20.2$\,s for the reference; $0.2$\,s on
+the DBN instance).
+
+\section{Evaluation}
+\label{sec:eval}
+
+\paragraph{Records.}
+Figure~\ref{fig:board} assembles the campaign's confirmed records against
+the tuned reference on all ten instances. Global cut surgery holds three
+(king graph $36.96$, surface code $d{=}21$ $47.40$, reg3\_1000
+$131.07$---the only record on an expander in the entire campaign), the
+simplify-then-anneal line holds the real-Sycamore record ($59.91$), and
+the elimination seed holds the DBN record ($29.00$). On four
+instances---both certified closed instances, the 97-qubit random
+circuit, and 28-queens---the tuned reference itself remains unbeaten,
+exactly as the certified null of Appendix~\ref{app:null} predicts for the
+converged cases. Figure~\ref{fig:waist}b shows a representative surgery
+run: each accepted rebuild drops the incumbent below the pre-surgery
+record, and the official median lands at $47.377$.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig8_record_board.pdf}
+  \caption{The record board: confirmed improvement over the tuned TreeSA
+  reference on each instance (validator protocol: confirm-twice,
+  worse-of-two, per-run relabeling). Marker shape and color encode the
+  mechanism; thick dashes mark instances where the tuned reference is
+  the record holder.}
+  \label{fig:board}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig10_waist_surgery.pdf}
+  \caption{Global cut surgery, instrumented. (a)~Every surgery call on
+  the two record runs: incumbent waist cut weight versus the best
+  comparable-balance cut found by bounded FM. All 835 points lie
+  strictly below the diagonal---the annealed waist is never locally
+  minimal (Sec.~\ref{sec:frozenwaist}). (b)~A representative
+  surface-code $d{=}21$ run: incumbent $\tc$ (solid), accepted waist
+  rebuilds (crosses), the pre-surgery record (dotted) and the official
+  with-surgery median (dash-dotted).}
+  \label{fig:waist}
+\end{figure}
+
+\paragraph{The time-quality Pareto front.}
+Figure~\ref{fig:pareto} presents the same-machine campaign as a Pareto
+scatter, following the presentation of the OMEinsumContractionOrders
+benchmark study \cite{liu_2025_omeco_orders}: every optimizer
+configuration from every toolchain is one point, and the dashed line
+traces the non-dominated front. On both instances the front has the same
+anatomy: treewidth back-ends hold the fast/low-quality end (sub-second,
+$10$--$40$ bits off best), HyperND the middle, and \emph{global cut
+surgery holds the entire high-quality wall}---at every time tier
+($90/300/900$\,s) its points sit strictly left of every tuned-TreeSA
+point from either implementation. On the real Sycamore network surgery
+reaches $59.87$ at 90\,s while the tuned reference does not reach it
+even at 900\,s ($60.50$)---a quality gap, not a speedup; on surface-code
+$d{=}21$, surgery at 90\,s ($47.39$) matches the reference at 900\,s
+($47.38$)---a tenfold time-to-quality gain with both converging to the
+same floor.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig13_pareto.pdf}
+  \caption{Time-versus-quality Pareto view of the same-machine campaign
+  (dedicated 2-core server, all runs single-threaded), in the
+  presentation style of the OMEinsumContractionOrders benchmark study
+  \cite{liu_2025_omeco_orders}. Each point is one optimizer
+  configuration or repetition: filled markers are external baselines
+  (Julia TreeSA ladder, HyperND, treewidth back-ends, cotengra
+  hyper-optimizer with SA refinement); open markers are this work at
+  $90/300/900$\,s budgets. The dashed line is the non-dominated front.
+  Global cut surgery (crosses) holds the entire high-quality wall of the
+  front on both instances.}
+  \label{fig:pareto}
+\end{figure}
+
+\paragraph{Distributions and scaling.}
+Figure~\ref{fig:campaign} gives the statistical view. Over 15
+repetitions at 90\,s, the surgery and reference distributions on
+surface-code $d{=}21$ are fully separated---surgery's worst run
+($47.91$) beats the reference's best ($48.18$); king-graph and
+reg3\_1000 medians improve by $3.0$ and $2.4$; the elimination-seed
+mechanism shows a $14\times$ tighter spread than the reference on the
+DBN instance. On the surface-code family the surgery advantage grows
+with distance ($+0.04$, $+0.02$, $+0.11$, $+1.04$ at $d=9,13,17,21$)
+while its run-to-run spread stays collapsed: global cut repair pays off
+precisely at scale, where the annealer's frozen waist is largest.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig11_campaign.pdf}
+  \caption{Statistical view of the same-machine campaign. (a)~All 15
+  repetitions per instance at 90\,s, centered on the tuned reference's
+  median: circles are the tuned reference, squares the best method per
+  instance. (b)~Surface-code family: repetitions at 90\,s versus code
+  distance, anchored at the surgery median per distance; the advantage
+  grows with $d$ while the surgery spread stays collapsed.}
+  \label{fig:campaign}
+\end{figure}
+
+\paragraph{External baselines.}
+Table~\ref{tab:external} closes the loop against the reference Julia
+implementation, run on the same server through its own benchmark
+harness at a ladder of configurations, against the suite's published
+numbers, and against cotengra. Our records beat the best same-machine
+Julia configuration \emph{at ten times our budget} on the three large
+structured instances (Sycamore $59.87$ versus $61.35$; surface code
+$47.40$ versus $48.75$; king graph $36.96$ versus $38.27$), and beat the
+entire published multi-optimizer suite by $6.8$, $4.9$, and $2.0$ bits
+respectively. The cotengra column adds a protocol-matched
+cross-toolchain reference: on the small converged instances it confirms
+the shared frontier (reg3\_250 $40.5$ versus our $39.9$; the circuit
+proxy $62.4$ versus $61.5$), while on the large instances a
+single-threaded 90-second budget starves its sampling-based portfolio
+($69.0$ on the king graph, $187$ on the 97-qubit circuit), which
+quantifies how much of that toolchain's power lives in parallel trial
+throughput rather than in per-trial quality.
+
+\paragraph{Where the advantage ends.}
+Honest boundaries, all measured. On reg3\_1000 the reference overtakes
+surgery at 900\,s ($129.8$ versus $134.4$): expanders have no cheap
+alternative separators for FM to find, so the surgery advantage there is
+a fixed-budget effect. On the DBN instance the published (and
+reproduced) treewidth row wins outright ($28.03$, instantly, versus our
+$29.00$)---elimination methods are the right tool for dense
+hyperedge-structured networks, a theme Sec.~\ref{sec:inference}
+develops. On nqueens\_28 no stable ordering exists at these budgets:
+our reference's fifteen-run spread on the server spans $104.9$--$159.3$,
+single Julia runs land inside that spread, and we decline to claim a
+direction. The Sycamore simplify-then-anneal pipeline, tuned against a
+faster development machine, is $0.5$ \emph{worse} than the reference at
+90\,s on the slower server and recovers only at 300\,s---optimizer
+pipelines calibrate to absolute time, and cross-machine reporting must
+say so.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+ & \multicolumn{2}{c}{this work (90\,s)} &
+ \multicolumn{2}{c}{Julia OMECO suite} & cotengra \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-6}
+instance & record & tuned ref. & best $\le$90\,s & best $\le$900\,s &
+SA, 90\,s \\
+\midrule
+sycamore\_53\_20\_0 & \textbf{59.91} & 60.61 & 64.49 & 61.35 & 66.03 \\
+surfacecode\_d21    & \textbf{47.40} & 48.76 & 48.98 & 48.75 & 54.03 \\
+ksg                 & \textbf{36.96} & 39.12 & 39.22 & 38.27 & 69.04 \\
+reg3\_1000          & \textbf{131.07} & 133.91 & --- & --- & 165.21 \\
+dbn\_13             & 29.00 & 29.09 & \textbf{28.03} & \textbf{28.03} & 41.15 \\
+qft\_27             & \textbf{29.61} & \textbf{29.61} & 29.62 & 29.62 & 31.45 \\
+\bottomrule
+\end{tabular}
+\caption{Records versus external baselines, all measured on the same
+server. Julia columns: over the configuration ladder of the reference
+implementation (OMEinsumContractionOrders.jl: TreeSA at
+$\scT \in \{20, \infty\}$ with 1/4/8 restarts, HyperND, treewidth
+back-ends, run through its own harness), the best row whose measured
+runtime fits budget $B$. Cotengra column: median of three 90\,s
+single-threaded runs of the hyper-optimizer followed by
+subtree simulated annealing; under this protocol it is starved of the
+parallel trial sampling that is its main strength, so these rows are a
+protocol-matched reference, not a claim about cotengra at large. Bold
+marks the winner per instance. The dbn\_13 row is won by the treewidth
+back-end (min-fill), instantly---see Sec.~\ref{sec:inference}.
+reg3\_1000 is not in the Julia suite. nqueens\_28 is excluded: no
+ordering is stable at these budgets (see text).}
+\label{tab:external}
+\end{table}
+
+\section{Application: inference workloads}
+\label{sec:inference}
+
+Contraction ordering is not a quantum-only problem: exact probabilistic
+inference contracts the tensor network of a graphical model, and
+TensorInference.jl \cite{roa_2023_tensorinference} does so literally,
+optimizing an einsum whose inputs are one unity tensor per variable plus
+one tensor per factor, at full cardinalities. We exported all 65
+instances of the UAI-2014 MAR benchmark from the package's own artifact
+in exactly that form, ranked them by a 5-second hardness scan, and
+measured the ten hardest (three dense deep-belief networks, four
+pedigree-linkage networks, one CSP, one grid, plus the package's own
+benchmark instance Promedus\_14) under the full protocol: our methods at
+five repetitions each, against a same-machine Julia ladder that includes
+the package's two defaults (the signature default GreedyMethod and the
+benchmark configuration TreeSA(ntrials=1, niters=5)), HyperND, the
+min-fill treewidth back-end, and tuned TreeSA.
+
+Figure~\ref{fig:inference} shows every method's distance above the
+per-instance frontier. Three findings. \emph{First, the shipped defaults
+are $12$--$30$ bits off frontier} ($4\,000\times$ to $10^9\times$ in
+flops): GreedyMethod lands $14.6$--$16.6$ above on the DBN family and
+$30.5$ above on linkage\_15; the benchmark TreeSA configuration is
+little better there ($10$--$16$ above). Whatever mechanism one prefers,
+an inference user who accepts defaults pays orders of magnitude for it.
+\emph{Second, the frontier splits into two structural regimes.} On dense
+DBNs, elimination methods win outright: min-fill treewidth and HyperND
+reach the frontier ($25.9$--$28.0$) in milliseconds, tuned annealing
+trails by $5$--$8$ bits, and our elimination-seeded annealer
+(Sec.~\ref{sec:anytime}) lands within $0.7$ of the elimination frontier
+with a $10\times$ tighter spread than the plain reference. On pedigree
+linkage the regimes invert: min-fill is $6$--$15$ bits \emph{above} the
+frontier, HyperND's back-end (KaHyPar) segfaults on all four instances,
+and annealing-family methods---ours leading on all four---hold the
+frontier. \emph{Third, the regime boundary is a structure property, not
+a size property}: the DBN networks have 44--66 shared labels of high
+degree (elimination's sweet spot), while linkage networks are sparse
+with a thousand variables. A portfolio that probes elimination first
+(milliseconds) and falls back to the annealing pipeline otherwise
+captures the frontier everywhere we measured; the simplification pass
+(Sec.~\ref{sec:simplify}) additionally absorbs the per-variable unity
+tensors that inference-style einsums carry by construction.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig12_inference.pdf}
+  \caption{The ten hardest UAI-2014 MAR instances (from a 65-instance
+  scan): each method's $\tc$ above the per-instance frontier, same
+  machine, 90\,s budgets for search methods. Filled triangles:
+  TensorInference.jl's signature default. Squares: best tuned TreeSA
+  from the Julia ladder. Open triangles: best elimination method
+  (min-fill treewidth / HyperND; KaHyPar segfaults on all four linkage
+  instances, so its rows there are min-fill only). Crosses: this work
+  (best method, median of five). Shaded bands mark the two regimes.}
+  \label{fig:inference}
+\end{figure}
+
+\section{Conclusions}
+\label{sec:conclusions}
+
+We introduced global cut surgery, a contraction-order optimizer built on
+a structural measurement: the converged annealer's dominant
+contraction---the cut that carries its cost---is never a locally minimal
+balanced cut of the tensor graph (835 instrumented calls, zero
+exceptions, margins of $3$--$12$ bits). Surgery extracts that cut,
+improves it globally with bounded Fiduccia--Mattheyses passes,
+cold-rebuilds both sides with fixed-work sub-anneals, and accepts on
+measured cost. Together with an exact simplification preprocessing pass,
+it sets records on real quantum-circuit, surface-code, and counting
+networks; separates fully from tuned annealing's run distribution;
+holds the entire high-quality wall of the same-machine time-quality
+Pareto front against the reference Julia implementation, its published
+suite, and cotengra; and its advantage grows with problem scale.
+
+The algorithm's design is uniquely constrained by negative results: on
+converged instances the annealing frontier is certifiably
+width-optimal (optimum in $[53, 61.5]$ on the circuit proxy, with
+profile-based bounds provably exhausted), and twenty falsified
+mechanisms show that global information helps only as input, never as
+search control. The method's boundaries are mapped: expanders return
+the advantage at long budgets, dense inference networks belong to
+elimination orderings (our elimination-seeded variant comes within
+$0.7$ bits), sparse pedigree networks belong to annealing---and shipped
+inference defaults sit $12$--$30$ bits above either regime's frontier,
+so a milliseconds-cheap elimination probe belongs in front of every
+annealer.
+
+Deliverables: the surgery pass, the simplification pass, tuned defaults,
+a warm-start annealing API, and two bug fixes are released in the omeco
+library (prepared for upstreaming to OMEinsumContractionOrders.jl),
+together with the validator, all certificates, and the 56-attempt audit
+trail. Open problems: carving-width-type lower bounds; the two
+instances that repelled every mechanism (the 97-qubit random circuit
+and 28-queens, the latter unstable at practical budgets); heterogeneous
+bond dimensions; and sliced contraction, where the interaction between
+slicing and surgery is unexplored.
+
+\appendix
+
+\section{Why search control cannot win: a certified null}
+\label{app:null}
 \label{sec:null}
 
-Before exhibiting mechanisms that beat the tuned reference, we establish
-where none can. On the two closed instances the tuned annealer converges
-within the budget, and the question ``can it be beaten?'' admits a
-certified negative answer in three layers: empirical convergence,
-width-optimality, and an impossibility result for profile-based bounds.
+The case for operating on the input rather than the search is made by a
+null result, and we certify it. On the two closed instances the tuned
+annealer converges within the budget, and nothing we or an independent
+toolchain tried can beat it---for reasons that are provable, not
+anecdotal.
 
 \subsection{Thirteen mechanisms, two toolchains, one frontier}
 \label{sec:frontier}
@@ -307,7 +760,7 @@ landscape, not of any search mechanism, schedule, or implementation.
   \caption{Distance of every scored optimizer from the frontier value
   (dashed line at zero). Open triangles: the thirteen search mechanisms
   of this work. Filled symbols: the tuned TreeSA reference
-  ($\scT=\infty$, circle), cotengra's SA refiner (diamond), cotengra's
+  ($\scT=\infty$, circle), cotengra's SA refiner (triangle), cotengra's
   hyper-optimizer (square), and the shipped-default TreeSA (cross).}
   \label{fig:frontier}
 \end{figure}
@@ -327,8 +780,8 @@ On sycamore\_m20 these tools give a sharp result. An explicit temporal
 cut severing all 53 qubit world-lines gives a balanced cut of value 53;
 extensive search finds nothing smaller, and the frontier trees achieve
 $\sct = 53$ exactly. The frontier is therefore \emph{width-optimal}, and
-$\mathrm{tw}(L(G)) = 52$. Combined with the frontier value,
-\textbf{our second main result} is the certified localization
+$\mathrm{tw}(L(G)) = 52$. Combined with the frontier value, we obtain
+the certified localization
 \begin{equation}
   \tc_{\min}(\text{sycamore\_m20}) \;\in\; [\,53,\; 61.544\,].
   \label{eq:interval}
@@ -385,9 +838,8 @@ complementary measurement (Fig.~\ref{fig:conservation}) shows why search
 cannot exploit the residual either: reducing the largest contraction by
 one unit systematically multiplies the number of contractions just below
 the peak, so total flops behave as if conserved under profile reshaping.
-This certified null is the backdrop against which the wins of the next
-two sections should be read: they do not contradict it---they change the
-input.
+This certified null fixes the design space for any challenger: the gains
+must come from changing what is searched, not how.
 
 \begin{figure}[t]
   \centering
@@ -407,8 +859,8 @@ input.
   \includegraphics[width=\linewidth]{figures/fig4_isoperimetric_profiles.pdf}
   \caption{Isoperimetric profiles. The empirical profile $b(k)$ (solid)
   dips well below the bisection width (dotted) at off-center sizes; the
-  certified star marks the 141-tensor sycamore\_m20 subset with boundary
-  exactly 40. This dip is what caps all profile-based bounds
+  certified marker shows the 141-tensor sycamore\_m20 subset with
+  boundary exactly 40. This dip is what caps all profile-based bounds
   (Observation~\ref{obs:cap}).}
   \label{fig:profiles}
 \end{figure}
@@ -417,353 +869,35 @@ input.
   \centering
   \includegraphics[width=\linewidth]{figures/fig5_profile_conservation.pdf}
   \caption{Cost-profile conservation at the frontier. Bars count
-  contractions within $1.0$ (solid) and $2.0$ (hatched) of the largest;
-  boxes give each tree's peak cost and $\tc$. Trees that lower the peak
+  contractions within $1.0$ (solid) and $2.0$ (outline) of the largest;
+  labels give each tree's peak cost and $\tc$. Trees that lower the peak
   by one unit acquire several times more near-peak contractions at
   essentially unchanged $\tc$.}
   \label{fig:conservation}
 \end{figure}
 
-\section{Beating the annealer I: structural simplification}
-\label{sec:simplify}
-
-The first mechanism that beats the tuned reference does not search
-better---it changes what is searched. Real-provenance networks carry
-large amounts of \emph{rank-non-increasing} structure: tensors whose
-contraction with a neighbor can never increase any intermediate rank
-(rank-1 spiders, dangling legs, series chains). A preprocessing pass
-contracts this structure away greedily, the annealer runs on the reduced
-network, and the contracted fragments are spliced back into the final
-tree as fixed subtrees.
-
-The effect is largest exactly where synthetic benchmarks never look.
-Figure~\ref{fig:simplify}a shows the shrink fraction across instances:
-$88.7\%$ of the real Sycamore network's 3369 tensors are removed before
-annealing begins ($3369 \to 381$), $65.5\%$ of surface-code $d{=}21$,
-$33.9\%$ of nqueens\_28, and $0\%$ of the random 3-regular
-control---which is why the identical mechanism, correctly measured as
-useless on the pre-simplified synthetic proxy two cycles earlier, was
-nearly discarded. A matched-budget ablation on the real Sycamore
-network isolates the effect: the same anneal reaches $\tc = 61.3$ with
-simplification and $76.0$ without it, a $2^{14.7}$ ($\sim\!27000\times$)
-difference from preprocessing alone. \textbf{The record march of
-Fig.~\ref{fig:simplify}b is our third main result}: three independently
-implemented simplify-then-anneal attempts drove the Sycamore record
-$60.605 \to 60.169 \to 60.104 \to 59.911$, and the mechanism transfers
-(surface-code and DBN records in Sec.~\ref{sec:board} start from the
-same pass). The pass is exact---the contracted structure is
-rank-non-increasing, so no approximation is introduced---and costs
-milliseconds.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig9_simplification.pdf}
-  \caption{Structural simplification. (a)~Fraction of tensors removed by
-  the exact rank-non-increasing pass; the random-regular control is
-  untouched at $0\%$. (b)~The Sycamore 53q record march: the tuned
-  reference (leftmost) and three successive simplify-then-anneal
-  attempts. The same anneal without simplification reaches $76.0$ (off
-  scale): preprocessing, not search, carries the improvement.}
-  \label{fig:simplify}
-\end{figure}
-
-\section{Beating the annealer II: waist surgery}
-\label{sec:waist}
-
-The second winning mechanism attacks the annealer where it is provably
-blind. A converged annealed tree has a \emph{waist}: the single dominant
-contraction that carries most of the log-sum \eqref{eq:tc}. Local tree
-moves (rotations, subtree transfers) perturb the waist only through
-sequences of individually uphill steps, so late in the schedule the waist
-freezes. Waist surgery treats it globally instead: extract the
-bipartition induced by the dominant contraction, improve it as a
-graph-cut problem with bounded Fiduccia--Mattheyses passes over the
-tensor graph, rebuild the two sides cold with fixed-work sub-anneals, and
-splice. The move is accepted only if the rescored tree improves.
-
-Instrumenting every surgery call yields \textbf{our fourth main result}
-(Fig.~\ref{fig:waist}a): across 835 pooled calls on two instances,
-\emph{the annealer's waist is never a locally minimal balanced cut}. On
-every single call, bounded FM found a strictly cheaper cut of comparable
-balance, by margins of $3$--$12$ bits; the improved cuts are sparse
-rather than near-clique (clique fraction $0.01$--$0.05$), i.e., genuine
-alternative separators, not degenerate rearrangements. The refinement is
-also load-bearing, not cosmetic: with surgery, the surface-code
-$d{=}21$ median improves from a ratchet-only $49.6$ to $47.38$, and the
-king-graph instance from $50.0$ to $36.8$. Fixed-work sub-anneals
-collapse run-to-run spread from $0.8$ to $0.08$ bits. Waist surgery set
-three simultaneous records (king graph $36.96$, surface code $47.40$,
-reg3\_1000 $131.07$)---including the only record on an expander in the
-entire campaign---while leaving the two converged closed instances
-unchanged, exactly as the certified null of Sec.~\ref{sec:null}
-predicts.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig10_waist_surgery.pdf}
-  \caption{Waist surgery. (a)~Every instrumented surgery call: incumbent
-  waist cut weight versus the best comparable-balance cut found by
-  bounded FM. All 835 points lie strictly below the diagonal---the
-  annealed waist is never locally minimal. (b)~A representative
-  surface-code $d{=}21$ run: incumbent $\tc$ (solid), accepted waist
-  rebuilds (stars), the pre-surgery record (dotted) and the official
-  with-surgery median (dash-dotted).}
-  \label{fig:waist}
-\end{figure}
-
-\section{The record board, and what survives a change of machine}
-\label{sec:board}
-
-Figure~\ref{fig:board} assembles the campaign's confirmed records against
-the tuned reference on all ten instances, colored by mechanism.
-The pattern, not the individual deltas, is the point: every record-setting
-mechanism injects global information as \emph{input} to the local search
-(a simplified network, an improved cut, an elimination seed), and no
-record was ever set by replacing the annealer's control loop
-(Sec.~\ref{sec:taxonomy}). On four instances---including both certified
-closed instances and, notably, the 97-qubit random circuit and the
-28-queens network---the tuned reference itself remains unbeaten.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig8_record_board.pdf}
-  \caption{The record board: confirmed improvement over the tuned TreeSA
-  reference on each instance (validator protocol: confirm-twice,
-  worse-of-two, per-run relabeling). Marker shape and color encode the
-  winning mechanism; horizontal dashes mark instances where the tuned
-  reference is the record holder.}
-  \label{fig:board}
-\end{figure}
-
-\paragraph{Same-machine re-measurement.}
-Records accumulated on one machine invite two objections: the gains might
-be machine-specific tuning artifacts, and single confirmed runs might not
-represent distributions. The dedicated-server campaign
-(Sec.~\ref{sec:setup}) addresses both. Figure~\ref{fig:pareto} presents
-its core as a time-versus-quality Pareto scatter, following the
-presentation of the OMEinsumContractionOrders benchmark study
-\cite{liu_2025_omeco_orders}: every optimizer configuration from every
-toolchain is one point, and the dashed line traces the non-dominated
-front. On both instances the front has the same anatomy: treewidth
-back-ends hold the fast/low-quality end (sub-second, $10$--$40$ bits off
-best), HyperND the middle, and \emph{waist surgery holds the entire
-high-quality wall}---at every time tier ($90/300/900$\,s) its points sit
-strictly left of every tuned-TreeSA point from either implementation.
-On the real Sycamore network surgery reaches $59.87$ at 90\,s while the
-tuned reference does not reach it even at 900\,s ($60.50$)---a quality
-gap, not a speedup; on surface-code $d{=}21$, surgery at 90\,s
-($47.39$) matches the reference at 900\,s ($47.38$)---a tenfold
-time-to-quality gain with both converging to the same floor. The
-picture is not universally rosy: on reg3\_1000 (not shown) the
-reference overtakes surgery at 900\,s ($129.8$ versus $134.4$), so the
-expander advantage is a fixed-budget effect.
-
-Figure~\ref{fig:campaign} adds the statistical view.
-\emph{Distributions} (Fig.~\ref{fig:campaign}a): over 15 repetitions,
-the surgery and reference distributions on surface-code $d{=}21$ are
-fully separated---surgery's worst run ($47.91$) beats the reference's
-best ($48.18$); king-graph and reg3\_1000 medians improve by $3.0$ and
-$2.4$; the DBN seed mechanism shows a $14\times$ tighter spread than
-the reference. One negative also reproduces: the Sycamore
-simplify-then-anneal pipeline of attempt 050, tuned against a faster
-development machine, is $0.5$ \emph{worse} than the reference at 90\,s on
-the slower server and recovers only at 300\,s---optimizer pipelines
-calibrate to absolute time, and honest cross-machine reporting must say
-so. \emph{Family scaling} (Fig.~\ref{fig:campaign}b): on surface codes
-the surgery advantage grows with distance ($+0.04$, $+0.02$, $+0.11$,
-$+1.04$ at $d=9,13,17,21$) while its run-to-run spread stays collapsed;
-global-information injection pays off precisely at scale.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig13_pareto.pdf}
-  \caption{Time-versus-quality Pareto view of the same-machine campaign
-  (dedicated 2-core server, all runs single-threaded), in the
-  presentation style of the OMEinsumContractionOrders benchmark study
-  \cite{liu_2025_omeco_orders}. Each point is one optimizer
-  configuration or repetition: filled markers are external baselines
-  (Julia TreeSA ladder, HyperND, treewidth back-ends, cotengra
-  hyper-optimizer with SA refinement); open markers are this work at
-  $90/300/900$\,s budgets. The dashed line is the non-dominated front.
-  Waist surgery (stars) holds the entire high-quality wall of the front
-  on both instances.}
-  \label{fig:pareto}
-\end{figure}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig11_campaign.pdf}
-  \caption{Statistical view of the same-machine campaign. (a)~All 15
-  repetitions per instance at 90\,s, centered on the tuned reference's
-  median: circles are the tuned reference, squares the best attempt per
-  instance. (b)~Surface-code family: repetitions at 90\,s versus code
-  distance, anchored at the surgery median per distance; the advantage
-  grows with $d$ while the surgery spread stays collapsed.}
-  \label{fig:campaign}
-\end{figure}
-
-\paragraph{External baselines.}
-Table~\ref{tab:external} closes the loop against the reference Julia
-implementation, run on the same server through its own benchmark
-harness at a ladder of configurations, and against the suite's published
-numbers. Three observations. First, our records beat the best
-same-machine Julia configuration \emph{at ten times our budget} on the
-three large structured instances (Sycamore $59.87$ versus $61.35$;
-surface code $47.40$ versus $48.75$; king graph $36.96$ versus $38.27$),
-and beat the entire published multi-optimizer suite by $6.8$, $4.9$, and
-$2.0$ bits respectively. Second, the comparison is honest in both
-directions: on the DBN instance the published (and reproduced) treewidth
-row wins outright ($28.03$, instantly, versus our $29.00$)---elimination
-methods are the right tool there, a theme Sec.~\ref{sec:inference}
-develops. Third, on nqueens\_28 no stable ordering exists at this
-budget: our reference's fifteen-run spread on the server spans
-$104.9$--$159.3$, single Julia runs land inside that spread, and we
-decline to claim a direction; distributional reporting is the only
-honest mode for that instance. The cotengra column adds a
-protocol-matched cross-toolchain reference: on the small converged
-instances it confirms the shared frontier (reg3\_250 $40.5$ versus our
-$39.9$; the circuit proxy $62.4$ versus $61.5$), while on the large
-instances a single-threaded 90-second budget starves its
-sampling-based portfolio ($69.0$ on the king graph, $187$ on the
-97-qubit circuit), which quantifies how much of that toolchain's power
-lives in parallel trial throughput rather than in per-trial quality.
-
-\begin{table}[t]
-\centering
-\small
-\begin{tabular}{lrrrrr}
-\toprule
- & \multicolumn{2}{c}{this work (90\,s)} &
- \multicolumn{2}{c}{Julia OMECO suite} & cotengra \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-6}
-instance & record & tuned ref. & best $\le$90\,s & best $\le$900\,s &
-SA, 90\,s \\
-\midrule
-sycamore\_53\_20\_0 & \textbf{59.91} & 60.61 & 64.49 & 61.35 & 66.03 \\
-surfacecode\_d21    & \textbf{47.40} & 48.76 & 48.98 & 48.75 & 54.03 \\
-ksg                 & \textbf{36.96} & 39.12 & 39.22 & 38.27 & 69.04 \\
-reg3\_1000          & \textbf{131.07} & 133.91 & --- & --- & 165.21 \\
-dbn\_13             & 29.00 & 29.09 & \textbf{28.03} & \textbf{28.03} & 41.15 \\
-qft\_27             & \textbf{29.61} & \textbf{29.61} & 29.62 & 29.62 & 31.45 \\
-\bottomrule
-\end{tabular}
-\caption{Records versus external baselines, all measured on the same
-server. Julia columns: over the configuration ladder of the reference
-implementation (OMEinsumContractionOrders.jl: TreeSA at
-$\scT \in \{20, \infty\}$ with 1/4/8 restarts, HyperND, treewidth
-back-ends, run through its own harness), the best row whose measured
-runtime fits budget $B$. Cotengra column: median of three 90\,s
-single-threaded runs of the hyper-optimizer followed by
-subtree simulated annealing; under this protocol it is starved of the
-parallel trial sampling that is its main strength, so these rows are a
-protocol-matched reference, not a claim about cotengra at large. Bold
-marks the winner per instance. The dbn\_13 row is won by the treewidth
-back-end (min-fill), instantly---see Sec.~\ref{sec:inference}.
-reg3\_1000 is not in the Julia suite. nqueens\_28 is excluded: no
-ordering is stable at these budgets (see text).}
-\label{tab:external}
-\end{table}
-
-\section{Inference workloads: a frontier with two regimes}
-\label{sec:inference}
-
-Contraction ordering is not a quantum-only problem: exact probabilistic
-inference contracts the tensor network of a graphical model, and
-TensorInference.jl \cite{roa_2023_tensorinference} does so literally,
-optimizing an einsum whose inputs are one unity tensor per variable plus
-one tensor per factor, at full cardinalities. We exported all 65
-instances of the UAI-2014 MAR benchmark from the package's own artifact
-in exactly that form, ranked them by a 5-second hardness scan, and
-measured the ten hardest (three dense deep-belief networks, four
-pedigree-linkage networks, one CSP, one grid, plus the package's own
-benchmark instance Promedus\_14) under the full protocol: our four
-methods at five repetitions each, against a same-machine Julia ladder
-that includes the package's two defaults (the signature default
-GreedyMethod and the benchmark configuration
-TreeSA(ntrials=1, niters=5)), HyperND, the min-fill treewidth back-end,
-and tuned TreeSA.
-
-Figure~\ref{fig:inference} shows every method's distance above the
-per-instance frontier, and \textbf{this figure is our fifth main
-result}. Three findings. \emph{First, the shipped defaults are
-$12$--$30$ bits off frontier} ($4\,000\times$ to $10^9\times$ in flops):
-GreedyMethod lands $14.6$--$16.6$ above on the DBN family and $30.5$
-above on linkage\_15; the benchmark TreeSA configuration is little
-better there ($10$--$16$ above). Whatever mechanism one prefers, an
-inference user who accepts defaults pays orders of magnitude for it.
-\emph{Second, the frontier itself splits into two structural regimes.}
-On dense DBNs, elimination methods win outright: min-fill treewidth and
-HyperND reach the frontier ($25.9$--$28.0$) in milliseconds, tuned
-annealing trails by $5$--$8$ bits, and our best method (the
-elimination-seeded annealer, Sec.~\ref{sec:anytime}) lands within
-$0.7$ of the elimination frontier with a $10\times$ tighter spread than
-the plain reference. On pedigree linkage the regimes invert: min-fill is
-$6$--$15$ bits \emph{above} the frontier, HyperND's back-end
-(KaHyPar) segfaults on all four instances, and annealing-family
-methods---ours leading on all four---hold the frontier. \emph{Third,
-the regime boundary is a structure property, not a size property}: the
-DBN networks have 44--66 shared labels of high degree (elimination's
-sweet spot), while linkage networks are sparse with a thousand
-variables. A portfolio that probes elimination first (milliseconds) and
-falls back to annealing otherwise captures the frontier everywhere we
-measured; our simplification pass (Sec.~\ref{sec:simplify}) additionally
-absorbs the per-variable unity tensors that inference-style einsums
-carry by construction.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig12_inference.pdf}
-  \caption{The ten hardest UAI-2014 MAR instances (from a 65-instance
-  scan): each method's $\tc$ above the per-instance frontier, same
-  machine, 90\,s budgets for search methods. Down-triangles:
-  TensorInference.jl's signature default. Squares: best tuned TreeSA
-  from the Julia ladder. Up-triangles: best elimination method (min-fill
-  treewidth / HyperND; KaHyPar segfaults on all four linkage instances,
-  so its rows there are min-fill only). Stars: this work (best method,
-  median of five). Shaded bands mark the two regimes.}
-  \label{fig:inference}
-\end{figure}
-
-\section{Composites, the anytime axis, and elimination seeds}
-\label{sec:anytime}
-
-Three secondary mechanisms round out the toolbox. \emph{Composites}: the
-winning mechanisms are complementary (simplification transforms the
-input, surgery escapes waist freezing, both feed the same annealer), and
-a composite that routes between them set three records in a single run,
-including the first fall of an expander instance. Racing arms with
-budget-fraction schedules matter here; a probe-leader policy never won.
-\emph{The anytime axis}: with the harness clocking candidate output over
-time, records exist for time-to-frontier as well: $16.1$\,s to reach the
-reg3\_250 frontier (versus $20.2$\,s for the reference), and $0.2$\,s on
-the DBN instance. \emph{Elimination seeds}: on hypergraph-like instances
-with few, high-degree labels, seeding the annealer with a min-fill
-variable-elimination order gives it a start ($\tc = 28.8$ at $0.2$\,s on
-dbn\_13) that plain greedy construction ($44.7$) cannot approach; the
-mechanism's boundary is equally sharp---at 4086 labels (nqueens) the VE
-peel freezes and the seed is useless. This is the method that holds the
-DBN-regime rows in Sec.~\ref{sec:inference}.
-
-\section{What does not work: a mechanism taxonomy}
+\section{What does not work: falsified alternatives}
+\label{app:taxonomy}
 \label{sec:taxonomy}
 
 Twenty further mechanisms were implemented, measured, and falsified under
-the same protocol. \textbf{Their taxonomy is our sixth main result},
-because the failures have measured causes that organize into four
-families (Table~\ref{tab:taxonomy}), and the pattern they draw is the
-paper's central lesson stated negatively: \emph{every mechanism that
-injected global information as search control failed; every mechanism
-that injected it as input won.} Construction-time global structure
-(separators, spectral cuts, boundary combs) loses to the greedy
-portfolio it seeds; search-control globality (targeting, tempering,
-blocking, acceptance relaxation) breaks the annealer's schedule
-invariants; exhaustive enumeration hits certified combinatorial walls
-(window-exact optimality of the incumbent frontier; block counts
+the same protocol, and their taxonomy (Table~\ref{tab:taxonomy}) is what
+makes the design of Sec.~\ref{sec:algorithm} non-arbitrary: \emph{every
+mechanism that injected global information as search control failed;
+every mechanism that injected it as input won.} Construction-time global
+structure (separators, spectral cuts, boundary combs) loses to the
+greedy portfolio it seeds; search-control globality (targeting,
+tempering, blocking, acceptance relaxation) breaks the annealer's
+schedule invariants; exhaustive enumeration hits certified combinatorial
+walls (window-exact optimality of the incumbent frontier; block counts
 exploding past $10^5$ within bits of the minimum boundary---with an
 outer-product counterexample showing the connectivity-restricted variant
 is not even correct); and population policies drain a small
 recombination reservoir (about ten productive recombinations) regardless
-of diversity management.
+of diversity management. Global cut surgery is, to our knowledge, the
+unique surviving design point: it consumes global information (a better
+cut) as an \emph{input} to a rebuild, leaving the annealer's control
+loop untouched.
 
 \begin{table}[t]
 \centering
@@ -857,18 +991,18 @@ cycle reports) ships with the code.
   \label{fig:timeline}
 \end{figure}
 
-\section{How the results were found: steered autonomous research}
+\section{How the algorithm was found: steered autonomous research}
 \label{sec:roadmap}
 
-The findings of this paper were produced by an autonomous research loop
+The algorithm of this paper was produced by an autonomous research loop
 (machine-proposed hypotheses, isolated implementations, hardened scoring)
 that was \emph{steered} by a small number of human decisions. Because the
 loop retained every artifact, the causal path from the opening question to
-each main result can be reconstructed exactly. Figure~\ref{fig:roadmap}
+the algorithm can be reconstructed exactly. Figure~\ref{fig:roadmap}
 shows that path left to right: the top row quotes the steering prompts,
 the middle row shows only the attempts that carried results forward
 (most of the 56 attempts served as controls, falsifications, or dead
-branches feeding Secs.~\ref{sec:taxonomy} and~\ref{sec:method}), and
+branches feeding Appendices~\ref{app:taxonomy} and~\ref{sec:method}), and
 each arrow states why the transition happened.
 
 Three properties of this trajectory are worth stating explicitly.
@@ -883,10 +1017,10 @@ while every input-level variant had won. \emph{Second, the human
 contributions were few but load-bearing}: the demand for a strengthened
 reference (which produced the tuning result of Sec.~\ref{sec:sctarget}),
 the switch to real-provenance instances (which unlocked the
-simplification pillar---the same mechanism had been correctly measured
+simplification pass---the same mechanism had been correctly measured
 as useless on the pre-simplified proxy two cycles earlier), the question
 ``can global information help the local search escape?'' (which became
-waist surgery), and the directive to demonstrate the methods on
+global cut surgery), and the directive to demonstrate the methods on
 inference workloads (which produced the two-regime result of
 Sec.~\ref{sec:inference}). \emph{Third, retests are cheap when
 provenance changes}: attempt 013's null on the synthetic proxy and
@@ -922,7 +1056,7 @@ embarrassing.
       pass/fail''};
     \node[res, below=4mm of s2] (w2) {\textbf{tuning + certificates}
       (cycles 2--6)\\ $\scT$ cliff $\Rightarrow$ tuned reference
-      reclaims all $800\times$ ``wins'' \textbf{[MR1]}\\ 13 mechanisms
+      reclaims all $800\times$ ``wins''\\ 13 mechanisms
       tie; window-exact optimality (033)};
     % stage 3
     \node[steer, right=9mm of s2] (s3) {``I need publishable
@@ -934,9 +1068,9 @@ embarrassing.
     \node[steer, right=9mm of s3] (s4) {``scale, median-of-3''\\``add
       harder \emph{real} instances''\\``launch 10 more trials''};
     \node[res, below=4mm of s4] (w4) {\textbf{real instances} (cycle 8)\\
-      039 simplify-then-anneal: 2 records \textbf{[MR3]} (retest of
+      039 simplify-then-anneal: 2 records (retest of
       013's proxy null)\\ 034 span-gated (ksg), 038 VE seed (dbn);
-      7 falsifications seed the taxonomy \textbf{[MR6]}};
+      7 falsifications seed the taxonomy};
     % stage 5
     \node[steer, right=9mm of s4] (s5) {``compose the winners; also try
       more \emph{innovative} algorithms''};
@@ -947,15 +1081,16 @@ embarrassing.
     % stage 6
     \node[steer, right=9mm of s5] (s6) {``can \emph{global} information
       help the local search escape?''\\``borrow from Tamaki?''};
-    \node[res, below=4mm of s6] (w6) {\textbf{waist surgery} (cycle 10)\\
+    \node[res, below=4mm of s6] (w6) {\textbf{global cut surgery}
+      (cycle 10)\\
       054: three records; the SA waist is \emph{never} a locally
-      minimal cut \textbf{[MR4]}\\ 055/056 close the recombination and
+      minimal cut\\ 055/056 close the recombination and
       exact-enumeration families};
     % stage 7
     \node[steer, right=9mm of s6] (s7) {``show the new methods work on
       \emph{inference} tasks---handle the hard instances properly''};
     \node[res, below=4mm of s7] (w7) {\textbf{inference batch}\\
-      65 UAI instances exported; two-regime frontier \textbf{[MR5]}:
+      65 UAI instances exported; two-regime frontier:
       elimination wins dense DBN, annealing wins linkage; defaults
       12--30 bits off};
 
@@ -976,72 +1111,36 @@ embarrassing.
   \end{tikzpicture}}
   \caption{The research roadmap, left to right. Top row (grey): the
   human steering prompts, essentially verbatim. Bottom row: the
-  result-carrying attempts only (shaded boxes contain main results);
-  most of the 56 attempts are controls and falsifications that feed
-  Table~\ref{tab:taxonomy} and Sec.~\ref{sec:method}. Each numbered
-  arrow is a transition forced by a measurement: (1) the gate was passed
-  without an algorithm, so the gate was hardened and references
-  ratcheted; (2) tc saturated and was certified locally optimal, so the
-  objective axis changed to arrival time; (3) speed gains sat at the
-  confirmation noise floor while scale budgets were non-converged, so
-  the regime changed; (4) the winning mechanisms proved complementary,
-  so they were composed while exploration continued; (5) every win
-  injected global information as \emph{input} while every
-  search-control variant failed, so global information was aimed
-  directly at the local search's blind spot---the dominant cut; (6) the
-  mechanism portfolio was complete, so it was pointed at a second
-  application domain to test transfer.}
+  result-carrying attempts only; most of the 56 attempts are controls
+  and falsifications that feed Table~\ref{tab:taxonomy} and
+  Appendix~\ref{sec:method}. Each numbered arrow is a transition forced by
+  a measurement: (1) the gate was passed without an algorithm, so the
+  gate was hardened and references ratcheted; (2) tc saturated and was
+  certified locally optimal, so the objective axis changed to arrival
+  time; (3) speed gains sat at the confirmation noise floor while scale
+  budgets were non-converged, so the regime changed; (4) the winning
+  mechanisms proved complementary, so they were composed while
+  exploration continued; (5) every win injected global information as
+  \emph{input} while every search-control variant failed, so global
+  information was aimed directly at the local search's blind spot---the
+  dominant cut; (6) the mechanism portfolio was complete, so it was
+  pointed at a second application domain to test transfer.}
   \label{fig:roadmap}
 \end{figure}
-
-\section{Conclusions}
-\label{sec:conclusions}
-
-When can tuned simulated annealing be beaten at contraction ordering?
-The campaign's answer is a characterization. \emph{Never, before
-tuning}: one shipped memory-target default costs $20\times$ to
-$2100\times$, more than every mechanism difference we measured, and
-comparisons against untuned incumbents are not informative.
-\emph{Never, on small converged instances}: thirteen paradigms and two
-toolchains tie a frontier that is certifiably width-optimal, with the
-optimum localized to $[53, 61.5]$ on the circuit proxy and a proof that
-profile-based bounds can go no further. \emph{Yes, on large structured
-instances}---but only, in our campaign, by mechanisms that inject global
-structure as input to the local search: exact simplification (up to
-$89\%$ of tensors removed, $2^{14.7}$ from preprocessing alone on
-Sycamore) and waist surgery (the annealed waist is never a locally
-minimal cut; three records, distribution-separated on surface code, with
-an advantage that grows with code distance). \emph{And sometimes the
-answer is to stop annealing}: on dense inference networks elimination
-orderings win outright, annealing wins the sparse pedigree regime, and
-the shipped defaults of an inference package sit $12$--$30$ bits above
-either---so a milliseconds-cheap elimination probe belongs in front of
-every annealer.
-
-Deliverables: the tuned defaults, the exact simplification pass, the
-waist-surgery refiner, a warm-start annealing API, and two bug fixes are
-released in the omeco library (with the simplification and surgery
-passes prepared for upstreaming to OMEinsumContractionOrders.jl),
-together with the validator, all certificates, and the 56-attempt audit
-trail. Open problems: carving-width-type lower bounds (profile methods
-are provably exhausted); the two instances that repelled every
-mechanism (the 97-qubit random circuit and 28-queens, the latter
-unstable at practical budgets); heterogeneous bond dimensions; and
-sliced contraction, where the interaction between slicing and both
-winning mechanisms is unexplored.
 
 \section*{Code and data availability}
 The optimizer library (omeco), the validation harness, all certificates
 (treewidth minors, cut sets, and their verification scripts), per-attempt
-logs, cycle reports, the same-machine campaign data (305 + 200 + 80 + 30
-scored runs and the Julia ladder), and the UAI instance exporter are
-available in the project repository.
+logs, cycle reports, the same-machine campaign data (305 + 200 + 80 + 69
++ 30 scored runs and the Julia ladder), and the UAI instance exporter are
+available in the project repository. Every figure regenerates from
+JSON data files via Typst sources shipped with the manuscript.
 
 \section*{Use of AI systems}
 This research was conducted as a steered autonomous research campaign:
 LLM-based agents proposed hypotheses, implemented attempts in isolated
 worktrees, and drafted analyses, under human steering decisions
-documented verbatim in Sec.~\ref{sec:roadmap} and under a validation
+documented verbatim in Appendix~\ref{sec:roadmap} and under a validation
 protocol in which no agent-reported number is trusted---every scored
 quantity is recomputed by an independent checker from artifacts, and all
 certified claims are verified by machine-checkable certificates
