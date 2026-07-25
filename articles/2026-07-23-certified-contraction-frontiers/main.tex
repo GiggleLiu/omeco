@@ -1,22 +1,41 @@
 \pdfoutput=1
-% DRAFT PREAMBLE: quantumarticle.cls (GitHub master and TeX Live 2025) is
-% currently incompatible with the 2025 LaTeX kernel on this machine
-% ("Sorting rule for 'begindocument' hook applied too late"). Drafting with
-% the article class; swap to quantumarticle at submission (e.g., on Overleaf
-% with TeX Live <= 2023). See template/README.md.
-\documentclass[a4paper,11pt]{article}
-\usepackage[margin=2.2cm]{geometry}
-\usepackage[utf8]{inputenc}
-\usepackage[english]{babel}
-\usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{graphicx}
-\usepackage{hyperref}
+% SciPost Physics submission. Official SciPost LaTeX template (version
+% 2024-07), class file SciPost.cls + SciPost_bibstyle.bst copied from
+% template/scipost/; see template/README.md for source URL and access date.
+\documentclass{SciPost}
+
+% Prevent all line breaks in inline equations.
+\binoppenalty=10000
+\relpenalty=10000
+
+\hypersetup{
+    colorlinks,
+    linkcolor={red!50!black},
+    citecolor={blue!50!black},
+    urlcolor={blue!80!black}
+}
+
+\usepackage[bitstream-charter]{mathdesign}
+\urlstyle{same}
+
+% Fix \cal and \mathcal characters look (so it's not the same as \mathscr)
+\DeclareSymbolFont{usualmathcal}{OMS}{cmsy}{m}{n}
+\DeclareSymbolFontAlphabet{\mathcal}{usualmathcal}
+
+\usepackage{amsthm}
 \usepackage{booktabs}
-\usepackage{authblk}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
-\newcommand{\affiliation}[1]{\affil{#1}}
+
+\fancypagestyle{SPstyle}{
+\fancyhf{}
+\lhead{\colorbox{scipostblue}{\bf \color{white} ~SciPost Physics }}
+\rhead{{\bf \color{scipostdeepblue} ~Submission }}
+\renewcommand{\headrulewidth}{1pt}
+\fancyfoot[C]{\textbf{\thepage}}
+}
+
+\hyphenation{co-ten-gra}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{observation}{Observation}
@@ -25,50 +44,71 @@
 \newcommand{\sct}{\ensuremath{\mathrm{sc}}}
 \newcommand{\scT}{\ensuremath{\mathrm{sc}_{\mathrm{target}}}}
 
-\title{Global cut surgery for tensor-network contraction ordering}
-
-\author{Jinguo Liu}
-\affiliation{Advanced Materials Thrust, The Hong Kong University of Science and Technology (Guangzhou)}
-
 \begin{document}
-\maketitle
 
-\begin{abstract}
-Simulated-annealing tree refiners are the strongest general-purpose
-optimizers of tensor-network contraction orders, yet late in every run
-they freeze: the dominant contraction---the tree's \emph{waist}, the
-single bipartition that carries most of the total cost---stops moving,
-because local tree rewrites can only cross between distinct good
-bipartitions through long uphill sequences. We report a structural
-measurement that turns this freeze into an algorithmic target: across 835
-instrumented converged states on real benchmark networks, the annealer's
-waist is \emph{never} a locally minimal balanced cut---a bounded
-Fiduccia--Mattheyses pass on the tensor hypergraph finds a strictly
-cheaper cut of comparable balance on every single call, by $3$--$12$ bits.
-We introduce \emph{global cut surgery}, an algorithm that exploits this
-blind spot: extract the waist bipartition, improve it as a graph cut
-(ignoring the tree), cold-rebuild the two sides with fixed-work
-sub-anneals, splice, and accept on measured cost; an exact
-rank-non-increasing simplification pass runs as preprocessing. On a
-ten-instance benchmark including the 53-qubit Sycamore circuit,
-surface-code syndrome networks, and counting and inference networks,
-surgery sets records on three instances, separates fully from tuned
-annealing's run distribution on surface code $d{=}21$, holds the entire
-high-quality wall of the same-machine time-quality Pareto front, and its
-advantage grows with problem scale. The algorithm's necessity is
-certified from both sides: on small converged instances we prove the
-annealing frontier width-optimal (optimum in $[53, 61.5]$ on a circuit
-proxy) so no search-control change can win, and twenty falsified
-alternative mechanisms show that global information helps only when
-injected as \emph{input}---a simplified network, a better cut---never as
-search control. On probabilistic-inference networks the method's scope is
-mapped honestly: annealing-family methods (ours leading) win sparse
-pedigree-linkage networks while elimination orderings win dense Bayesian
-networks, and the defaults of a shipped inference package sit $12$--$30$
-bits above either. All algorithms, validators, and the audit trail of the
-56-attempt steered autonomous research campaign that produced them are
-released with the paper.
-\end{abstract}
+\pagestyle{SPstyle}
+
+\begin{center}{\Large \textbf{\color{scipostdeepblue}{
+Global cut surgery for tensor-network contraction ordering
+}}}\end{center}
+
+\begin{center}\textbf{
+Jin-Guo Liu\textsuperscript{1$\star$}
+}\end{center}
+
+\begin{center}
+{\bf 1} Advanced Materials Thrust, The Hong Kong University of Science
+and Technology (Guangzhou), Guangzhou, China
+\\[\baselineskip]
+$\star$ \href{mailto:jinguoliu@hkust-gz.edu.cn}{\small jinguoliu@hkust-gz.edu.cn}
+\end{center}
+
+
+\section*{\color{scipostdeepblue}{Abstract}}
+\textbf{\boldmath{%
+Simulated annealing over contraction trees is the strongest
+general-purpose optimizer of tensor-network contraction orders, yet late
+in every run its dominant contraction---the tree's \emph{waist}---freezes.
+Across 835 instrumented converged states, this frozen waist is
+\emph{never} a locally minimal balanced cut: a bounded
+Fiduccia--Mattheyses pass finds a strictly cheaper cut every time, by
+$3$--$12$ bits. \emph{Global cut surgery} exploits the blind spot:
+extract the waist, improve it as a graph cut, cold-rebuild both sides,
+accept on measured cost. It sets three records on ten benchmarks
+including the Sycamore circuit, holds the high-quality wall of the
+time--quality Pareto front, and gains with scale; certified bounds and
+twenty falsified alternatives show search control alone cannot win.
+}}
+
+\vspace{\baselineskip}
+
+%%%%%%%%%% BLOCK: Copyright information
+% This block will be filled during the proof stage, and finilized just before publication.
+% It exists here only as a placeholder, and should not be modified by authors.
+\noindent\textcolor{white!90!black}{%
+\fbox{\parbox{0.975\linewidth}{%
+\textcolor{white!40!black}{\begin{tabular}{lr}%
+  \begin{minipage}{0.6\textwidth}%
+    {\small Copyright attribution to authors. \newline
+    This work is a submission to SciPost Physics. \newline
+    License information to appear upon publication. \newline
+    Publication information to appear upon publication.}
+  \end{minipage} & \begin{minipage}{0.4\textwidth}%
+    {\small Received Date \newline Accepted Date \newline Published Date}%
+  \end{minipage}
+\end{tabular}}
+}}
+}
+%%%%%%%%%% BLOCK: Copyright information
+
+% For convenience during refereeing we turn on line numbers:
+\linenumbers
+
+\vspace{10pt}
+\noindent\rule{\textwidth}{1pt}
+\tableofcontents
+\noindent\rule{\textwidth}{1pt}
+\vspace{10pt}
 
 
 \section{Introduction}
@@ -128,7 +168,7 @@ single dedicated machine against the reference Julia implementation, its
 published benchmark suite, and cotengra (Sec.~\ref{sec:eval}). Surgery
 sets records on three of ten instances, its run distribution separates
 fully from tuned annealing's on surface code $d{=}21$, it holds the
-entire high-quality wall of the time-quality Pareto front, and its
+entire high-quality wall of the time--quality Pareto front, and its
 advantage grows with surface-code distance. Its boundaries are reported
 with the same care: random 3-regular expanders yield the advantage back
 at long budgets, and two instances repel it entirely.
@@ -329,8 +369,8 @@ cheaper cut of comparable balance
 on the tensor hypergraph, recording the incumbent's cut weight, the best
 alternative found, and the structure of the improved cut.
 
-Figure~\ref{fig:waist}a shows all 835 pooled calls on two instances, and
-\textbf{this figure is the paper's motivating result}: every single
+Figure~\ref{fig:board}a shows all 835 pooled calls on two instances, and
+\textbf{this panel is the paper's motivating result}: every single
 point lies strictly below the diagonal. \emph{The annealer's waist is
 never a locally minimal balanced cut}---bounded FM finds a strictly
 cheaper cut of comparable balance on every call, by margins of $3$--$12$
@@ -341,6 +381,24 @@ persistent: it does not shrink as the incumbent improves, and it recurs
 at the new waist after every accepted repair. An optimizer that can see
 cuts globally therefore always has a move available exactly where the
 annealer is most stuck.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig14_advantage.pdf}
+  \caption{The blind spot and the advantage it buys. (a)~Every surgery
+  call on the two record runs: incumbent waist cut weight versus the
+  best comparable-balance cut found by bounded FM. All 835 points lie
+  strictly below the diagonal---the annealed waist is never locally
+  minimal (Sec.~\ref{sec:frozenwaist}). (b)~Record board: confirmed
+  improvement over the tuned TreeSA reference on each instance
+  (validator protocol: confirm-twice, worse-of-two, per-run relabeling);
+  marker shape encodes the mechanism, thick dashes mark
+  instances where the tuned reference remains the record holder.
+  (c)~Surface-code family: all repetitions at 90\,s versus code
+  distance, anchored at the surgery median per distance---the surgery
+  advantage grows with $d$ while its run-to-run spread stays collapsed.}
+  \label{fig:board}
+\end{figure}
 
 \section{The algorithm: global cut surgery}
 \label{sec:algorithm}
@@ -470,7 +528,7 @@ the DBN instance).
 \label{sec:eval}
 
 \paragraph{Records.}
-Figure~\ref{fig:board} assembles the campaign's confirmed records against
+Figure~\ref{fig:board}b assembles the campaign's confirmed records against
 the tuned reference on all ten instances. Global cut surgery holds three
 (king graph $36.96$, surface code $d{=}21$ $47.40$, reg3\_1000
 $131.07$---the only record on an expander in the entire campaign), the
@@ -479,39 +537,12 @@ the elimination seed holds the DBN record ($29.00$). On four
 instances---both certified closed instances, the 97-qubit random
 circuit, and 28-queens---the tuned reference itself remains unbeaten,
 exactly as the certified null of Appendix~\ref{app:null} predicts for the
-converged cases. Figure~\ref{fig:waist}b shows a representative surgery
-run: each accepted rebuild drops the incumbent below the pre-surgery
+converged cases. A representative surgery run
+(Fig.~\ref{fig:traj}, Appendix~\ref{app:supp}) shows the dynamics:
+each accepted rebuild drops the incumbent below the pre-surgery
 record, and the official median lands at $47.377$.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig14_advantage.pdf}
-  \caption{The advantage, summarized. (a)~Record board: confirmed
-  improvement over the tuned TreeSA reference on each instance
-  (validator protocol: confirm-twice, worse-of-two, per-run relabeling);
-  marker shape and color encode the mechanism, thick dashes mark
-  instances where the tuned reference remains the record holder.
-  (b)~Surface-code family: all repetitions at 90\,s versus code
-  distance, anchored at the surgery median per distance --- the surgery
-  advantage grows with $d$ while its run-to-run spread stays collapsed.}
-  \label{fig:board}
-\end{figure}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig10_waist_surgery.pdf}
-  \caption{Global cut surgery, instrumented. (a)~Every surgery call on
-  the two record runs: incumbent waist cut weight versus the best
-  comparable-balance cut found by bounded FM. All 835 points lie
-  strictly below the diagonal---the annealed waist is never locally
-  minimal (Sec.~\ref{sec:frozenwaist}). (b)~A representative
-  surface-code $d{=}21$ run: incumbent $\tc$ (solid), accepted waist
-  rebuilds (crosses), the pre-surgery record (dotted) and the official
-  with-surgery median (dash-dotted).}
-  \label{fig:waist}
-\end{figure}
-
-\paragraph{The time-quality Pareto front.}
+\paragraph{The time--quality Pareto front.}
 Figure~\ref{fig:pareto} presents the same-machine campaign as a Pareto
 scatter, following the presentation of the OMEinsumContractionOrders
 benchmark study \cite{liu_2025_omeco_orders}: every optimizer
@@ -565,8 +596,9 @@ surface-code $d{=}21$ are fully separated---surgery's worst run
 reg3\_1000 medians improve by $3.0$ and $2.4$; the elimination-seed
 mechanism shows a $14\times$ tighter spread than the reference on the
 DBN instance. On the surface-code family the surgery advantage grows
-with distance ($+0.04$, $+0.02$, $+0.11$, $+1.04$ at $d=9,13,17,21$)
-while its run-to-run spread stays collapsed: global cut repair pays off
+with distance ($+0.04$, $+0.02$, $+0.11$, $+1.04$ at $d=9,13,17,21$;
+Fig.~\ref{fig:board}c) while its run-to-run spread stays collapsed:
+global cut repair pays off
 precisely at scale, where the annealer's frozen waist is largest.
 
 
@@ -648,7 +680,7 @@ Contraction ordering is not a quantum-only problem: exact probabilistic
 inference contracts the tensor network of a graphical model, and
 TensorInference.jl \cite{roa_2023_tensorinference} does so literally,
 optimizing an einsum whose inputs are one unity tensor per variable plus
-one tensor per factor, at full cardinalities; the package's own
+one tensor per factor, at full cardinalities. The package's own
 cross-tool evaluation \cite{tibenchmarks_2023} shows it competitive
 with dedicated inference engines (Merlin, libDAI, JunctionTrees) on the
 same networks, so its end-to-end runtime is bounded directly by the
@@ -742,7 +774,39 @@ and 28-queens, the latter unstable at practical budgets); heterogeneous
 bond dimensions; and sliced contraction, where the interaction between
 slicing and surgery is unexplored.
 
-\appendix
+\section*{Acknowledgements}
+The author thanks the OMEinsumContractionOrders.jl and TensorInference.jl
+communities for the open benchmark suites and artifacts this study
+builds on.
+
+\paragraph{Code and data availability}
+The optimizer library (omeco), the validation harness, all certificates
+(treewidth minors, cut sets, and their verification scripts), per-attempt
+logs, cycle reports, the same-machine campaign data (305 + 200 + 80 + 69
++ 30 scored runs and the Julia ladder), and the UAI instance exporter are
+available in the project repository. Every figure regenerates from
+JSON data files via Typst sources shipped with the manuscript.
+
+\paragraph{Use of AI systems}
+This research was conducted as a steered autonomous research campaign:
+LLM-based agents proposed hypotheses, implemented attempts in isolated
+worktrees, and drafted analyses, under human steering decisions
+documented verbatim in Appendix~\ref{sec:roadmap} and under a validation
+protocol in which no agent-reported number is trusted---every scored
+quantity is recomputed by an independent checker from artifacts, and all
+certified claims are verified by machine-checkable certificates
+independent of any agent output. The manuscript was drafted with the
+same agents and revised by the human author, who takes full
+responsibility for its content.
+
+\paragraph{Funding information}
+% TODO: fill in funding agencies and grant numbers before submission
+% (SciPost requires them; correctly-provided data is linked to the
+% Fundref registry).
+To be completed before submission.
+
+\begin{appendix}
+\numberwithin{equation}{section}
 
 \section{Why search control cannot win: a certified null}
 \label{app:null}
@@ -965,6 +1029,17 @@ none of the failures is a tuning accident.}
 
 \section{Supplementary figures}
 \label{app:supp}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.62\linewidth]{figures/fig10_waist_surgery.pdf}
+  \caption{A representative surgery run on surface code $d{=}21$:
+  incumbent $\tc$ (solid), accepted waist rebuilds (crosses), the
+  pre-surgery record (dotted) and the official with-surgery median
+  (dash-dotted). Each accepted rebuild moves the waist; surgery repeats
+  at the new waist until no improving cut remains.}
+  \label{fig:traj}
+\end{figure}
 
 \begin{figure}[t]
   \centering
@@ -1198,32 +1273,8 @@ embarrassing.
   \label{fig:roadmap}
 \end{figure}
 
-\section*{Code and data availability}
-The optimizer library (omeco), the validation harness, all certificates
-(treewidth minors, cut sets, and their verification scripts), per-attempt
-logs, cycle reports, the same-machine campaign data (305 + 200 + 80 + 69
-+ 30 scored runs and the Julia ladder), and the UAI instance exporter are
-available in the project repository. Every figure regenerates from
-JSON data files via Typst sources shipped with the manuscript.
+\end{appendix}
 
-\section*{Use of AI systems}
-This research was conducted as a steered autonomous research campaign:
-LLM-based agents proposed hypotheses, implemented attempts in isolated
-worktrees, and drafted analyses, under human steering decisions
-documented verbatim in Appendix~\ref{sec:roadmap} and under a validation
-protocol in which no agent-reported number is trusted---every scored
-quantity is recomputed by an independent checker from artifacts, and all
-certified claims are verified by machine-checkable certificates
-independent of any agent output. The manuscript was drafted with the
-same agents and revised by the human author, who takes full
-responsibility for its content.
-
-\section*{Acknowledgments}
-The author thanks the OMEinsumContractionOrders.jl and TensorInference.jl
-communities for the open benchmark suites and artifacts this study
-builds on.
-
-\bibliographystyle{plain}
 \bibliography{references}
 
 \end{document}
