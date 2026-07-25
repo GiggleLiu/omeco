@@ -15,7 +15,7 @@
   ("hypernd", "HyperND (Julia)", "square", blue, true),
   ("treewidth", "Treewidth (Julia, 9 back-ends)", "triangle", orange, true),
   ("cotengra", "cotengra hyper+SA", "+", black, true),
-  ("ours-treesa", "tuned TreeSA reference (this work)", "o", purple, false),
+  ("ours-treesa", "TreeSA, tuned (baseline, our port)", "o", purple, false),
   ("ours-simplify", "simplify+anneal (this work)", "triangle", blue, false),
   ("ours-surgery", "waist surgery (this work)", "x", red, true),
 )
