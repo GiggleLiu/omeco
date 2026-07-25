@@ -1,0 +1,384 @@
+{
+ "instances": {
+  "uai_DBN_16": {
+   "julia": {
+    "TI-default-TreeSA": 44.515,
+    "HyperND": 28.026,
+    "Treewidth-MF": 28.026,
+    "TreeSA-sc20-nt1": 41.567,
+    "TreeSA-sc20-nt4": 39.061,
+    "TreeSA-sc1000-nt1": 37.558,
+    "TreeSA-sc1000-nt4": 37.007,
+    "TI-default-Greedy": 44.595
+   },
+   "ours": {
+    "ref": {
+     "median": 29.464,
+     "min": 28.986,
+     "max": 30.08,
+     "n": 5
+    },
+    "a038": {
+     "median": 28.775,
+     "min": 28.629,
+     "max": 28.792,
+     "n": 5
+    },
+    "a050": {
+     "median": 35.795,
+     "min": 34.585,
+     "max": 36.364,
+     "n": 5
+    },
+    "a054": {
+     "median": 34.509,
+     "min": 34.294,
+     "max": 34.714,
+     "n": 5
+    }
+   }
+  },
+  "uai_DBN_12": {
+   "julia": {
+    "TI-default-TreeSA": 41.73,
+    "HyperND": 26.958,
+    "Treewidth-MF": 26.958,
+    "TreeSA-sc20-nt1": 38.281,
+    "TreeSA-sc20-nt4": 39.186,
+    "TreeSA-sc1000-nt1": 35.371,
+    "TreeSA-sc1000-nt4": 33.664,
+    "TI-default-Greedy": 42.764
+   },
+   "ours": {
+    "ref": {
+     "median": 28.03,
+     "min": 27.302,
+     "max": 28.612,
+     "n": 5
+    },
+    "a038": {
+     "median": 27.674,
+     "min": 27.628,
+     "max": 27.716,
+     "n": 5
+    },
+    "a050": {
+     "median": 32.338,
+     "min": 31.824,
+     "max": 34.128,
+     "n": 5
+    },
+    "a054": {
+     "median": 32.762,
+     "min": 31.538,
+     "max": 32.923,
+     "n": 5
+    }
+   }
+  },
+  "uai_DBN_14": {
+   "julia": {
+    "TI-default-TreeSA": 38.735,
+    "HyperND": 25.862,
+    "Treewidth-MF": 25.862,
+    "TreeSA-sc20-nt1": 35.327,
+    "TreeSA-sc20-nt4": 35.905,
+    "TreeSA-sc1000-nt1": 32.787,
+    "TreeSA-sc1000-nt4": 31.473,
+    "TI-default-Greedy": 40.411
+   },
+   "ours": {
+    "ref": {
+     "median": 26.442,
+     "min": 26.315,
+     "max": 27.022,
+     "n": 5
+    },
+    "a038": {
+     "median": 26.646,
+     "min": 26.605,
+     "max": 26.65,
+     "n": 5
+    },
+    "a050": {
+     "median": 29.882,
+     "min": 28.072,
+     "max": 30.274,
+     "n": 5
+    },
+    "a054": {
+     "median": 30.974,
+     "min": 30.884,
+     "max": 31.839,
+     "n": 5
+    }
+   }
+  },
+  "uai_linkage_15": {
+   "julia": {
+    "TI-default-TreeSA": 43.616,
+    "TI-default-Greedy": 60.876,
+    "HyperND": "crash",
+    "Treewidth-MF": 45.781,
+    "TreeSA-sc20-nt1": 33.293,
+    "TreeSA-sc20-nt4": 31.553,
+    "TreeSA-sc1000-nt1": 30.482,
+    "TreeSA-sc1000-nt4": 30.65
+   },
+   "ours": {
+    "ref": {
+     "median": 30.532,
+     "min": 30.521,
+     "max": 30.657,
+     "n": 5
+    },
+    "a038": {
+     "median": 30.553,
+     "min": 30.468,
+     "max": 30.634,
+     "n": 5
+    },
+    "a050": {
+     "median": 30.425,
+     "min": 30.418,
+     "max": 30.443,
+     "n": 5
+    },
+    "a054": {
+     "median": 30.426,
+     "min": 30.416,
+     "max": 30.434,
+     "n": 5
+    }
+   }
+  },
+  "uai_linkage_13": {
+   "julia": {
+    "TI-default-Greedy": 48.34,
+    "TI-default-TreeSA": 31.282,
+    "HyperND": "crash",
+    "Treewidth-MF": 36.722,
+    "TreeSA-sc20-nt1": 25.808,
+    "TreeSA-sc20-nt4": 25.774,
+    "TreeSA-sc1000-nt1": 25.883,
+    "TreeSA-sc1000-nt4": 25.754
+   },
+   "ours": {
+    "ref": {
+     "median": 25.744,
+     "min": 25.736,
+     "max": 25.819,
+     "n": 5
+    },
+    "a038": {
+     "median": 25.754,
+     "min": 25.737,
+     "max": 25.757,
+     "n": 5
+    },
+    "a050": {
+     "median": 25.729,
+     "min": 25.726,
+     "max": 25.734,
+     "n": 5
+    },
+    "a054": {
+     "median": 25.739,
+     "min": 25.738,
+     "max": 25.742,
+     "n": 5
+    }
+   }
+  },
+  "uai_linkage_23": {
+   "julia": {
+    "TI-default-Greedy": 51.217,
+    "TI-default-TreeSA": 37.844,
+    "HyperND": "crash",
+    "Treewidth-MF": 36.524,
+    "TreeSA-sc20-nt1": 36.135,
+    "TreeSA-sc20-nt4": 34.285,
+    "TreeSA-sc1000-nt1": 33.842,
+    "TreeSA-sc1000-nt4": 33.431
+   },
+   "ours": {
+    "ref": {
+     "median": 32.909,
+     "min": 32.883,
+     "max": 33.188,
+     "n": 5
+    },
+    "a038": {
+     "median": 33.133,
+     "min": 32.98,
+     "max": 35.328,
+     "n": 5
+    },
+    "a050": {
+     "median": 32.89,
+     "min": 32.856,
+     "max": 32.89,
+     "n": 5
+    },
+    "a054": {
+     "median": 32.856,
+     "min": 32.856,
+     "max": 32.888,
+     "n": 5
+    }
+   }
+  },
+  "uai_linkage_17": {
+   "julia": {
+    "TI-default-Greedy": 47.079,
+    "TI-default-TreeSA": 32.374,
+    "HyperND": "crash",
+    "Treewidth-MF": 36.476,
+    "TreeSA-sc20-nt1": 29.711,
+    "TreeSA-sc20-nt4": 25.426,
+    "TreeSA-sc1000-nt1": 32.14,
+    "TreeSA-sc1000-nt4": 25.439
+   },
+   "ours": {
+    "ref": {
+     "median": 25.405,
+     "min": 25.4,
+     "max": 25.418,
+     "n": 5
+    },
+    "a038": {
+     "median": 25.383,
+     "min": 25.37,
+     "max": 25.424,
+     "n": 5
+    },
+    "a050": {
+     "median": 25.363,
+     "min": 25.363,
+     "max": 25.37,
+     "n": 5
+    },
+    "a054": {
+     "median": 25.384,
+     "min": 25.378,
+     "max": 25.394,
+     "n": 5
+    }
+   }
+  },
+  "uai_CSP_11": {
+   "julia": {
+    "TI-default-Greedy": 41.29,
+    "TI-default-TreeSA": 29.51,
+    "HyperND": 26.323,
+    "Treewidth-MF": 26.515,
+    "TreeSA-sc20-nt1": 29.619,
+    "TreeSA-sc20-nt4": 27.5,
+    "TreeSA-sc1000-nt1": 26.435,
+    "TreeSA-sc1000-nt4": 26.458
+   },
+   "ours": {
+    "ref": {
+     "median": 25.969,
+     "min": 25.917,
+     "max": 26.024,
+     "n": 5
+    },
+    "a038": {
+     "median": 26.138,
+     "min": 26.069,
+     "max": 26.294,
+     "n": 5
+    },
+    "a050": {
+     "median": 25.927,
+     "min": 25.921,
+     "max": 25.936,
+     "n": 5
+    },
+    "a054": {
+     "median": 26.176,
+     "min": 26.161,
+     "max": 26.219,
+     "n": 5
+    }
+   }
+  },
+  "uai_Grids_15": {
+   "julia": {
+    "TI-default-Greedy": 32.237,
+    "TI-default-TreeSA": 26.994,
+    "HyperND": 28.506,
+    "Treewidth-MF": 29.386,
+    "TreeSA-sc20-nt1": 26.432,
+    "TreeSA-sc20-nt4": 26.209,
+    "TreeSA-sc1000-nt1": 26.593,
+    "TreeSA-sc1000-nt4": 26.247
+   },
+   "ours": {
+    "ref": {
+     "median": 26.247,
+     "min": 26.18,
+     "max": 26.358,
+     "n": 5
+    },
+    "a038": {
+     "median": 26.802,
+     "min": 26.372,
+     "max": 27.045,
+     "n": 5
+    },
+    "a050": {
+     "median": 26.289,
+     "min": 26.182,
+     "max": 26.397,
+     "n": 5
+    },
+    "a054": {
+     "median": 26.276,
+     "min": 26.202,
+     "max": 26.431,
+     "n": 5
+    }
+   }
+  },
+  "uai_Promedus_14": {
+   "julia": {
+    "TI-default-Greedy": 35.221,
+    "TI-default-TreeSA": 23.576,
+    "HyperND": 26.29,
+    "Treewidth-MF": 26.185,
+    "TreeSA-sc20-nt1": 23.594,
+    "TreeSA-sc20-nt4": 23.368,
+    "TreeSA-sc1000-nt1": 23.485,
+    "TreeSA-sc1000-nt4": 23.463
+   },
+   "ours": {
+    "ref": {
+     "median": 23.314,
+     "min": 23.31,
+     "max": 23.345,
+     "n": 5
+    },
+    "a038": {
+     "median": 23.328,
+     "min": 23.319,
+     "max": 23.41,
+     "n": 5
+    },
+    "a050": {
+     "median": 23.301,
+     "min": 23.301,
+     "max": 23.302,
+     "n": 5
+    },
+    "a054": {
+     "median": 23.301,
+     "min": 23.301,
+     "max": 23.301,
+     "n": 5
+    }
+   }
+  }
+ }
+}
