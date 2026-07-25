@@ -329,7 +329,12 @@ def fig13():
     out = {"note": src["note"], "instances": {}}
     extra = _pareto_extra_points()
     for inst in src["instances"]:
-        src["instances"][inst] = src["instances"][inst] + extra.get(inst, [])
+        pts = src["instances"][inst] + extra.get(inst, [])
+        # one algorithm, one series: merge both TreeSA implementations
+        for pt in pts:
+            if pt["family"] in ("julia-treesa", "ours-treesa"):
+                pt["family"] = "treesa"
+        src["instances"][inst] = pts
     for inst, pts in src["instances"].items():
         srt = sorted(pts, key=lambda p: (p["tc"], p["t"]))
         front, best_t = [], float("inf")
