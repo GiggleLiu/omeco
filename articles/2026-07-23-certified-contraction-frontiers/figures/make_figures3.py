@@ -35,38 +35,10 @@ def save(fig, name):
 # ------------------------------------------------- F11 matched-budget campaign
 def fig11_campaign():
     camp = json.load(open(DATA / "huawei_campaign.json"))
-    fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
+    fig, axes = plt.subplots(1, 2, figsize=(9.5, 3.5))
 
-    # (a) budget scaling, anchored per instance at ref median @900 s
-    # (reg3_1000's 900 s crossover is quoted in the text; plotting it here
-    # would compress the two clean stories into an unreadable band)
+    # (a) 15-rep distributions at 90 s, centered per instance on ref median
     ax = axes[0]
-    styles = {"sycamore_53_20_0": ("o", "Sycamore 53q"),
-              "surfacecode_d21": ("s", "surface code d=21")}
-    budgets = [90, 300, 900]
-    for inst, (mk, lab) in styles.items():
-        d = camp["p2_budget_scaling"][inst]
-        anchor = st.median(d["ref"]["900"])
-        for m, c, ls in [("ref", BLACK, "--"), ("a054", RED, "-")]:
-            ys = [st.median(d[m][str(b)]) - anchor for b in budgets]
-            ax.plot(budgets, ys, marker=mk, markersize=8, color=c, ls=ls,
-                    markerfacecolor="none", markeredgewidth=2.0)
-    for mk, lab in [("o", "Sycamore 53q"), ("s", "surface code d=21")]:
-        ax.plot([], [], marker=mk, markersize=8, color="0.4", ls="none",
-                markerfacecolor="none", markeredgewidth=2.0, label=lab)
-    ax.axhline(0.0, color=BLACK, lw=1.0, ls=":")
-    ax.set_xscale("log")
-    ax.set_xticks(budgets)
-    ax.set_xticklabels(["90", "300", "900"])
-    ax.set_xlabel("time budget  [s]")
-    ax.set_ylabel(r"tc $-$ tuned TreeSA at 900 s  [log$_2$]")
-    ax.text(0.30, 0.30, "dashed: tuned TreeSA\nsolid: waist surgery",
-            transform=ax.transAxes, fontsize=8, va="top")
-    ax.legend(loc="upper right", frameon=False)
-    ax.text(0.05, 0.06, "(a)", transform=ax.transAxes, fontsize=11)
-
-    # (b) 15-rep distributions at 90 s, centered per instance on ref median
-    ax = axes[1]
     order = ["sycamore_53_20_0", "surfacecode_d21", "ksg", "reg3_1000",
              "dbn_13", "rqc_97_m24"]
     labs = ["Sycamore\n53q", "surface\nd=21", "king\ngraph", "reg3\n1000",
@@ -91,10 +63,10 @@ def fig11_campaign():
     ax.scatter([], [], marker="s", facecolors="none", edgecolors=RED,
                label="best attempt (15 reps)")
     ax.legend(loc="upper right", frameon=False)
-    ax.text(0.05, 0.06, "(b)", transform=ax.transAxes, fontsize=11)
+    ax.text(0.05, 0.06, "(a)", transform=ax.transAxes, fontsize=11)
 
-    # (c) surface-code family: both methods' reps vs d, anchored per d
-    ax = axes[2]
+    # (b) surface-code family: both methods' reps vs d, anchored per d
+    ax = axes[1]
     ds = [9, 13, 17, 21]
     for j, d_ in enumerate(ds):
         reps = camp["p4_family"][str(d_)]
@@ -112,7 +84,7 @@ def fig11_campaign():
     ax.set_ylabel(r"tc $-$ surgery median  [log$_2$]")
     ax.text(0.03, 0.92, "circles: tuned TreeSA\nsquares: waist surgery",
             transform=ax.transAxes, fontsize=8, va="top")
-    ax.text(0.05, 0.06, "(c)", transform=ax.transAxes, fontsize=11)
+    ax.text(0.05, 0.06, "(b)", transform=ax.transAxes, fontsize=11)
 
     fig.subplots_adjust(wspace=0.32)
     save(fig, "fig11_campaign")
@@ -169,6 +141,68 @@ def fig12_inference():
     save(fig, "fig12_inference")
 
 
+
+
+
+# --------------------------------------- F13 JOSS-style Pareto (time vs tc)
+def fig13_pareto():
+    """Mimics the presentation of the OMEinsumContractionOrders JOSS paper
+    (per-configuration scatter, log10 wall-time vs log2 flops, dashed
+    Pareto front), on same-machine data."""
+    import math
+    data = json.load(open(DATA / "pareto_points.json"))["instances"]
+    FAMS = [
+        ("julia-treesa", "TreeSA (Julia, 6 configs)", "o", VIOLET, True),
+        ("hypernd", "HyperND (Julia)", "s", BLUE, True),
+        ("treewidth", "Treewidth MF/AMF/MMD (Julia)", "^", ORANGE, True),
+        ("cotengra", "cotengra hyper+SA", "P", BLACK, True),
+        ("ours-treesa", "tuned TreeSA (this work)", "D", "#9933cc", False),
+        ("ours-simplify", "simplify+anneal (this work)", "v", BLUE, False),
+        ("ours-surgery", "waist surgery (this work)", "*", RED, False),
+    ]
+    titles = {"sycamore_53_20_0": "Sycamore 53q, m=20 (3369 tensors)",
+              "surfacecode_d21": "surface code d=21 (2203 tensors)"}
+
+    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.0))
+    for ax, inst in zip(axes, ["sycamore_53_20_0", "surfacecode_d21"]):
+        pts = data[inst]
+        for fam, lab, mk, c, filled in FAMS:
+            xs = [p["tc"] for p in pts if p["family"] == fam]
+            ys = [math.log10(max(p["t"], 0.02)) for p in pts if p["family"] == fam]
+            if not xs:
+                continue
+            size = 150 if mk == "*" else 55
+            ax.scatter(xs, ys, marker=mk, s=size,
+                       facecolors=c if filled else "none",
+                       edgecolors=c, linewidths=1.8,
+                       label=lab if ax is axes[0] else None, zorder=3)
+        # Pareto front: non-dominated in (tc, t)
+        srt = sorted(pts, key=lambda p: (p["tc"], p["t"]))
+        front, best_t = [], float("inf")
+        for p in srt:
+            if p["t"] < best_t:
+                front.append(p)
+                best_t = p["t"]
+        front = sorted(front, key=lambda p: p["tc"])
+        ax.plot([p["tc"] for p in front],
+                [math.log10(max(p["t"], 0.02)) for p in front],
+                ls="--", color=BLACK, lw=1.6, zorder=2)
+        mid = front[min(1, len(front) - 1)]
+        ax.annotate("Pareto front", (mid["tc"], math.log10(max(mid["t"], 0.02))),
+                    textcoords="offset points", xytext=(14, 6), fontsize=9)
+        ax.set_xlabel(r"$\log_2$ FLOPs (time complexity tc)")
+        ax.set_title(titles[inst], fontsize=10)
+    axes[0].set_ylabel(r"$\log_{10}$ wall-clock time  [s]")
+    leg = axes[0].legend(loc="upper right", frameon=True, fontsize=8)
+    leg.get_frame().set_edgecolor("black")
+    leg.get_frame().set_linewidth(0.8)
+    axes[0].text(0.04, 0.05, "(a)", transform=axes[0].transAxes, fontsize=11)
+    axes[1].text(0.04, 0.05, "(b)", transform=axes[1].transAxes, fontsize=11)
+    fig.subplots_adjust(wspace=0.18)
+    save(fig, "fig13_pareto")
+
+
 if __name__ == "__main__":
     fig11_campaign()
     fig12_inference()
+    fig13_pareto()

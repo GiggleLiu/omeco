@@ -539,43 +539,66 @@ closed instances and, notably, the 97-qubit random circuit and the
 Records accumulated on one machine invite two objections: the gains might
 be machine-specific tuning artifacts, and single confirmed runs might not
 represent distributions. The dedicated-server campaign
-(Sec.~\ref{sec:setup}) addresses both, and Fig.~\ref{fig:campaign} shows
-its three headline panels. \emph{Budget scaling}
-(Fig.~\ref{fig:campaign}a): on the real Sycamore network, waist surgery
-reaches $59.87$ at 90\,s while the tuned reference does not reach it even
-at 900\,s ($60.50$)---a quality gap, not a speedup; on surface-code
-$d{=}21$, surgery at 90\,s ($47.39$) matches the reference at 900\,s
-($47.38$)---a tenfold time-to-quality gain with both converging to the
-same floor. The picture is not universally rosy: on reg3\_1000 the
+(Sec.~\ref{sec:setup}) addresses both. Figure~\ref{fig:pareto} presents
+its core as a time-versus-quality Pareto scatter, following the
+presentation of the OMEinsumContractionOrders benchmark study
+\cite{liu_2025_omeco_orders}: every optimizer configuration from every
+toolchain is one point, and the dashed line traces the non-dominated
+front. On both instances the front has the same anatomy: treewidth
+back-ends hold the fast/low-quality end (sub-second, $10$--$40$ bits off
+best), HyperND the middle, and \emph{waist surgery holds the entire
+high-quality wall}---at every time tier ($90/300/900$\,s) its points sit
+strictly left of every tuned-TreeSA point from either implementation.
+On the real Sycamore network surgery reaches $59.87$ at 90\,s while the
+tuned reference does not reach it even at 900\,s ($60.50$)---a quality
+gap, not a speedup; on surface-code $d{=}21$, surgery at 90\,s
+($47.39$) matches the reference at 900\,s ($47.38$)---a tenfold
+time-to-quality gain with both converging to the same floor. The
+picture is not universally rosy: on reg3\_1000 (not shown) the
 reference overtakes surgery at 900\,s ($129.8$ versus $134.4$), so the
-expander advantage is a fixed-budget effect. \emph{Distributions}
-(Fig.~\ref{fig:campaign}b): over 15 repetitions, the surgery and
-reference distributions on surface-code $d{=}21$ are fully
-separated---surgery's worst run ($47.91$) beats the reference's best
-($48.18$); king-graph and reg3\_1000 medians improve by $3.0$ and $2.4$;
-the DBN seed mechanism shows a $14\times$ tighter spread than the
-reference. One negative also reproduces: the Sycamore
+expander advantage is a fixed-budget effect.
+
+Figure~\ref{fig:campaign} adds the statistical view.
+\emph{Distributions} (Fig.~\ref{fig:campaign}a): over 15 repetitions,
+the surgery and reference distributions on surface-code $d{=}21$ are
+fully separated---surgery's worst run ($47.91$) beats the reference's
+best ($48.18$); king-graph and reg3\_1000 medians improve by $3.0$ and
+$2.4$; the DBN seed mechanism shows a $14\times$ tighter spread than
+the reference. One negative also reproduces: the Sycamore
 simplify-then-anneal pipeline of attempt 050, tuned against a faster
 development machine, is $0.5$ \emph{worse} than the reference at 90\,s on
 the slower server and recovers only at 300\,s---optimizer pipelines
 calibrate to absolute time, and honest cross-machine reporting must say
-so. \emph{Family scaling} (Fig.~\ref{fig:campaign}c): on surface codes
+so. \emph{Family scaling} (Fig.~\ref{fig:campaign}b): on surface codes
 the surgery advantage grows with distance ($+0.04$, $+0.02$, $+0.11$,
 $+1.04$ at $d=9,13,17,21$) while its run-to-run spread stays collapsed;
 global-information injection pays off precisely at scale.
 
 \begin{figure}[t]
   \centering
+  \includegraphics[width=\linewidth]{figures/fig13_pareto.pdf}
+  \caption{Time-versus-quality Pareto view of the same-machine campaign
+  (dedicated 2-core server, all runs single-threaded), in the
+  presentation style of the OMEinsumContractionOrders benchmark study
+  \cite{liu_2025_omeco_orders}. Each point is one optimizer
+  configuration or repetition: filled markers are external baselines
+  (Julia TreeSA ladder, HyperND, treewidth back-ends, cotengra
+  hyper-optimizer with SA refinement); open markers are this work at
+  $90/300/900$\,s budgets. The dashed line is the non-dominated front.
+  Waist surgery (stars) holds the entire high-quality wall of the front
+  on both instances.}
+  \label{fig:pareto}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
   \includegraphics[width=\linewidth]{figures/fig11_campaign.pdf}
-  \caption{Same-machine matched-budget campaign (dedicated 2-core server;
-  all runs single-threaded). (a)~Median $\tc$ versus budget, anchored per
-  instance at the tuned reference's 900\,s median: on Sycamore the
-  surgery gap never closes; on surface code $d{=}21$ surgery at 90\,s
-  already sits on the reference's 900\,s floor. (b)~All 15 repetitions
-  per instance at 90\,s, centered on the reference median: circles are
-  the tuned reference, squares the best attempt per instance.
-  (c)~Surface-code family: repetitions at 90\,s versus code distance,
-  anchored at the surgery median per distance.}
+  \caption{Statistical view of the same-machine campaign. (a)~All 15
+  repetitions per instance at 90\,s, centered on the tuned reference's
+  median: circles are the tuned reference, squares the best attempt per
+  instance. (b)~Surface-code family: repetitions at 90\,s versus code
+  distance, anchored at the surgery median per distance; the advantage
+  grows with $d$ while the surgery spread stays collapsed.}
   \label{fig:campaign}
 \end{figure}
 
