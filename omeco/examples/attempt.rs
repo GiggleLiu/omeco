@@ -1,43 +1,55 @@
-//! Attempt entry point for the autoresearch validator (attempt-053).
+//! Attempt entry point for the autoresearch validator (attempt-058).
 //!
 //! Contract: `attempt <graph.json> <budget_ms> <out.json>` — read an einsum
 //! graph, search for a contraction order within the wall-clock budget, and keep
 //! the best tree found (by pure time complexity `tc`) written atomically to
 //! `out.json` in omeco `writejson` format.
 //!
-//! BOUNDED / cheap-first variable elimination (attempt-053, parent 038).
-//! attempt-038 showed a full min-cost variable-elimination (VE) seed WINS on the
-//! dense 44-label `dbn_13` hypergraph but FAILS on `nqueens_28` (4086 labels):
-//! unbounded VE walks into the treewidth blow-up (tc_ve = 714 vs tc_greedy =
-//! 384) and is too slow to finish. This attempt keeps the full VE seed (the dbn
-//! winner) but adds a BOUNDED path for large-treewidth instances:
+//! ADAPTIVE WIDTH-CAPPED PEEL for annealer-immobile scales (attempt-058, parent
+//! 053). attempt-053 peeled the cheap periphery under ONE fixed cost cap, handed
+//! the residual to library TreeSA, and spliced the peel subtrees back — and was
+//! FALSIFIED on nqueens_28 (4086 labels), where full-graph TreeSA is competitive
+//! (134) and peel+residual-TreeSA lost at every cap (>=188): good large-treewidth
+//! orders interleave core and periphery, and a fixed peel boundary removes that
+//! freedom.
 //!
-//!   (a) PEEL only the cheap labels — eliminate labels in min-cost order while
-//!       the factor an elimination creates stays under a cost cap (the tree-like
-//!       periphery: arity-1 tensors, degree-<=2 labels, and other no-regret
-//!       eliminations). Stop before the hard core, so no factor blows up and
-//!       peeling is fast even at 4k labels. This partitions the original leaves
-//!       into super-tensors, each carrying a contraction subtree + live-label
-//!       set, and leaves the hard core un-eliminated.
-//!   (b) Hand the DEFERRED residual network (the hard-core super-tensors only, a
-//!       much smaller problem) to the proven library TreeSA, which anneals a
-//!       few-hundred-tensor residual far better than the full graph.
-//!   (c) SPLICE each super-tensor's peel subtree back under the residual tree.
-//!       The scorer recomputes tc from tree TOPOLOGY alone (node einsum metadata
-//!       is ignored), so the spliced tree scores exactly as its topology
-//!       deserves; outputs are re-derived by exact outside-occurrence counting.
+//! NEW REGIME. On the UAI relational instances the annealer is IMMOBILE: at
+//! 30k-70k tensors a full-graph anneal barely completes a sweep and is stuck at
+//! tc~202/sc=200 at every budget 90-900s (double the width-100 optimum). Here the
+//! alternative to peeling is not "better interleaving" but "no optimization at
+//! all". This attempt answers the 053 objection two ways: the cap is a LADDER,
+//! not a point; and the full-graph anneal still RACES as a fallback, protecting
+//! the falsified regime.
 //!
-//! RESULT (see LOG.md): the bounded-peel scaling idea is FALSIFIED — peeling is
-//! fast (<260 ms at 4k labels) but peel+residual-TreeSA loses to full-graph
-//! TreeSA at every cap (nqueens: >=188 vs 134), because good large-treewidth
-//! orders interleave core and periphery and a fixed peel boundary removes that
-//! freedom. So `auto` keeps only the winners: greedy (immediate fallback), the
-//! deterministic full VE seed (dbn winner), and a full-graph TreeSA anytime
-//! doubling run. The peel lane survives behind `MODE=peel` for attribution only.
-//! Best-by-`tc` wins. Pure-tc objective (sc ignored). Single-threaded compute:
-//! all work runs on one worker
-//! thread with a large stack (deep trees exceed the default 8 MB stack at n~4k);
-//! the main thread blocks on the join, so CPU never exceeds wall. No per-instance
+//! LADDER (Phase A, <=40% of budget). Rungs are an escalating sequence of
+//! factor-width caps; the TOP rung is cap = infinity, i.e. full min-cost VE run
+//! to completion (the attempt-038 seed). Each rung: peel the periphery in
+//! min-cost order while each new factor stays under the cap -> hand the residual
+//! core to the library annealer -> splice each peel subtree back -> score;
+//! best full tree by measured tc wins. A residual is annealed only when it is
+//! small enough that the annealer can move it (<=3000 tensors); larger residuals
+//! are recorded but left to VE / the full-graph fallback. The infinity rung (full
+//! VE) reaches tc~109 on uai_relational_4 (30400 tensors, width 100) and tc~24 on
+//! uai_relational_5 (70000 tensors, width 10) in well under a second, where the
+//! full-graph anneal is frozen at 202.
+//!
+//! FLOOR. The library greedy is ~O(n·deg^2) and does not finish at 30k+ tensors,
+//! so it is run only for n<=6000; at scale the cap=infinity rung (VE) IS the
+//! first always-valid tree — a proper elimination tree, cheap to build and score,
+//! unlike a degenerate chain over an un-eliminated core. TreeSA's own Greedy
+//! initializer has the same cost as the greedy, so anneals on >4000-tensor graphs
+//! use Random init.
+//!
+//! Phase B: the remaining budget goes to whichever arm is winning, with a
+//! full-graph TreeSA doubling run racing so the result is never worse than the
+//! base annealer on expanders / small large-treewidth cores where peeling is
+//! useless (the falsified-053 protection). The fallback is GATED to n<=8000: above
+//! that the annealer is immobile (only ever ~202 on the relational cores, never
+//! beating VE) and one uninterruptible niters round would overrun the budget, so
+//! it is skipped and the process ends as soon as VE has won. Best-by-`tc` wins
+//! (sc ignored). Single-threaded on one worker thread
+//! with a large stack (deep trees exceed the default 8 MB stack at scale); the
+//! main thread blocks on the join, so CPU never exceeds wall. No per-instance
 //! constants; behaviour is invariant under relabeling. Every improvement is
 //! written eagerly and atomically (tmp file + rename).
 
@@ -108,93 +120,215 @@ fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>
     let hg = HyperGraph::build(&graph.ixs, &graph.iy, &sizes);
     let n = code.num_tensors();
 
-    // Optional experiment knobs (default OFF: production behaviour is the `auto`
-    // route with an adaptive cap — no per-instance constants). `MODE`=full|peel
-    // forces a single lane for head-to-head attribution; `PEEL_CAP` overrides the
-    // adaptive cost cap for a local sweep.
+    let m = hg.id_label.len();
+
+    // Attribution knobs (default OFF; production is `auto`). MODE=ve|peel|full
+    // forces a single lane; PEEL_CAP pins one finite cap for a local sweep.
     let mode = std::env::var("MODE").unwrap_or_else(|_| "auto".into());
     let cap_override = std::env::var("PEEL_CAP")
         .ok()
         .and_then(|s| s.parse::<f64>().ok());
 
-    // ---- Deterministic greedy: written immediately (always-valid fallback). --
-    let mut best = optimize_code(&code, &sizes, &GreedyMethod::default())
-        .ok_or("greedy optimizer returned no tree")?;
+    // TreeSA's Greedy initializer calls the library greedy, which is ~O(n·deg^2)
+    // and does NOT finish at 30k+ tensors (the relational instances). Above this
+    // size both the full-graph and residual anneals switch to the Random
+    // initializer so a sweep can actually start; below it the better Greedy start
+    // is kept. `mobile` is the (smaller) size at which annealing can still improve
+    // the order at all — the whole hypothesis is peeling the core below it.
+    let big_n = |cnt: usize| cnt > 4000;
+    let mobile = |cnt: usize| cnt <= 3000;
+    let greedy_ok = n <= 6000;
+
+    // =====================================================================
+    // Adaptive width-capped peel LADDER (Phase A, <=40% of budget). The rungs
+    // are an escalating sequence of factor-width caps; the TOP rung is
+    // cap = infinity, i.e. full min-cost variable elimination run to
+    // completion (the attempt-038 VE seed). Each rung peels the periphery,
+    // hands the residual core to the library annealer, splices the peel
+    // subtrees back, and scores; the best full tree by measured tc is kept.
+    //
+    // Why this is NOT the falsified 053: 053 used ONE fixed cap and always
+    // deferred to TreeSA, in a regime (nqueens, 4k tensors) where full-graph
+    // TreeSA is COMPETITIVE, so removing interleaving freedom only hurt. Here
+    // the regime is annealer-IMMOBILE (30k-70k tensors; full-graph anneal
+    // stuck at tc~202 at every budget). The ladder is adaptive AND its top
+    // rung is unbounded VE, which reaches the width-~100/~10 optimum in <1s
+    // where the annealer cannot move; and the full-graph anneal still RACES
+    // as a fallback so the falsified regime is protected.
+    // =====================================================================
+    let phase_a_deadline = (budget_ms * 0.40).min(deadline_ms);
+
+    // Rung 0 = cap infinity: full min-cost VE run to completion. This is the
+    // primary winner on the relational instances AND the scale floor: a proper
+    // elimination tree is cheap to BUILD and SCORE (unlike a degenerate chain
+    // over an un-eliminated core), reaching tc~109/~24 in under a second where
+    // the full-graph anneal is frozen. Boxed so a blow-up order (expander)
+    // cannot eat Phase A — and the library greedy is ~O(n*deg^2) and does not
+    // finish at 30k+ tensors, so at scale VE is the first always-valid tree.
+    let ve_box = phase_a_deadline.min(elapsed_ms() + budget_ms * 0.25);
+    let mut rng = SmallRng::seed_from_u64(0x0000_0058_c0ff_ee00);
+    let ve_topo = hg.ve_order(0.0, &mut rng, &start, ve_box);
+    let mut best = hg.build_nested(&ve_topo);
     let mut best_tc = tc_of(&best);
+    let ve_tc = best_tc;
+    let mut best_source = "ve(cap=inf)";
     write_atomic(&out_path, &best)?;
-    let tc_greedy = best_tc;
-
-    // ---- Full VE seed (attempt-038 min-cost): the dbn winner. ---------------
-    // Deadline-boxed so a large graph's VE cannot eat the budget; each order is
-    // itself abortable. If it beats greedy, VE fits this geometry (dense small
-    // hypergraph); if not, it is discarded and the peel/TreeSA lanes take over.
-    // Small box: VE only wins on small dense hypergraphs (dbn: 44 labels, VE
-    // finishes in <100 ms); on large-label instances it aborts early and is
-    // discarded, so a tight box avoids wasting the TreeSA budget.
-    let ve_deadline = (budget_ms * 0.06).min(deadline_ms);
-    let mut rng = SmallRng::seed_from_u64(0x0000_0053_c0ff_ee00);
-    let ve_topo = hg.ve_order(0.0, &mut rng, &start, ve_deadline);
-    let ve_tree = hg.build_nested(&ve_topo);
-    let tc_ve = tc_of(&ve_tree);
-    if tc_ve < best_tc - 1e-9 {
-        best = ve_tree;
-        best_tc = tc_ve;
-        write_atomic(&out_path, &best)?;
-    }
-
-    // ---- Cheap-first PEEL: partition leaves into hard-core super-tensors. ----
-    // Adaptive cap: peel any elimination whose factor stays below a fraction of
-    // the greedy tc frontier — this removes the tree-like periphery (arity-1,
-    // degree-<=2, and other cheap eliminations) without approaching the treewidth
-    // blow-up. `PEEL_CAP` overrides for local sweeps.
-    let cap = cap_override.unwrap_or_else(|| (tc_greedy * 0.30).clamp(6.0, 60.0));
-    let peel = hg.peel(cap, &start, (budget_ms * 0.30).min(deadline_ms));
-    let k = peel.residual.len();
-    let live_labels: HashSet<u32> = peel
-        .residual
-        .iter()
-        .flat_map(|(live, _)| live.iter().copied())
-        .collect();
     eprintln!(
-        "n={n} n_labels={} | greedy={tc_greedy:.4} ve={tc_ve:.4} best_seed={best_tc:.4} \
-         | peel: cap={cap:.1} residual_tensors={k} residual_labels={} peel_ms={:.0} \
-         | t={:.0}ms",
-        hg.id_label.len(),
-        live_labels.len(),
-        peel.peel_ms,
+        "t={:.0}ms tc={best_tc:.4} (rung cap=inf / full VE)",
         elapsed_ms()
     );
 
-    // Route. The bounded-peel hypothesis was FALSIFIED empirically (see LOG):
-    // separating the periphery from the hard core with fixed peel boundaries is
-    // consistently worse than full-graph TreeSA, because good orders on
-    // large-treewidth instances interleave core and peripheral contractions and
-    // peeling removes that freedom (nqueens: peel residual-TreeSA >= 188 vs full
-    // 134 at equal budget). So `auto` routes to the proven full-graph TreeSA; the
-    // peel lane is retained only for attribution via `MODE=peel`.
-    let _ = n;
-    let use_peel = match mode.as_str() {
-        "peel" => k >= 2,
-        _ => false, // "full" and "auto": full-graph TreeSA
-    };
+    // Library greedy: good and tested, but only for n<=6000 (it hangs at scale).
+    // Kept if it beats VE — e.g. expanders, where VE blows up.
+    if greedy_ok {
+        if let Some(g) = optimize_code(&code, &sizes, &GreedyMethod::default()) {
+            let gtc = tc_of(&g);
+            if gtc < best_tc - 1e-9 {
+                best = g;
+                best_tc = gtc;
+                best_source = "greedy";
+                write_atomic(&out_path, &best)?;
+            }
+        }
+    }
+    let tc_floor = best_tc;
 
-    if use_peel {
-        // Residual first (its smaller graph anneals better/faster), then a
-        // shorter full-graph safety pass with whatever budget remains.
-        let split = if mode == "peel" { 0.99 } else { 0.80 };
-        let residual_deadline = (budget_ms * split).min(deadline_ms);
-        residual_treesa(
-            &hg,
-            &peel,
-            &sizes,
-            &out_path,
-            &mut best,
-            &mut best_tc,
-            tc_of,
-            &start,
-            residual_deadline,
-        )?;
-        if mode != "peel" {
+    // Finite rungs: probe a geometric cap ladder to find w0 = the smallest cap
+    // that already peels >=50% of the tensors, then evaluate {0.8 w0, w0,
+    // 1.25 w0}. A rung's residual is annealed only when it is `mobile` (small
+    // enough that the annealer can actually improve it) — on the relational core
+    // the peel cannot shrink below ~10k, the annealer is as stuck there as on the
+    // full graph, so those rungs are recorded but not annealed (VE already wins).
+    let mut best_peel: Option<(f64, Peel)> = None;
+    let mut peel_stats: Vec<(u32, usize)> = Vec::new();
+    if mode == "auto" || mode == "peel" {
+        let probe_caps: Vec<f64> = match cap_override {
+            Some(c) => vec![c],
+            None => vec![6.0, 10.0, 16.0, 26.0, 42.0],
+        };
+        let mut w0 = *probe_caps.last().unwrap();
+        let mut best_frac = f64::INFINITY;
+        let mut w0_set = false;
+        for &c in &probe_caps {
+            if elapsed_ms() >= phase_a_deadline {
+                break;
+            }
+            let p = hg.peel(c, &start, phase_a_deadline);
+            let k = p.residual.len();
+            peel_stats.push((c as u32, k));
+            eprintln!(
+                "t_peel={:.0}ms cap={c:.0} peeled={}/{n} residual={k}",
+                p.peel_ms,
+                n - k
+            );
+            let frac = k as f64 / n as f64;
+            best_frac = best_frac.min(frac);
+            if !w0_set && frac <= 0.5 {
+                w0 = c;
+                w0_set = true;
+            }
+        }
+        let peel_useful = best_frac <= 0.6;
+        eprintln!(
+            "n={n} n_labels={m} floor={tc_floor:.4} ve={ve_tc:.4} best={best_tc:.4} \
+             | probe w0={w0:.1} best_frac={best_frac:.3} useful={peel_useful} \
+             caps_residual={peel_stats:?} | t={:.0}ms",
+            elapsed_ms()
+        );
+
+        if peel_useful || mode == "peel" {
+            let mut caps: Vec<f64> = match cap_override {
+                Some(_) => vec![w0],
+                None => vec![(0.8 * w0).max(4.0), w0, 1.25 * w0],
+            };
+            caps.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            caps.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+            for (i, &c) in caps.iter().enumerate() {
+                if elapsed_ms() >= phase_a_deadline {
+                    break;
+                }
+                let p = hg.peel(c, &start, phase_a_deadline);
+                let rk = p.residual.len();
+                // Only anneal a residual the annealer can move; otherwise VE /
+                // full-graph fallback own this instance.
+                if !mobile(rk) && mode != "peel" {
+                    eprintln!(
+                        "t={:.0}ms rung {}/{} cap={c:.1} residual={rk} (immobile, skip)",
+                        elapsed_ms(),
+                        i + 1,
+                        caps.len()
+                    );
+                    continue;
+                }
+                let per_rung =
+                    ((phase_a_deadline - elapsed_ms()) / (caps.len() - i) as f64).max(0.0);
+                let rung_deadline = (elapsed_ms() + per_rung).min(phase_a_deadline);
+                let before = best_tc;
+                let init_random = big_n(rk);
+                let rtc = residual_treesa(
+                    &hg,
+                    &p,
+                    &sizes,
+                    &out_path,
+                    &mut best,
+                    &mut best_tc,
+                    tc_of,
+                    &start,
+                    rung_deadline,
+                    init_random,
+                )?;
+                if best_tc < before - 1e-9 {
+                    best_source = "residual";
+                }
+                eprintln!(
+                    "t={:.0}ms rung {}/{} cap={c:.1} residual={rk} rtc={rtc:.4}",
+                    elapsed_ms(),
+                    i + 1,
+                    caps.len()
+                );
+                match &best_peel {
+                    Some((btc, _)) if *btc <= rtc => {}
+                    _ => best_peel = Some((rtc, p)),
+                }
+            }
+        }
+    }
+
+    // =====================================================================
+    // Phase B: hand the remaining budget to whichever arm is winning, with the
+    // full-graph TreeSA fallback racing so we never end up worse than the base
+    // annealer where peeling/VE is useless (expanders, small large-treewidth
+    // cores) — this is the protection for the falsified-053 regime. The fallback
+    // is GATED to n<=full_treesa_max: above that the annealer is immobile (it
+    // only ever reaches ~202 on the relational cores, never beating VE) AND a
+    // single niters round is uninterruptible and would overrun the budget by
+    // minutes, so running it is pure downside. best-by-tc, emitted eagerly.
+    // =====================================================================
+    let residual_won = best_source == "residual" && best_peel.is_some();
+    // A full-graph niters round is uninterruptible; only start one where it fits.
+    let full_treesa_max = 8000usize;
+    let run_full = |n: usize| n <= full_treesa_max;
+
+    match mode.as_str() {
+        "peel" => {
+            if let Some((_, p)) = &best_peel {
+                let init_random = big_n(p.residual.len());
+                residual_treesa(
+                    &hg,
+                    p,
+                    &sizes,
+                    &out_path,
+                    &mut best,
+                    &mut best_tc,
+                    tc_of,
+                    &start,
+                    deadline_ms,
+                    init_random,
+                )?;
+            }
+        }
+        "ve" => {}
+        "full" => {
             treesa_doubling(
                 &code,
                 &sizes,
@@ -204,23 +338,51 @@ fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>
                 tc_of,
                 &start,
                 deadline_ms,
+                big_n(n),
             )?;
         }
-    } else {
-        treesa_doubling(
-            &code,
-            &sizes,
-            &out_path,
-            &mut best,
-            &mut best_tc,
-            tc_of,
-            &start,
-            deadline_ms,
-        )?;
+        _ => {
+            // auto: winning arm gets the larger share; fallback races when it fits.
+            if residual_won {
+                if let Some((_, p)) = &best_peel {
+                    let init_random = big_n(p.residual.len());
+                    let rd = if run_full(n) {
+                        (elapsed_ms() + (deadline_ms - elapsed_ms()) * 0.70).min(deadline_ms)
+                    } else {
+                        deadline_ms
+                    };
+                    residual_treesa(
+                        &hg,
+                        p,
+                        &sizes,
+                        &out_path,
+                        &mut best,
+                        &mut best_tc,
+                        tc_of,
+                        &start,
+                        rd,
+                        init_random,
+                    )?;
+                }
+            }
+            if run_full(n) {
+                treesa_doubling(
+                    &code,
+                    &sizes,
+                    &out_path,
+                    &mut best,
+                    &mut best_tc,
+                    tc_of,
+                    &start,
+                    deadline_ms,
+                    big_n(n),
+                )?;
+            }
+        }
     }
 
     eprintln!(
-        "t_final={:.0}ms tc_final={best_tc:.4} use_peel={use_peel}",
+        "t_final={:.0}ms tc_final={best_tc:.4} source={best_source} residual_won={residual_won}",
         elapsed_ms()
     );
     Ok(())
@@ -240,9 +402,11 @@ fn residual_treesa(
     tc_of: impl Fn(&NestedEinsum<usize>) -> f64,
     start: &Instant,
     deadline_ms: f64,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    init_random: bool,
+) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
     let elapsed_ms = || start.elapsed().as_secs_f64() * 1e3;
     let k = peel.residual.len();
+    let mut local_best = f64::INFINITY;
     // Residual EinCode: each super-tensor's live labels (original label space).
     let ixs: Vec<Vec<usize>> = peel
         .residual
@@ -278,10 +442,17 @@ fn residual_treesa(
             }
         }
         let round_start = Instant::now();
-        let ts = TreeSA::default()
+        let mut ts = TreeSA::default()
             .with_ntrials(1)
             .with_niters(niters)
             .with_sc_target(f64::INFINITY);
+        // Greedy init calls the library greedy (hangs at 30k+); above that size
+        // fall back to Random init so a sweep can start at all.
+        ts.initializer = if init_random {
+            omeco::Initializer::Random
+        } else {
+            omeco::Initializer::Greedy
+        };
         let Some(rtree) = optimize_code(&rcode, sizes, &ts) else {
             break;
         };
@@ -291,6 +462,7 @@ fn residual_treesa(
         let topo = splice(&rtree, &mut supers);
         let tree = hg.build_nested(&topo);
         let tc = tc_of(&tree);
+        local_best = local_best.min(tc);
         if tc < *best_tc - 1e-9 {
             *best = tree;
             *best_tc = tc;
@@ -305,7 +477,7 @@ fn residual_treesa(
         rounds += 1;
     }
     eprintln!("residual_rounds={rounds}");
-    Ok(())
+    Ok(local_best)
 }
 
 /// Proven anytime full-graph TreeSA with a doubling `niters` schedule. Each
@@ -322,6 +494,7 @@ fn treesa_doubling(
     tc_of: impl Fn(&NestedEinsum<usize>) -> f64,
     start: &Instant,
     deadline_ms: f64,
+    init_random: bool,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let elapsed_ms = || start.elapsed().as_secs_f64() * 1e3;
     let hard = deadline_ms;
@@ -346,10 +519,15 @@ fn treesa_doubling(
             }
         }
         let round_start = Instant::now();
-        let ts = TreeSA::default()
+        let mut ts = TreeSA::default()
             .with_ntrials(1)
             .with_niters(niters)
             .with_sc_target(f64::INFINITY);
+        ts.initializer = if init_random {
+            omeco::Initializer::Random
+        } else {
+            omeco::Initializer::Greedy
+        };
         let Some(tree) = optimize_code(code, sizes, &ts) else {
             break;
         };

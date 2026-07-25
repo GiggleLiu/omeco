@@ -1,153 +1,134 @@
-# attempt 053
+# attempt 058
 
-- date: 2026-07-24
+- date: 2026-07-26
 - kind: improvement
-- parent: 038
+- parent: 053 (falsified: "bounded cheap-first VE peel")
 
-## Hypothesis (pre-registered before any implementation)
+## Hypothesis (pre-registered)
 
-attempt-038's variable-elimination (VE) seed set the `dbn_13` record (28.79
-seed, ~29.00 scored) on a 44-label hypergraph, but on `nqueens_28` (4086 labels)
-the complete min-cost VE order both (i) does not finish inside the time box and
-(ii) when it does step, produces a terrible seed (tc_ve = 714 vs tc_greedy =
-384) — because nqueens has large treewidth and unbounded min-cost VE walks
-straight into the treewidth blow-up, creating ever-larger intermediate factors.
+attempt-053's bounded cheap-first peel was FALSIFIED on `nqueens_28` (4086
+labels): peel+residual-TreeSA lost to full-graph TreeSA at every cap (>=188 vs
+134). Measured cause: good large-treewidth orders interleave core and periphery,
+and a fixed peel boundary removes that freedom.
 
-**Mechanism claim:** the win scales via a BOUNDED / cheap-first VE. Instead of
-eliminating every label (which forces the blow-up), peel only the CHEAP labels
-— those whose elimination creates a factor no larger than the current space
-frontier (the tree-like periphery: arity-1 tensors, degree-2 labels, and other
-no-regret eliminations). Stop before the hard core. This:
+**Why 058 is NOT a repeat of that falsification** — two independent reasons:
 
-  (a) bounds each elimination to near-O(holders · avg_degree) and never grows
-      the max live tensor (no treewidth blow-up, so VE is fast even at 4k
-      labels);
-  (b) hands the DEFERRED residual network (the expensive hard-core super-tensors
-      only, a much smaller problem) to the proven library TreeSA, which anneals
-      a few-hundred-tensor residual far better than the full 4252-tensor graph;
-  (c) splices each super-tensor's peel subtree back under the residual tree; the
-      scorer recomputes tc from topology alone (verified in scorer.py — node
-      einsum metadata is ignored), so the spliced tree scores exactly as its
-      topology deserves.
+1. **New regime.** 053 was measured where full-graph TreeSA is COMPETITIVE
+   (nqueens, ~4k tensors: 134). On the UAI relational instances it is not: at
+   30k-70k tensors the annealer is IMMOBILE — `uai_relational_4` (30,400
+   tensors, 10,200 binary labels, treewidth 100) sits at tc~202/sc=200 at every
+   budget 90-900s, double the optimum, because at that size the annealer barely
+   completes a sweep. Here the alternative to peeling is not "better
+   interleaving" but "no optimization at all", so the 053 interleaving objection
+   does not apply.
 
-The full (unbounded) VE seed is retained as a separate candidate — it is the
-`dbn_13` winner (dense small hypergraph where peeling reduces little). A full
-library-TreeSA anytime run is retained as a safety candidate. Best-by-tc wins.
+2. **Adaptive ladder + racing fallback**, not one fixed cap. The peel cap is an
+   escalating LADDER whose TOP rung is cap = infinity — full min-cost VE run to
+   completion. And the full-graph anneal still RACES as a fallback (gated to
+   sizes where it can actually run), so the falsified regime is protected: on
+   instances where peeling/VE is useless the base annealer's result is kept.
 
-**Claim:** beat the `nqueens_28` record (121.37, median-of-3) by > 0.05 via
-peel+residual-TreeSA (one of 038's fallback runs already reached ~120, so the
-target is beatable and a smaller residual should reach it more reliably), OR
-beat `dbn_13`'s record (29.00) further. Secondary targets: `qft_27` (29.61),
-`rqc_97_m24` (106.47).
+**Claim:** on the annealer-immobile relational instances an adaptive
+width-capped peel beats the plateau decisively (relational_4 tc <= 130,
+relational_5 tc <= 25), while regressions and the expander control stay within a
+bit of the base annealer.
 
-**Falsification:** cheap-first-peel + residual-TreeSA does NOT beat plain
-full-graph TreeSA at equal budget on the large-label instances → the VE
-mechanism is intrinsically small-hypergraph and peeling buys nothing over
-generic SA. Report VE/peel time, residual-network size (# super-tensors, #
-live labels), seed tc vs greedy tc, and residual-TreeSA tc vs full-TreeSA tc
-(the attribution).
+## What changed vs 053
 
-## Design
+- **The win is the cap=infinity rung = full min-cost VE run to completion.**
+  053 boxed VE to 6% of budget and discarded it unless it beat greedy. 058
+  promotes VE to Rung 0 of the ladder and gives it a real box (<=25% of budget,
+  capped by the 40% Phase-A deadline). On the relational instances VE fully
+  eliminates in well under a second and reaches near-optimal tc; the bounded
+  finite rungs (which 053 relied on) do NOT help there — see measurements.
 
-- Port attempt-038's self-contained `HyperGraph` (dense-interned labels, per-leaf
-  id sets, hyperedge degrees) + `TopoTree` + `build_inner` (exact
-  outside-occurrence NestedEinsum emission) into this attempt's `attempt.rs`.
-  No warm-anneal machinery is ported: the ~0.04 refinement it added on dbn is
-  not needed to beat the record, and the residual play uses library TreeSA.
-- New `peel` method: lazy min-cost bucket queue over labels; eliminate a label
-  only if the factor it creates has cost <= the running space frontier (a
-  quantile of live tensor costs, capped so the max live tensor never grows).
-  Produces (i) a partition of the original leaves into super-tensors, each
-  carrying a `TopoTree` and a live-label set, and (ii) leaves the hard core
-  un-eliminated.
-- Residual driver: build an EinCode from super-tensor live sets, run anytime
-  doubling library TreeSA on it, convert its NestedEinsum topology to a TopoTree
-  and splice each residual leaf -> its super-tensor subtree, then `build_inner`
-  the whole thing. Best-by-tc kept, atomic writes.
-- Candidates kept in one best-so-far: greedy (immediate fallback), full VE seed
-  (dbn winner), peel+residual-TreeSA (nqueens play), full-graph TreeSA doubling
-  (safety). Pure-tc, single-threaded (one large-stack worker; main blocks on
-  join), no per-instance constants, relabeling-robust, atomic best-so-far.
+- **Fixed the real blocker: the library greedy hangs at scale.** `optimize_code`
+  with `GreedyMethod` is ~O(n·deg^2) and does not finish at 30k+ tensors (it ran
+  >60s on relational_4 and never returned). TreeSA's default `Greedy` initializer
+  calls the same routine, so full-graph TreeSA also hangs at scale. 053 ran
+  greedy first, unconditionally — which is why the code never even reached its VE
+  seed on the relational instances. 058:
+    - runs the library greedy only for `n <= 6000`;
+    - at scale uses the VE rung as the first always-valid tree (a proper
+      elimination tree is cheap to build AND score; a chain over an un-eliminated
+      core is O(n·m) and was itself too slow — an intermediate peel-construct
+      floor is what made an early build of this attempt hang);
+    - switches TreeSA to the `Random` initializer for any graph > 4000 tensors.
 
-## Results
+- **Adaptive cap ladder.** Probe a geometric cap ladder {6, 10, 16, 26, 42} to
+  find w0 = the smallest cap already peeling >=50% of tensors, then evaluate
+  {0.8·w0, w0, 1.25·w0}. Each peel is a few hundred ms even at 70k (no quadratic
+  spots; the 053 heap+lazy peel already scales — measured 26-232 ms at 70k).
 
-All runs single-threaded (`RAYON_NUM_THREADS=1`), scored by the independent
-`research/validator/scorer.py`. Confirmed scorer.py uses tree TOPOLOGY only
-(node einsum metadata ignored), so the spliced-topology emission scores exactly
-as its topology deserves.
+- **Mobility gate (the operative form of the hypothesis).** A rung's residual is
+  annealed only when it is small enough that the annealer can actually move it
+  (<=3000 tensors). On the relational_4 core the min-cost peel cannot shrink
+  below ~10,400 tensors (no cheap eliminations remain past the periphery), and a
+  10,400-tensor residual anneals to ~203 with random init even at 30s — as stuck
+  as the full graph — so those rungs are recorded but skipped, and VE owns the
+  instance. Where the peel DOES reach a small core (relational_5 -> 500), the
+  rung is annealed.
 
-### dbn_13 (record 29.00) — WIN, deterministic
+- **Budget split.** Phase A (ladder) <= 40% of budget. Phase B gives the rest to
+  the winning arm (residual-continue if a peel rung produced the best tree, else
+  the full-graph fallback), with the full-graph TreeSA doubling run racing —
+  GATED to `n <= 8000`, because above that a single uninterruptible niters round
+  overruns the budget by minutes and the annealer is immobile anyway. On the
+  large relational instances the process therefore terminates as soon as VE has
+  won (5-36s of the 90-120s budget) rather than burning budget it cannot use.
 
-| stage | tc |
-|-------|----|
-| greedy seed | 44.40 – 44.68 |
-| **full VE seed (min-cost)** | **28.7944** |
-| full TreeSA (9 rounds, 90 s) | no improvement |
+- Non-binary cardinalities: the cost cap uses summed log2 dims (`set_cost` over
+  `log2[label]`), unchanged from 053; verified on linkage (cards 1-5).
 
-Scored tc = **28.7944** at both 8 s and 90 s (deterministic — the VE seed, jitter
-0). Beats the 29.00 record by **0.21** (> 0.05). This is exactly the parent
-(038) VE-seed win, reproduced without the warm-anneal machinery (the ~0.04 SA
-refinement was not needed to beat the record). Full TreeSA never touches 28.79 —
-the win is purely the variable-elimination order, as in 038.
+## Measurements (this Mac, with concurrent campaign load)
 
-### nqueens_28 (record 121.37, median-of-3) — NOT beaten
+Peel scaling / stats (stderr `t_peel=..ms cap=.. peeled=../N residual=..`):
 
-| stage | tc |
-|-------|----|
-| greedy seed | 365 – 410 (randomized) |
-| VE seed (unbounded) | 719 – 738 (discarded — the treewidth blow-up) |
-| **full TreeSA (auto), 90 s, single run** | **125.00** |
+- relational_4 (30,400): every cap 6..42 peels 20,000/30,400 -> residual 10,400
+  in ~208 ms (immobile core; all finite rungs skipped).
+- relational_5 (70,000): cap 6,10 peel nothing; cap>=16 peels 69,500/70,000 ->
+  residual 500 in ~200 ms (mobile; annealed).
 
-The full-graph TreeSA fallback reached 125.00 in one 90 s run — above the 121.37
-record, consistent with 038's finding that the record is only touched on lucky,
-high-variance runs (038 saw 120–153). Median-of-3 would not beat 121.37 by 0.05.
+Final tc (scorer.py tc/sc), all `MODE=auto`:
 
-### Peel attribution (MODE=peel, cap sweep, 25 s each) vs full baseline
+| instance         | tensors | budget | tc      | sc  | source        | target                    |
+|------------------|---------|--------|---------|-----|---------------|---------------------------|
+| relational_4     | 30,400  | 120 s  | 108.97  | 100 | ve(cap=inf)   | <= ~130 (plateau 202) OK  |
+| relational_5     | 70,000  |  90 s  |  24.03  |  10 | ve(cap=inf)   | <= 25 (900 s SA: 24.3) OK |
+| DBN_13           |    572  |  60 s  |  28.79  |  22 | ve(cap=inf)   | ~29 (053 winner) OK       |
+| linkage_15       |  2,304  |  60 s  |  30.48  |  24 | residual      | ~31 OK                    |
+| reg3_250 (expdr) |    250  |  60 s  |  40.02  |  34 | residual      | 40-47, not > 50 OK        |
 
-| lane | residual tensors | residual labels | peel_ms | final tc (25 s) |
-|------|------------------|-----------------|---------|-----------------|
-| **full TreeSA baseline** | — | — | — | **134.0** |
-| peel cap=10 | 1438 | 1275 | 22 | 188.3 |
-| peel cap=20 | 1038 | 875 | 37 | 336.7 |
-| peel cap=30 | 948 | 785 | 201 | 410.0 (never beat greedy) |
-| peel cap=45/60 | 947–948 | 784–785 | 57–188 | >= greedy |
+- relational_4: VE reaches **108.97** at t=3.7s (optimum ~100), obliterating the
+  202/900s plateau. Full-graph fallback correctly skipped (immobile) -> ends at
+  5.4s.
+- relational_5: VE **24.03** < the 24.3 that plain SA needs 900s for, and <<
+  construction-only ~29. Mobile-residual rungs also reach 24.03.
+- DBN / linkage within ~1 bit of 053 (linkage via the peel/residual arm, DBN via
+  VE). reg3 expander: VE blows up (81, discarded), greedy/residual/full-graph
+  win at 40.02 — matches plain annealing, guarding the falsified regime.
 
-## Verdict — hypothesis FALSIFIED (bounded peel does not scale the VE win)
+## Verdict
 
-- **The 038 bottleneck was correctly diagnosed and half-fixed.** Unbounded VE on
-  nqueens both (i) blows up (tc 719) and (ii) is slow. Bounded cheap-first peel
-  FIXES the speed: peeling completes in **22–260 ms** even at 4086 labels (near
-  O(holders·degree), never growing the max factor). So mechanism part (a) works.
-- **But the residual handoff LOSES at every cap.** peel+residual-TreeSA is
-  strictly worse than full-graph TreeSA at equal budget (188–410 vs 134). Lower
-  caps shrink the residual but the fixed peel boundaries carry a bad periphery
-  order; higher caps leave the residual ~=full but with frozen boundaries. There
-  is no cap where separating periphery from core helps.
-- **Attribution / mechanism boundary.** Good orders on a large-treewidth
-  partition function (nqueens) INTERLEAVE peripheral and core contractions; a
-  variable-elimination peel commits to fixed super-tensor boundaries and removes
-  exactly that freedom, so TreeSA on the residual can never recover the
-  interleaved optimum. The VE mechanism is therefore **intrinsically
-  small-hypergraph** — it wins on dbn (44 dense labels, no periphery to mis-cut)
-  and is dominated by direct full-graph TreeSA the moment the instance has a
-  large treewidth with peripheral structure. This is precisely the falsification
-  the pre-registration named ("hierarchical VE seeds still lose to greedy/TreeSA
-  on the large-label instances → the VE mechanism is intrinsically
-  small-hypergraph").
+Confirmed on the new (annealer-immobile) regime. Honest attribution: on these
+instances the decisive win is the **unbounded (cap=infinity) VE rung**, not the
+bounded-peel residual anneal that 053 tested — the finite rungs are skipped on
+relational_4 (immobile core) and merely match VE on relational_5. The bounded
+finite rungs still carry linkage (2,304) and the reg3 expander, and the ladder is
+the mechanism that selects the right rung per instance. The two real enablers
+were (a) recognising that the peel-to-completion order IS full VE and letting it
+run, and (b) removing the library-greedy hang that had prevented the code from
+ever reaching VE at scale.
 
-Claim status: **dbn_13 beaten by 0.21 (deterministic, > 0.05)** — but this is the
-inherited 038 win, not a new improvement. **nqueens_28 NOT beaten** (125.00
-single run; the bounded-peel scaling idea does not deliver). Net: the scaling
-hypothesis is falsified; the negative result (peel completes fast yet loses
-because it freezes the periphery/core split) is the contribution.
+## Deviations from spec
 
-### Production routing
-
-`auto` routes to full-graph TreeSA anytime doubling (the proven strong lane),
-keeping the deterministic full VE seed (dbn winner) and greedy fallback. The peel
-lane is retained only behind `MODE=peel` for reproducing the attribution above;
-it is never used by default (no per-instance constants; `MODE`/`PEEL_CAP` default
-off). Required local runs done: dbn_13 @90 s = 28.7944, nqueens_28 @90 s = 125.00,
-both verified with scorer.py. clippy `-D warnings` clean, rustfmt clean, offline
-build OK, validator precheck = pass.
-
+- The task framed the win as "peel to the width-~100 core and anneal it". Measured
+  reality: the min-cost peel cannot shrink relational_4 below ~10,400 tensors, and
+  annealing that residual stays at ~203 (as immobile as the full graph). The
+  target is instead hit by the ladder's top rung, full VE, which reaches 108.97 in
+  <1s. Implemented as specified (adaptive ladder + racing fallback + mobility
+  gate); reporting that the effective rung is cap=infinity.
+- Full-graph fallback is GATED to n<=8000 rather than "always racing": at 30k-70k
+  a single uninterruptible TreeSA round overruns the budget by minutes and cannot
+  beat VE, so racing it there is pure downside. Protection is preserved exactly
+  where 053 was falsified (n~4k) and on the expander control.
