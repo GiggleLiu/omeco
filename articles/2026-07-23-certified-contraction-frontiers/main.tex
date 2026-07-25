@@ -140,7 +140,7 @@ This paper identifies such a weakness and builds the algorithm that
 exploits it. The weakness is the annealer's \emph{waist}: with the total
 cost a log-sum-exp over all contractions, the converged tree's cost is
 dominated by its single most expensive contraction, which induces a
-bipartition of all tensors. Local tree rewrites move one leaf at a time
+bipartition of all tensors. Local tree rewrites move one subtree at a time
 and can cross between distinct good bipartitions of the same size only
 through long, individually uphill move sequences, so late in the schedule
 the waist freezes. Our motivating measurement
@@ -351,8 +351,9 @@ Every converged annealed tree has a waist: by \eqref{eq:tc} its cost is
 dominated by the argmax-cost contraction, whose leaf set $A$ (against
 complement $B$) is a bipartition of all tensors, and whose cost is
 essentially the weight of the cut $(A,B)$ in the tensor hypergraph.
-Local tree moves---rotations, single-subtree transfers---perturb this
-bipartition one leaf at a time; crossing to a \emph{different} good
+Local tree moves---the associativity rewrites of the annealer
+\cite{kalachev_2021_multi}---transfer one subtree across this
+bipartition at a time; crossing to a \emph{different} good
 bipartition of comparable balance requires a long sequence of
 individually uphill steps, which a cooled annealer will never take. We
 also know the freeze is not repairable by small exact windows: exhaustive
@@ -640,20 +641,20 @@ say so.
 \begin{table}[t]
 \centering
 \small
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lrrrr}
 \toprule
- & \multicolumn{2}{c}{this work (90\,s)} &
+ & this work &
  \multicolumn{2}{c}{Julia OMECO suite} & cotengra \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-6}
-instance & record & tuned ref. & best $\le$90\,s & best $\le$900\,s &
+\cmidrule(lr){2-2}\cmidrule(lr){3-4}\cmidrule(lr){5-5}
+instance & record (90\,s) & best $\le$90\,s & best $\le$900\,s &
 SA, 90\,s \\
 \midrule
-sycamore\_53\_20\_0 & \textbf{59.91} & 60.61 & 64.49 & 61.35 & 66.03 \\
-surfacecode\_d21    & \textbf{47.40} & 48.76 & 48.98 & 48.75 & 54.03 \\
-ksg                 & \textbf{36.96} & 39.12 & 39.22 & 38.27 & 69.04 \\
-reg3\_1000          & \textbf{131.07} & 133.91 & --- & --- & 165.21 \\
-dbn\_13             & 29.00 & 29.09 & \textbf{28.03} & \textbf{28.03} & 41.15 \\
-qft\_27             & \textbf{29.61} & \textbf{29.61} & 29.62 & 29.62 & 31.45 \\
+sycamore\_53\_20\_0 & \textbf{59.91} & 64.49 & 61.35 & 66.03 \\
+surfacecode\_d21    & \textbf{47.40} & 48.98 & 48.75 & 54.03 \\
+ksg                 & \textbf{36.96} & 39.22 & 38.27 & 69.04 \\
+reg3\_1000          & \textbf{131.07} & --- & --- & 165.21 \\
+dbn\_13             & 29.00 & \textbf{28.03} & \textbf{28.03} & 41.15 \\
+qft\_27             & \textbf{29.61} & 29.62 & 29.62 & 31.45 \\
 \bottomrule
 \end{tabular}
 \caption{Records versus external baselines, all measured on the same
