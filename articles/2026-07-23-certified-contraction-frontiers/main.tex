@@ -357,18 +357,56 @@ Local tree moves---the associativity rewrites of the annealer
 \cite{kalachev_2021_multi}---transfer one subtree across this
 bipartition at a time; crossing to a \emph{different} good
 bipartition of comparable balance requires a long sequence of
-individually uphill steps, which a cooled annealer will never take. We
+individually uphill steps, which a cooled annealer will never take;
+Fig.~\ref{fig:escape} draws the resulting landscape picture. We
 also know the freeze is not repairable by small exact windows: exhaustive
 splicing of all subtrees up to 16 leaves leaves frontier trees unchanged
 (they are window-exact optimal, Appendix~\ref{app:taxonomy}), while the
 dominant contraction spans a constant fraction of the network.
 
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.9\linewidth]{figures/fig15_escape.pdf}
+  \caption{Why the annealer freezes and surgery does not. The landscape
+  is the waist cut weight $w$ over contraction trees, with neighboring
+  trees connected by the annealer's local rewrites; each rewrite moves
+  one subtree across the waist bipartition, so a distinct separator
+  $(A',B')$ of comparable balance is reachable only through a long
+  sequence of mixed bipartitions of higher cut weight, which a
+  late-schedule annealer never accepts (dotted attempt). Surgery
+  side-steps the barrier by improving the cut in cut space---bounded
+  FM, seeded to jump separators (Sec.~\ref{sec:frozenwaist})---and
+  rebuilding both sides (Algorithm~\ref{alg:surgery}, lines 5--8). The
+  well-depth gap is not hypothetical: it is $3$--$12$ bits on every one
+  of the 835 instrumented calls (Fig.~\ref{fig:board}a). Schematic.}
+  \label{fig:escape}
+\end{figure}
+
 The question is whether the frozen waist is actually good \emph{as a
-cut}. We instrumented every surgery call of the algorithm of
+cut}. The right tool for that question is Fiduccia--Mattheyses (FM)
+refinement \cite{fiduccia_1982_linear}, the classic
+linear-time partitioning heuristic from circuit design; since it is the
+one ingredient this paper imports from outside the tensor-network
+toolbox, we state it in full. Given a bipartition $(A,B)$ of the
+tensors, assign every tensor a \emph{gain}: the decrease in the cut
+weight $w(A,B)$---here the summed $\log_2$ dimensions of the indices
+straddling the cut---if that tensor alone switched sides. A pass
+repeatedly moves a highest-gain tensor across the cut \emph{even when
+that best gain is negative}, locks it, updates the gains of its
+neighbors, and rejects moves that unbalance the two sides beyond a
+tolerance; when all tensors are locked, the pass rolls back to the best
+prefix of its move sequence. The tolerated uphill moves before rollback
+let a pass carry the boundary across ridges that no sequence of
+individually improving single moves can cross---the same barriers that
+freeze the annealer---and a bucket structure over gains makes a full
+pass linear in the network size. \emph{Bounded} FM caps the number of
+passes and move attempts (scaling with instance size, nothing tuned per
+instance), so a call costs a fixed, small slice of the budget.
+
+We instrumented every surgery call of the algorithm of
 Sec.~\ref{sec:algorithm} on its two record runs: at each converged
-incumbent, extract the waist bipartition and run a bounded
-Fiduccia--Mattheyses (FM) \cite{fiduccia_1982_linear} search for a
-cheaper cut of comparable balance
+incumbent, extract the waist bipartition and run bounded FM
+for a cheaper cut of comparable balance
 on the tensor hypergraph, recording the incumbent's cut weight, the best
 alternative found, and the structure of the improved cut.
 
@@ -415,11 +453,13 @@ interleaves, at every outer iteration, a surgery step that treats the
 waist as a graph problem:
 
 \begin{enumerate}
-\item \textbf{Extract.} Locate the argmax-cost node of the incumbent
+\item \textbf{Extract} (Algorithm~\ref{alg:surgery}, lines 3--4).
+  Locate the argmax-cost node of the incumbent
   (costs recomputed exactly from the index dimensions); its leaf set
   $A$ versus complement $B$ is the waist bipartition.
-\item \textbf{Improve the cut, not the tree.} Run bounded
-  Fiduccia--Mattheyses passes on the tensor hypergraph, with gain
+\item \textbf{Improve the cut, not the tree} (line 5). Run the bounded
+  FM passes of Sec.~\ref{sec:frozenwaist} on the tensor hypergraph,
+  with gain
   defined as the exact reduction in summed $\log_2$ dimensions of the
   straddling labels (open output labels are excluded---they are
   invariant), and balance constrained to $|A| \pm 18\%$. The search is
@@ -427,7 +467,8 @@ waist as a graph problem:
   bipartitions (one from the highest-degree tensor, three from random
   starts), so it can jump to a different separator rather than only
   polish the current one.
-\item \textbf{Rebuild cold, with fixed work.} If a strictly cheaper cut
+\item \textbf{Rebuild cold, with fixed work} (lines 7--8). If a
+  strictly cheaper cut
   of comparable balance was found, promote it to the tree top: each side
   becomes an independent, much smaller ordering problem (its open
   indices are the new cut plus its external labels, computed by
@@ -435,7 +476,8 @@ waist as a graph problem:
   independent scorer exactly). Anneal each side from scratch with a
   \emph{fixed-work} budget (three V-cycles, linear schedules), join, and
   splice into the incumbent.
-\item \textbf{Accept on measurement.} Adopt the rebuilt tree only if its
+\item \textbf{Accept on measurement} (lines 9--10). Adopt the rebuilt
+  tree only if its
   independently recomputed total cost improves; then iterate---the waist
   typically moves, and surgery repeats at the new waist until no
   improving cut is found or the budget ends.
