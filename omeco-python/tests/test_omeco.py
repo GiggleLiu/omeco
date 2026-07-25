@@ -833,3 +833,115 @@ def test_nested_einsum_pretty_print_vs_repr():
     print("\n__repr__ output:", repr_output)
     print("\n__str__ output:")
     print(str_output)
+
+
+# ---------------------------------------------------------------------------
+# Treewidth optimizer
+# ---------------------------------------------------------------------------
+
+
+def test_treewidth_basic():
+    """Treewidth optimizer produces a valid binary tree."""
+    from omeco import Treewidth
+
+    ixs = [[0, 1], [1, 2], [2, 3]]
+    out = [0, 3]
+    sizes = {0: 2, 1: 4, 2: 8, 3: 2}
+
+    tree = optimize_code(ixs, out, sizes, Treewidth())
+    assert tree is not None
+    assert tree.is_binary()
+    assert tree.leaf_count() == 3
+    # Root output must equal the requested output labels.
+    root = tree.to_dict()
+    assert sorted(root["eins"]["iy"]) == [0, 3]
+
+
+def test_treewidth_single_tensor_is_leaf():
+    """A single tensor collapses to a leaf."""
+    from omeco import Treewidth
+
+    tree = optimize_code([[0, 1]], [0, 1], {0: 4, 1: 4}, Treewidth())
+    assert tree.is_leaf()
+    assert tree.leaf_indices() == [0]
+
+
+def test_treewidth_optimize_treewidth_helper():
+    """The standalone optimize_treewidth helper works and matches optimize_code."""
+    from omeco import Treewidth, optimize_treewidth
+
+    ixs = [[0, 1], [1, 2], [2, 0]]
+    out = []
+    sizes = {0: 2, 1: 2, 2: 2}
+
+    tree = optimize_treewidth(ixs, out, sizes, Treewidth())
+    assert tree.is_binary()
+    assert tree.leaf_count() == 3
+
+    # Same result via the unified interface.
+    tree2 = optimize_code(ixs, out, sizes, Treewidth())
+    assert tree.to_dict() == tree2.to_dict()
+
+
+def test_treewidth_deterministic():
+    """Repeated runs give identical trees (deterministic ordering)."""
+    from omeco import Treewidth
+
+    ixs = [[0, 1], [1, 2], [2, 3], [3, 0], [0, 2]]
+    out = []
+    sizes = {0: 2, 1: 3, 2: 4, 3: 5}
+
+    t1 = optimize_code(ixs, out, sizes, Treewidth())
+    t2 = optimize_code(ixs, out, sizes, Treewidth())
+    assert t1.to_dict() == t2.to_dict()
+
+
+def test_treewidth_config_and_repr():
+    """Treewidth exposes its algorithm and a helpful repr; bad algo errors."""
+    from omeco import Treewidth
+
+    opt = Treewidth(algorithm="min_degree")
+    assert opt.algorithm == "min_degree"
+    assert "Treewidth" in repr(opt)
+    # Default is min_degree.
+    assert Treewidth().algorithm == "min_degree"
+
+    with pytest.raises(ValueError):
+        Treewidth(algorithm="not_an_algorithm")
+
+
+def test_treewidth_scales_and_low_complexity():
+    """Treewidth solves a modest grid with sensible complexity."""
+    from omeco import Treewidth
+
+    # 4x4 grid of bond tensors -> scalar. Each internal bond is a binary label.
+    ixs = []
+    label = 0
+    labels = {}
+    n = 4
+    # horizontal bonds
+    edges = []
+    for r in range(n):
+        for c in range(n - 1):
+            edges.append(((r, c), (r, c + 1)))
+    for c in range(n):
+        for r in range(n - 1):
+            edges.append(((r, c), (r + 1, c)))
+    for a, b in edges:
+        labels.setdefault((a, b), len(labels))
+        ixs.append([labels[(a, b)]])
+    # Turn each edge into a shared label between the two incident vertices:
+    # build vertex tensors collecting their incident edge labels.
+    vtensors = {}
+    for eid, (a, b) in enumerate(edges):
+        vtensors.setdefault(a, []).append(eid)
+        vtensors.setdefault(b, []).append(eid)
+    ixs = [v for v in vtensors.values()]
+    sizes = {i: 2 for i in range(len(edges))}
+
+    tree = optimize_code(ixs, [], sizes, Treewidth())
+    assert tree.is_binary()
+    assert tree.leaf_count() == len(ixs)
+    comp = tree.complexity(ixs, sizes)
+    # A 4x4 grid has small treewidth; space stays modest.
+    assert comp.sc <= 8.0

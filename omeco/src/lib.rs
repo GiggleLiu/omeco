@@ -64,10 +64,14 @@
 //! | [`GreedyMethod`] | Fast O(n² log n) greedy heuristic |
 //! | [`ExhaustiveSearch`] | Exact dynamic programming for small networks |
 //! | [`TreeSA`] | Simulated annealing for higher-quality solutions |
+//! | [`Treewidth`] | Scalable treewidth-heuristic elimination ordering |
 //!
 //! Use [`GreedyMethod`] when you need speed, [`ExhaustiveSearch`] when the
-//! network is small enough for exact optimization, and [`TreeSA`] when
-//! contraction cost dominates and you can afford extra search time.
+//! network is small enough for exact optimization, [`TreeSA`] when
+//! contraction cost dominates and you can afford extra search time, and
+//! [`Treewidth`] on large structured networks (graphical models, relational
+//! instances) where a low-treewidth elimination order beats pairwise-greedy
+//! and annealing search.
 //!
 //! ### Feature 2: Slicing
 //!
@@ -139,6 +143,7 @@ pub mod score;
 pub mod simplifier;
 pub mod slicer;
 pub mod treesa;
+pub mod treewidth;
 pub mod utils;
 
 #[cfg(test)]
@@ -159,6 +164,9 @@ pub use label::Label;
 pub use score::ScoreFunction;
 pub use slicer::{slice_code, CodeSlicer, Slicer, TreeSASlicer};
 pub use treesa::{optimize_treesa, Initializer, TreeSA};
+pub use treewidth::{
+    optimize_treewidth, EliminationAlgorithm, EliminationOrder, Treewidth, TreewidthError,
+};
 
 use std::collections::HashMap;
 
@@ -199,6 +207,16 @@ impl CodeOptimizer for ExhaustiveSearch {
         size_dict: &HashMap<L, usize>,
     ) -> Option<NestedEinsum<L>> {
         optimize_exhaustive(code, size_dict, self).ok()
+    }
+}
+
+impl CodeOptimizer for Treewidth {
+    fn optimize<L: Label>(
+        &self,
+        code: &EinCode<L>,
+        size_dict: &HashMap<L, usize>,
+    ) -> Option<NestedEinsum<L>> {
+        optimize_treewidth(code, size_dict, self).ok()
     }
 }
 
