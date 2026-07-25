@@ -282,6 +282,251 @@
      "tc": 67.316,
      "sc": 61.0,
      "t": 88.3
+    },
+    {
+     "family": "ours-simplify",
+     "config": "10s",
+     "tc": 67.179,
+     "sc": 61.0,
+     "t": 9.9
+    },
+    {
+     "family": "ours-treesa",
+     "config": "10s",
+     "tc": 61.518,
+     "sc": 53.0,
+     "t": 7.8
+    },
+    {
+     "family": "ours-treesa",
+     "config": "30s",
+     "tc": 61.754,
+     "sc": 53.0,
+     "t": 26.6
+    },
+    {
+     "family": "ours-simplify",
+     "config": "30s",
+     "tc": 61.553,
+     "sc": 53.0,
+     "t": 29.6
+    },
+    {
+     "family": "ours-treesa",
+     "config": "10s",
+     "tc": 61.406,
+     "sc": 53.0,
+     "t": 7.8
+    },
+    {
+     "family": "ours-simplify",
+     "config": "10s",
+     "tc": 72.886,
+     "sc": 68.0,
+     "t": 10.3
+    },
+    {
+     "family": "ours-simplify",
+     "config": "30s",
+     "tc": 61.381,
+     "sc": 53.0,
+     "t": 29.9
+    },
+    {
+     "family": "ours-treesa",
+     "config": "30s",
+     "tc": 62.813,
+     "sc": 55.0,
+     "t": 17.8
+    },
+    {
+     "family": "cotengra",
+     "config": "300s",
+     "tc": 62.194,
+     "sc": 54.0,
+     "t": 277.6
+    },
+    {
+     "family": "cotengra",
+     "config": "300s",
+     "tc": 61.985,
+     "sc": 54.0,
+     "t": 284.2
+    },
+    {
+     "family": "cotengra",
+     "config": "30s",
+     "tc": 90.002,
+     "sc": 61.0,
+     "t": 41.3
+    },
+    {
+     "family": "cotengra",
+     "config": "10s",
+     "tc": 73.806,
+     "sc": 65.0,
+     "t": 18.9
+    },
+    {
+     "family": "cotengra",
+     "config": "30s",
+     "tc": 84.001,
+     "sc": 67.0,
+     "t": 39.9
+    },
+    {
+     "family": "cotengra",
+     "config": "10s",
+     "tc": 81.749,
+     "sc": 75.0,
+     "t": 24.3
+    },
+    {
+     "family": "ours-surgery",
+     "config": "10s",
+     "tc": 61.29,
+     "sc": 53.0,
+     "t": 10.2
+    },
+    {
+     "family": "ours-surgery",
+     "config": "30s",
+     "tc": 60.161,
+     "sc": 52.0,
+     "t": 29.6
+    },
+    {
+     "family": "ours-surgery",
+     "config": "10s",
+     "tc": 61.352,
+     "sc": 53.0,
+     "t": 10.6
+    },
+    {
+     "family": "ours-surgery",
+     "config": "30s",
+     "tc": 60.556,
+     "sc": 53.0,
+     "t": 29.4
+    },
+    {
+     "family": "julia-greedy",
+     "config": "greedy-default",
+     "tc": 105.001,
+     "sc": 77.0,
+     "t": 0.101
+    },
+    {
+     "family": "julia-greedy",
+     "config": "greedy-nrepeat10",
+     "tc": 105.001,
+     "sc": 77.0,
+     "t": 0.705
+    },
+    {
+     "family": "julia-greedy",
+     "config": "greedy-nrepeat40",
+     "tc": 105.001,
+     "sc": 77.0,
+     "t": 2.502
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i1-fastbeta",
+     "tc": 91.748,
+     "sc": 87.0,
+     "t": 0.199
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i5-fastbeta",
+     "tc": 89.0,
+     "sc": 71.0,
+     "t": 0.759
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i5",
+     "tc": 98.459,
+     "sc": 92.0,
+     "t": 3.46
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i10",
+     "tc": 60.724,
+     "sc": 52.0,
+     "t": 7.344
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i20",
+     "tc": 60.536,
+     "sc": 53.0,
+     "t": 14.726
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n2-i10",
+     "tc": 61.747,
+     "sc": 54.0,
+     "t": 14.988
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-sc20-n1-i5",
+     "tc": 89.0,
+     "sc": 63.0,
+     "t": 3.248
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-sc20-n1-i20",
+     "tc": 74.323,
+     "sc": 57.0,
+     "t": 13.028
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-LexBFS",
+     "tc": 135.373,
+     "sc": 130.0,
+     "t": 0.348
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-BFS",
+     "tc": 147.713,
+     "sc": 144.0,
+     "t": 0.205
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-MCS",
+     "tc": 193.319,
+     "sc": 188.0,
+     "t": 0.277
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-RCMMD",
+     "tc": 88.396,
+     "sc": 82.0,
+     "t": 0.172
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-RCMGL",
+     "tc": 87.403,
+     "sc": 82.0,
+     "t": 0.159
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-MCSM",
+     "tc": 135.126,
+     "sc": 130.0,
+     "t": 0.235
     }
    ],
    "front": [
@@ -298,16 +543,16 @@
      "t": 87.5
     },
     {
-     "tc": 60.683,
-     "t": 76.3
+     "tc": 60.161,
+     "t": 29.6
     },
     {
-     "tc": 64.489,
-     "t": 39.956
+     "tc": 60.536,
+     "t": 14.726
     },
     {
-     "tc": 70.016,
-     "t": 33.55
+     "tc": 60.724,
+     "t": 7.344
     },
     {
      "tc": 74.394,
@@ -604,6 +849,251 @@
      "tc": 53.882,
      "sc": 46.0,
      "t": 90.5
+    },
+    {
+     "family": "cotengra",
+     "config": "30s",
+     "tc": 58.278,
+     "sc": 43.0,
+     "t": 27.6
+    },
+    {
+     "family": "cotengra",
+     "config": "10s",
+     "tc": 57.718,
+     "sc": 47.0,
+     "t": 13.2
+    },
+    {
+     "family": "cotengra",
+     "config": "30s",
+     "tc": 61.706,
+     "sc": 44.0,
+     "t": 50.9
+    },
+    {
+     "family": "cotengra",
+     "config": "10s",
+     "tc": 59.409,
+     "sc": 47.0,
+     "t": 16.4
+    },
+    {
+     "family": "ours-surgery",
+     "config": "30s",
+     "tc": 47.432,
+     "sc": 40.0,
+     "t": 29.3
+    },
+    {
+     "family": "ours-surgery",
+     "config": "10s",
+     "tc": 49.014,
+     "sc": 40.0,
+     "t": 10.2
+    },
+    {
+     "family": "ours-surgery",
+     "config": "30s",
+     "tc": 47.857,
+     "sc": 40.0,
+     "t": 29.4
+    },
+    {
+     "family": "ours-surgery",
+     "config": "10s",
+     "tc": 48.742,
+     "sc": 40.0,
+     "t": 9.9
+    },
+    {
+     "family": "ours-simplify",
+     "config": "30s",
+     "tc": 54.041,
+     "sc": 41.0,
+     "t": 29.7
+    },
+    {
+     "family": "ours-simplify",
+     "config": "10s",
+     "tc": 57.697,
+     "sc": 41.0,
+     "t": 13.3
+    },
+    {
+     "family": "ours-simplify",
+     "config": "30s",
+     "tc": 50.073,
+     "sc": 41.0,
+     "t": 29.5
+    },
+    {
+     "family": "ours-simplify",
+     "config": "10s",
+     "tc": 57.651,
+     "sc": 40.0,
+     "t": 12.8
+    },
+    {
+     "family": "cotengra",
+     "config": "300s",
+     "tc": 61.706,
+     "sc": 44.0,
+     "t": 337.9
+    },
+    {
+     "family": "cotengra",
+     "config": "300s",
+     "tc": 48.971,
+     "sc": 40.0,
+     "t": 285.7
+    },
+    {
+     "family": "ours-treesa",
+     "config": "10s",
+     "tc": 48.955,
+     "sc": 40.0,
+     "t": 6.0
+    },
+    {
+     "family": "ours-treesa",
+     "config": "30s",
+     "tc": 48.271,
+     "sc": 41.0,
+     "t": 25.9
+    },
+    {
+     "family": "ours-treesa",
+     "config": "10s",
+     "tc": 54.037,
+     "sc": 40.0,
+     "t": 5.6
+    },
+    {
+     "family": "ours-treesa",
+     "config": "30s",
+     "tc": 49.016,
+     "sc": 40.0,
+     "t": 26.3
+    },
+    {
+     "family": "julia-greedy",
+     "config": "greedy-default",
+     "tc": 69.014,
+     "sc": 48.0,
+     "t": 0.07
+    },
+    {
+     "family": "julia-greedy",
+     "config": "greedy-nrepeat10",
+     "tc": 69.014,
+     "sc": 48.0,
+     "t": 0.789
+    },
+    {
+     "family": "julia-greedy",
+     "config": "greedy-nrepeat40",
+     "tc": 69.014,
+     "sc": 48.0,
+     "t": 2.647
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i1-fastbeta",
+     "tc": 60.216,
+     "sc": 45.0,
+     "t": 0.15
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i5-fastbeta",
+     "tc": 54.279,
+     "sc": 43.0,
+     "t": 0.448
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i5",
+     "tc": 52.68,
+     "sc": 45.0,
+     "t": 2.491
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i10",
+     "tc": 49.056,
+     "sc": 40.0,
+     "t": 4.945
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n1-i20",
+     "tc": 48.949,
+     "sc": 40.0,
+     "t": 10.428
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-scInf-n2-i10",
+     "tc": 53.077,
+     "sc": 41.0,
+     "t": 10.369
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-sc20-n1-i5",
+     "tc": 58.174,
+     "sc": 41.0,
+     "t": 2.32
+    },
+    {
+     "family": "julia-treesa",
+     "config": "treesa-sc20-n1-i20",
+     "tc": 58.013,
+     "sc": 40.0,
+     "t": 9.26
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-LexBFS",
+     "tc": 77.915,
+     "sc": 73.0,
+     "t": 0.099
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-BFS",
+     "tc": 80.386,
+     "sc": 75.0,
+     "t": 0.084
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-MCS",
+     "tc": 442.988,
+     "sc": 439.0,
+     "t": 0.548
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-RCMMD",
+     "tc": 75.783,
+     "sc": 70.0,
+     "t": 0.081
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-RCMGL",
+     "tc": 80.906,
+     "sc": 76.0,
+     "t": 0.081
+    },
+    {
+     "family": "treewidth",
+     "config": "treewidth-MCSM",
+     "tc": 77.716,
+     "sc": 72.0,
+     "t": 0.085
     }
    ],
    "front": [
@@ -620,16 +1110,32 @@
      "t": 87.5
     },
     {
-     "tc": 47.721,
-     "t": 54.5
+     "tc": 47.432,
+     "t": 29.3
     },
     {
-     "tc": 48.983,
-     "t": 27.921
+     "tc": 48.271,
+     "t": 25.9
     },
     {
-     "tc": 56.324,
-     "t": 0.825
+     "tc": 48.742,
+     "t": 9.9
+    },
+    {
+     "tc": 48.955,
+     "t": 6.0
+    },
+    {
+     "tc": 49.056,
+     "t": 4.945
+    },
+    {
+     "tc": 52.68,
+     "t": 2.491
+    },
+    {
+     "tc": 54.279,
+     "t": 0.448
     },
     {
      "tc": 58.215,

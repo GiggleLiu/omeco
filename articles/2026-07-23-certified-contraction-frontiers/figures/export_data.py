@@ -291,9 +291,45 @@ def fig12():
 
 
 # ------------------------------------------------------------------ fig13
+def _pareto_extra_points():
+    """Densifying sources: short-budget runs and the Julia config sweep."""
+    extra = {"sycamore_53_20_0": [], "surfacecode_d21": []}
+    runs = ROOT / "research/paper_data/pareto_runs"
+    if runs.exists():
+        for p in runs.glob("*/score.json"):
+            d = json.load(open(p))
+            fam = {"ref": "ours-treesa", "a054": "ours-surgery",
+                   "a050": "ours-simplify", "ctg": "cotengra"}[d["method"]]
+            extra[d["instance"]].append(
+                {"family": fam, "config": f"{d['budget_s']}s",
+                 "tc": round(d["tc"], 3), "sc": d["sc"], "t": d["wall_s"]})
+    sweep = ROOT / "research/paper_data/pareto_sweep.jsonl"
+    if sweep.exists():
+        for line in open(sweep):
+            d = json.loads(line)
+            if "tc" not in d:
+                continue
+            cfg = d["config"]
+            if cfg.startswith("greedy"):
+                fam = "julia-greedy"
+            elif cfg.startswith("treesa"):
+                fam = "julia-treesa"
+            elif cfg.startswith("treewidth"):
+                fam = "treewidth"
+            else:
+                fam = "hypernd"
+            extra[d["instance"]].append(
+                {"family": fam, "config": cfg, "tc": round(d["tc"], 3),
+                 "sc": d["sc"], "t": round(d["time_elapsed"], 3)})
+    return extra
+
+
 def fig13():
     src = json.load(open(DATA / "pareto_points.json"))
     out = {"note": src["note"], "instances": {}}
+    extra = _pareto_extra_points()
+    for inst in src["instances"]:
+        src["instances"][inst] = src["instances"][inst] + extra.get(inst, [])
     for inst, pts in src["instances"].items():
         srt = sorted(pts, key=lambda p: (p["tc"], p["t"]))
         front, best_t = [], float("inf")

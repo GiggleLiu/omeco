@@ -10,9 +10,10 @@
 
 // (family key, legend label, mark, color, filled?)
 #let fams = (
-  ("julia-treesa", "TreeSA (Julia, 6 configs)", "o", purple, true),
+  ("julia-greedy", "GreedyMethod (Julia)", "o", red, true),
+  ("julia-treesa", "TreeSA (Julia)", "o", purple, true),
   ("hypernd", "HyperND (Julia)", "square", blue, true),
-  ("treewidth", "Treewidth MF/AMF/MMD (Julia)", "triangle", orange, true),
+  ("treewidth", "Treewidth (Julia, 9 back-ends)", "triangle", orange, true),
   ("cotengra", "cotengra hyper+SA", "+", black, true),
   ("ours-treesa", "tuned TreeSA (this work)", "o", purple, false),
   ("ours-simplify", "simplify+anneal (this work)", "triangle", blue, false),
@@ -30,12 +31,15 @@
     {
       // dashed Pareto front through the non-dominated points
       plot.add(
-        entry.front.map(p => (p.tc, calc.log(p.t, base: 10))),
+        entry.front.filter(p => p.tc >= x-min and p.tc <= x-max)
+          .map(p => (p.tc, calc.log(p.t, base: 10))),
         style: (stroke: (dash: "dashed", paint: black, thickness: 1pt)),
         mark: none,
       )
       for (fam, lab, mark, color, filled) in fams {
-        let pts = entry.points.filter(p => p.family == fam)
+        // clip off-scale orderings (BFS/MCS-style treewidth, tc up to 443)
+        let pts = entry.points.filter(p =>
+          p.family == fam and p.tc >= x-min and p.tc <= x-max)
         if pts.len() == 0 { continue }
         plot.add(
           pts.map(p => (p.tc, calc.log(calc.max(p.t, 0.02), base: 10))),
@@ -56,17 +60,17 @@
 #grid(columns: 2, gutter: 15pt,
   canvas(length: 1cm, {
     import draw: content
-    panel("sycamore_53_20_0", 56, 106, legend: "inner-north-east")
+    panel("sycamore_53_20_0", 56, 110, legend: "inner-north-east")
     content((4, 7.45), [*Sycamore 53q, m=20 (3369 tensors)*])
-    content((2.4, 3.4), [Pareto Front], align: center,
+    content((1.5, 2.5), [Pareto Front], align: center,
             fill: white.transparentize(50%), frame: "rect", padding: 0.1,
             stroke: none)
   }),
   canvas(length: 1cm, {
     import draw: content
-    panel("surfacecode_d21", 46, 66)
+    panel("surfacecode_d21", 46, 84)
     content((4, 7.45), [*surface code d=21 (2203 tensors)*])
-    content((3.2, 4.0), [Pareto Front], align: center,
+    content((2.6, 4.0), [Pareto Front], align: center,
             fill: white.transparentize(50%), frame: "rect", padding: 0.1,
             stroke: none)
   }),
