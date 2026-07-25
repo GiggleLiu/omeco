@@ -596,36 +596,48 @@ develops. Third, on nqueens\_28 no stable ordering exists at this
 budget: our reference's fifteen-run spread on the server spans
 $104.9$--$159.3$, single Julia runs land inside that spread, and we
 decline to claim a direction; distributional reporting is the only
-honest mode for that instance.
+honest mode for that instance. The cotengra column adds a
+protocol-matched cross-toolchain reference: on the small converged
+instances it confirms the shared frontier (reg3\_250 $40.5$ versus our
+$39.9$; the circuit proxy $62.4$ versus $61.5$), while on the large
+instances a single-threaded 90-second budget starves its
+sampling-based portfolio ($69.0$ on the king graph, $187$ on the
+97-qubit circuit), which quantifies how much of that toolchain's power
+lives in parallel trial throughput rather than in per-trial quality.
 
 \begin{table}[t]
 \centering
 \small
-\begin{tabular}{lrrrr}
+\begin{tabular}{lrrrrr}
 \toprule
  & \multicolumn{2}{c}{this work (90\,s)} &
- \multicolumn{2}{c}{Julia OMECO suite (same machine)} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}
-instance & record & tuned ref. & best $\le$90\,s & best $\le$900\,s \\
+ \multicolumn{2}{c}{Julia OMECO suite} & cotengra \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-6}
+instance & record & tuned ref. & best $\le$90\,s & best $\le$900\,s &
+SA, 90\,s \\
 \midrule
-sycamore\_53\_20\_0 & \textbf{59.91} & 60.61 & 64.49 & 61.35 \\
-surfacecode\_d21    & \textbf{47.40} & 48.76 & 48.98 & 48.75 \\
-ksg                 & \textbf{36.96} & 39.12 & 39.22 & 38.27 \\
-reg3\_1000          & \textbf{131.07} & 133.91 & --- & --- \\
-dbn\_13             & 29.00 & 29.09 & \textbf{28.03} & \textbf{28.03} \\
-qft\_27             & 29.61 & 29.61 & 29.62 & 29.62 \\
+sycamore\_53\_20\_0 & \textbf{59.91} & 60.61 & 64.49 & 61.35 & 66.03 \\
+surfacecode\_d21    & \textbf{47.40} & 48.76 & 48.98 & 48.75 & 54.03 \\
+ksg                 & \textbf{36.96} & 39.12 & 39.22 & 38.27 & 69.04 \\
+reg3\_1000          & \textbf{131.07} & 133.91 & --- & --- & 165.21 \\
+dbn\_13             & 29.00 & 29.09 & \textbf{28.03} & \textbf{28.03} & 41.15 \\
+qft\_27             & \textbf{29.61} & \textbf{29.61} & 29.62 & 29.62 & 31.45 \\
 \bottomrule
 \end{tabular}
-\caption{Records versus the reference Julia implementation
-(OMEinsumContractionOrders.jl) measured on the same server through its
-own harness. ``Best $\le B$'' selects, over the configuration ladder
-(TreeSA at $\scT \in \{20, \infty\}$ with 1/4/8 restarts, HyperND,
-treewidth back-ends), the best row whose measured runtime fits budget
-$B$. Bold marks the winner per instance. The dbn\_13 row is won by the
-treewidth back-end (min-fill), instantly---see
-Sec.~\ref{sec:inference}. reg3\_1000 is not in the Julia suite.
-nqueens\_28 is excluded: no ordering is stable at these budgets (see
-text).}
+\caption{Records versus external baselines, all measured on the same
+server. Julia columns: over the configuration ladder of the reference
+implementation (OMEinsumContractionOrders.jl: TreeSA at
+$\scT \in \{20, \infty\}$ with 1/4/8 restarts, HyperND, treewidth
+back-ends, run through its own harness), the best row whose measured
+runtime fits budget $B$. Cotengra column: median of three 90\,s
+single-threaded runs of the hyper-optimizer followed by
+subtree simulated annealing; under this protocol it is starved of the
+parallel trial sampling that is its main strength, so these rows are a
+protocol-matched reference, not a claim about cotengra at large. Bold
+marks the winner per instance. The dbn\_13 row is won by the treewidth
+back-end (min-fill), instantly---see Sec.~\ref{sec:inference}.
+reg3\_1000 is not in the Julia suite. nqueens\_28 is excluded: no
+ordering is stable at these budgets (see text).}
 \label{tab:external}
 \end{table}
 
