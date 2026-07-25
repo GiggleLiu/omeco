@@ -336,7 +336,8 @@ annealer is most stuck.
 \label{sec:algorithm}
 
 Global cut surgery operationalizes the observation of
-Sec.~\ref{sec:frozenwaist}. The optimizer maintains an incumbent
+Sec.~\ref{sec:frozenwaist}; Fig.~\ref{fig:k4} illustrates both of the
+pipeline's mechanisms on a toy network. The optimizer maintains an incumbent
 contraction tree produced by a standard annealing engine, and
 interleaves, at every outer iteration, a surgery step that treats the
 waist as a graph problem:
@@ -367,6 +368,21 @@ waist as a graph problem:
   typically moves, and surgery repeats at the new waist until no
   improving cut is found or the budget ends.
 \end{enumerate}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.92\linewidth]{figures/typst/k4_shared_demo.pdf}
+  \caption{The two mechanisms on a toy network: two dense clusters (each
+  a $K_4$) joined by two sparse bridges. (a,b)~Preprocessing: the chain
+  tensors on the bridges are rank-non-increasing, so the exact
+  simplification pass absorbs them ($L_2, L_4 \to L_2^*, L_4^*$) before
+  any search begins. (c,d)~Surgery: a converged annealed tree can freeze
+  with a poor waist---the horizontal bipartition (c), which cuts through
+  both clusters---while the cheap comparable-balance cut through the two
+  bridges (d) is invisible to local tree moves; bounded FM on the tensor
+  graph finds it, and both sides are rebuilt cold and spliced.}
+  \label{fig:k4}
+\end{figure}
 
 Two design choices matter beyond the loop itself. \emph{Fixed work, not
 fixed time}: giving each rebuild a deterministic amount of annealing
