@@ -255,8 +255,8 @@ closed instances have $\sct = 34$ and $53$---this default is not merely
 unhelpful. It actively drags the search into a low-memory, high-flop
 region of tree space.
 
-Figure~\ref{fig:sweep} shows the resulting $\tc$ at a fixed 90-second
-budget as a function of $\scT$. The transition it reveals is a cliff,
+Figure~\ref{fig:sweep} (Appendix~\ref{app:supp}) shows the resulting
+$\tc$ at a fixed 90-second budget as a function of $\scT$. The transition it reveals is a cliff,
 not a slope: every target below the natural space cost of good trees is
 roughly equally harmful (medians $45.6$--$47.0$ on reg3\_250, $71$--$77$
 on sycamore\_m20), quality snaps to the frontier exactly at the natural
@@ -278,19 +278,6 @@ use the natural value or no target at all.} Every comparison in the
 remainder of this paper is against the annealer with this fix
 applied---the \emph{tuned reference}.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig1_sctarget_sweep.pdf}
-  \caption{Best $\tc$ reached in 90\,s of single-threaded annealing versus
-  the memory target $\scT$ (median of three runs; whiskers span the
-  range). The dashed line marks the converged frontier of
-  Appendix~\ref{app:null}; the dotted vertical line marks the natural
-  space cost of optimum-quality trees. The transition is a cliff at the
-  natural value: every smaller target is comparably harmful, and every
-  target at or above it, including $\scT=\infty$, reaches the frontier.
-  The shipped default is $\scT=20$.}
-  \label{fig:sweep}
-\end{figure}
 
 \paragraph{Why not better search control.}
 Before targeting the waist, we verified that no search-control change can
@@ -405,7 +392,7 @@ reduced network, and the contracted fragments are spliced back into the
 final tree as fixed subtrees. The pass is exact and costs milliseconds.
 
 Its effect is largest exactly where synthetic benchmarks never look
-(Fig.~\ref{fig:simplify}a): $88.7\%$ of the real Sycamore network's 3369
+(Fig.~\ref{fig:simplify}a, Appendix~\ref{app:supp}): $88.7\%$ of the real Sycamore network's 3369
 tensors are removed before annealing begins ($3369 \to 381$), $65.5\%$
 of surface-code $d{=}21$, $33.9\%$ of nqueens\_28---and $0\%$ of the
 random 3-regular control, which is why the identical mechanism, correctly
@@ -418,17 +405,6 @@ Figure~\ref{fig:simplify}b shows the resulting record march: three
 successive simplify-then-anneal implementations drove the Sycamore
 record $60.605 \to 60.169 \to 60.104 \to 59.911$.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig9_simplification.pdf}
-  \caption{The preprocessing pass. (a)~Fraction of tensors removed by
-  the exact rank-non-increasing pass; the random-regular control is
-  untouched at $0\%$. (b)~The Sycamore 53q record march: the tuned
-  reference (leftmost) and three successive simplify-then-anneal
-  attempts. The same anneal without simplification reaches $76.0$ (off
-  scale): preprocessing, not search, carries this improvement.}
-  \label{fig:simplify}
-\end{figure}
 
 \subsection{Seeding and anytime behavior}
 \label{sec:anytime}
@@ -466,12 +442,15 @@ record, and the official median lands at $47.377$.
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\linewidth]{figures/fig8_record_board.pdf}
-  \caption{The record board: confirmed improvement over the tuned TreeSA
-  reference on each instance (validator protocol: confirm-twice,
-  worse-of-two, per-run relabeling). Marker shape and color encode the
-  mechanism; thick dashes mark instances where the tuned reference is
-  the record holder.}
+  \includegraphics[width=\linewidth]{figures/fig14_advantage.pdf}
+  \caption{The advantage, summarized. (a)~Record board: confirmed
+  improvement over the tuned TreeSA reference on each instance
+  (validator protocol: confirm-twice, worse-of-two, per-run relabeling);
+  marker shape and color encode the mechanism, thick dashes mark
+  instances where the tuned reference remains the record holder.
+  (b)~Surface-code family: all repetitions at 90\,s versus code
+  distance, anchored at the surgery median per distance --- the surgery
+  advantage grows with $d$ while its run-to-run spread stays collapsed.}
   \label{fig:board}
 \end{figure}
 
@@ -535,7 +514,8 @@ same floor.
 \end{figure}
 
 \paragraph{Distributions and scaling.}
-Figure~\ref{fig:campaign} gives the statistical view. Over 15
+Figure~\ref{fig:campaign} (Appendix~\ref{app:supp}) gives the full
+run distributions. Over 15
 repetitions at 90\,s, the surgery and reference distributions on
 surface-code $d{=}21$ are fully separated---surgery's worst run
 ($47.91$) beats the reference's best ($48.18$); king-graph and
@@ -546,17 +526,6 @@ with distance ($+0.04$, $+0.02$, $+0.11$, $+1.04$ at $d=9,13,17,21$)
 while its run-to-run spread stays collapsed: global cut repair pays off
 precisely at scale, where the annealer's frozen waist is largest.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/fig11_campaign.pdf}
-  \caption{Statistical view of the same-machine campaign. (a)~All 15
-  repetitions per instance at 90\,s, centered on the tuned reference's
-  median: circles are the tuned reference, squares the best method per
-  instance. (b)~Surface-code family: repetitions at 90\,s versus code
-  distance, anchored at the surgery median per distance; the advantage
-  grows with $d$ while the surgery spread stays collapsed.}
-  \label{fig:campaign}
-\end{figure}
 
 \paragraph{External baselines.}
 Table~\ref{tab:external} closes the loop against the reference Julia
@@ -636,7 +605,11 @@ Contraction ordering is not a quantum-only problem: exact probabilistic
 inference contracts the tensor network of a graphical model, and
 TensorInference.jl \cite{roa_2023_tensorinference} does so literally,
 optimizing an einsum whose inputs are one unity tensor per variable plus
-one tensor per factor, at full cardinalities. We exported all 65
+one tensor per factor, at full cardinalities; the package's own
+cross-tool evaluation \cite{tibenchmarks_2023} shows it competitive
+with dedicated inference engines (Merlin, libDAI, JunctionTrees) on the
+same networks, so its end-to-end runtime is bounded directly by the
+ordering quality studied here. We exported all 65
 instances of the UAI-2014 MAR benchmark from the package's own artifact
 in exactly that form, ranked them by a 5-second hardness scan, and
 measured the ten hardest (three dense deep-belief networks, four
@@ -946,6 +919,45 @@ trail. The four families fail for four distinct measured reasons, and
 none of the failures is a tuning accident.}
 \label{tab:taxonomy}
 \end{table}
+
+\section{Supplementary figures}
+\label{app:supp}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig1_sctarget_sweep.pdf}
+  \caption{Best $\tc$ reached in 90\,s of single-threaded annealing versus
+  the memory target $\scT$ (median of three runs; whiskers span the
+  range). The dashed line marks the converged frontier of
+  Appendix~\ref{app:null}; the dotted vertical line marks the natural
+  space cost of optimum-quality trees. The transition is a cliff at the
+  natural value: every smaller target is comparably harmful, and every
+  target at or above it, including $\scT=\infty$, reaches the frontier.
+  The shipped default is $\scT=20$.}
+  \label{fig:sweep}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig9_simplification.pdf}
+  \caption{The preprocessing pass. (a)~Fraction of tensors removed by
+  the exact rank-non-increasing pass; the random-regular control is
+  untouched at $0\%$. (b)~The Sycamore 53q record march: the tuned
+  reference (leftmost) and three successive simplify-then-anneal
+  attempts. The same anneal without simplification reaches $76.0$ (off
+  scale): preprocessing, not search, carries this improvement.}
+  \label{fig:simplify}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/fig11_campaign.pdf}
+  \caption{Run distributions of the same-machine campaign: all 15
+  repetitions per instance at 90\,s, centered on the tuned reference's
+  median. Circles are the tuned reference, squares the best method per
+  instance.}
+  \label{fig:campaign}
+\end{figure}
 
 \section{Methodology: a research loop that distrusts itself}
 \label{sec:method}
