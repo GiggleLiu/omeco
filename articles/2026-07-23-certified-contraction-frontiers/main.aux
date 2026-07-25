@@ -12,9 +12,15 @@
 \citation{dumitrescu_2018_benchmarking}
 \citation{tamaki_2017_positive}
 \citation{pfeifer_2013_faster}
+\citation{meirom_2022_optimizing}
+\citation{hoppe_2026_algorithmic}
 \babel@aux{english}{}
 \@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
 \newlabel{sec:intro}{{1}{1}{Introduction}{section.1}{}}
+\citation{xu_2023_np}
+\citation{ibaraki_1984_optimal}
+\citation{lam_1997_optimizing}
+\citation{stoian_2022_optimal}
 \citation{liu_2025_omeco_orders}
 \@writefile{toc}{\contentsline {section}{\numberline {2}Setup and evaluation protocol}{2}{section.2}\protected@file@percent }
 \newlabel{sec:setup}{{2}{2}{Setup and evaluation protocol}{section.2}{}}
@@ -29,48 +35,52 @@
 \@writefile{toc}{\contentsline {paragraph}{Same-machine re-measurement.}{3}{section*.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {3}Tuning the incumbent: a prerequisite}{3}{section.3}\protected@file@percent }
 \newlabel{sec:sctarget}{{3}{3}{Tuning the incumbent: a prerequisite}{section.3}{}}
+\citation{fiduccia_1982_linear}
 \@writefile{toc}{\contentsline {paragraph}{Why not better search control.}{4}{section*.4}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {4}The frozen waist is never a minimal cut}{4}{section.4}\protected@file@percent }
 \newlabel{sec:frozenwaist}{{4}{4}{The frozen waist is never a minimal cut}{section.4}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5}The algorithm: global cut surgery}{4}{section.5}\protected@file@percent }
-\newlabel{sec:algorithm}{{5}{4}{The algorithm: global cut surgery}{section.5}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The two mechanisms on a toy network: two dense clusters (each a $K_4$) joined by two sparse bridges. (a,b)~Preprocessing: the chain tensors on the bridges are rank-non-increasing, so the exact simplification pass absorbs them ($L_2, L_4 \to L_2^*, L_4^*$) before any search begins. (c,d)~Surgery: a converged annealed tree can freeze with a poor waist---the horizontal bipartition (c), which cuts through both clusters---while the cheap comparable-balance cut through the two bridges (d) is invisible to local tree moves; bounded FM on the tensor graph finds it, and both sides are rebuilt cold and spliced.}}{5}{figure.1}\protected@file@percent }
-\newlabel{fig:k4}{{1}{5}{The two mechanisms on a toy network: two dense clusters (each a $K_4$) joined by two sparse bridges. (a,b)~Preprocessing: the chain tensors on the bridges are rank-non-increasing, so the exact simplification pass absorbs them ($L_2, L_4 \to L_2^*, L_4^*$) before any search begins. (c,d)~Surgery: a converged annealed tree can freeze with a poor waist---the horizontal bipartition (c), which cuts through both clusters---while the cheap comparable-balance cut through the two bridges (d) is invisible to local tree moves; bounded FM on the tensor graph finds it, and both sides are rebuilt cold and spliced}{figure.1}{}}
-\citation{liu_2025_omeco_orders}
-\citation{liu_2025_omeco_orders}
-\citation{liu_2025_omeco_orders}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Preprocessing: exact simplification}{6}{subsection.5.1}\protected@file@percent }
-\newlabel{sec:simplify}{{5.1}{6}{Preprocessing: exact simplification}{subsection.5.1}{}}
+\citation{kalachev_2021_multi}
+\citation{geiger_2025_optimizing}
+\citation{guerrero_2026_bond}
+\citation{bayraktar_2023_cuquantum}
+\citation{smith_2018_opt}
+\@writefile{toc}{\contentsline {section}{\numberline {5}The algorithm: global cut surgery}{5}{section.5}\protected@file@percent }
+\newlabel{sec:algorithm}{{5}{5}{The algorithm: global cut surgery}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Preprocessing: exact simplification}{5}{subsection.5.1}\protected@file@percent }
+\newlabel{sec:simplify}{{5.1}{5}{Preprocessing: exact simplification}{subsection.5.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The two mechanisms on a toy network: two dense clusters (each a $K_4$) joined by two sparse bridges. (a,b)~Preprocessing: the chain tensors on the bridges are rank-non-increasing, so the exact simplification pass absorbs them ($L_2, L_4 \to L_2^*, L_4^*$) before any search begins. (c,d)~Surgery: a converged annealed tree can freeze with a poor waist---the horizontal bipartition (c), which cuts through both clusters---while the cheap comparable-balance cut through the two bridges (d) is invisible to local tree moves; bounded FM on the tensor graph finds it, and both sides are rebuilt cold and spliced.}}{6}{figure.1}\protected@file@percent }
+\newlabel{fig:k4}{{1}{6}{The two mechanisms on a toy network: two dense clusters (each a $K_4$) joined by two sparse bridges. (a,b)~Preprocessing: the chain tensors on the bridges are rank-non-increasing, so the exact simplification pass absorbs them ($L_2, L_4 \to L_2^*, L_4^*$) before any search begins. (c,d)~Surgery: a converged annealed tree can freeze with a poor waist---the horizontal bipartition (c), which cuts through both clusters---while the cheap comparable-balance cut through the two bridges (d) is invisible to local tree moves; bounded FM on the tensor graph finds it, and both sides are rebuilt cold and spliced}{figure.1}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Seeding and anytime behavior}{6}{subsection.5.2}\protected@file@percent }
 \newlabel{sec:anytime}{{5.2}{6}{Seeding and anytime behavior}{subsection.5.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {6}Evaluation}{6}{section.6}\protected@file@percent }
 \newlabel{sec:eval}{{6}{6}{Evaluation}{section.6}{}}
 \@writefile{toc}{\contentsline {paragraph}{Records.}{6}{section*.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{The time-quality Pareto front.}{6}{section*.6}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Distributions and scaling.}{6}{section*.7}\protected@file@percent }
-\citation{roa_2023_tensorinference}
-\citation{tibenchmarks_2023}
+\citation{liu_2025_omeco_orders}
+\citation{liu_2025_omeco_orders}
+\citation{liu_2025_omeco_orders}
 \@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The advantage, summarized. (a)~Record board: confirmed improvement over the tuned TreeSA reference on each instance (validator protocol: confirm-twice, worse-of-two, per-run relabeling); marker shape and color encode the mechanism, thick dashes mark instances where the tuned reference remains the record holder. (b)~Surface-code family: all repetitions at 90\,s versus code distance, anchored at the surgery median per distance --- the surgery advantage grows with $d$ while its run-to-run spread stays collapsed.}}{7}{figure.2}\protected@file@percent }
 \newlabel{fig:board}{{2}{7}{The advantage, summarized. (a)~Record board: confirmed improvement over the tuned TreeSA reference on each instance (validator protocol: confirm-twice, worse-of-two, per-run relabeling); marker shape and color encode the mechanism, thick dashes mark instances where the tuned reference remains the record holder. (b)~Surface-code family: all repetitions at 90\,s versus code distance, anchored at the surgery median per distance --- the surgery advantage grows with $d$ while its run-to-run spread stays collapsed}{figure.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{The time-quality Pareto front.}{7}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Distributions and scaling.}{7}{section*.7}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{External baselines.}{7}{section*.8}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Where the advantage ends.}{7}{section*.9}\protected@file@percent }
+\citation{roa_2023_tensorinference}
+\citation{tibenchmarks_2023}
 \@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Global cut surgery, instrumented. (a)~Every surgery call on the two record runs: incumbent waist cut weight versus the best comparable-balance cut found by bounded FM. All 835 points lie strictly below the diagonal---the annealed waist is never locally minimal (Sec.~\ref {sec:frozenwaist}). (b)~A representative surface-code $d{=}21$ run: incumbent $\ensuremath  {\mathrm  {tc}}$ (solid), accepted waist rebuilds (crosses), the pre-surgery record (dotted) and the official with-surgery median (dash-dotted).}}{8}{figure.3}\protected@file@percent }
 \newlabel{fig:waist}{{3}{8}{Global cut surgery, instrumented. (a)~Every surgery call on the two record runs: incumbent waist cut weight versus the best comparable-balance cut found by bounded FM. All 835 points lie strictly below the diagonal---the annealed waist is never locally minimal (Sec.~\ref {sec:frozenwaist}). (b)~A representative surface-code $d{=}21$ run: incumbent $\tc $ (solid), accepted waist rebuilds (crosses), the pre-surgery record (dotted) and the official with-surgery median (dash-dotted)}{figure.3}{}}
+\@writefile{toc}{\contentsline {paragraph}{Where the advantage ends.}{8}{section*.9}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {7}Application: inference workloads}{8}{section.7}\protected@file@percent }
 \newlabel{sec:inference}{{7}{8}{Application: inference workloads}{section.7}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Time-versus-quality Pareto view of the same-machine campaign (dedicated 2-core server, all runs single-threaded), in the presentation style of the OMEinsumContractionOrders benchmark study \cite  {liu_2025_omeco_orders}. Each point is one optimizer configuration or repetition. Baselines are the published implementations: Julia TreeSA across a 14-configuration ladder (both memory-target settings, 1--8 restarts, five sweep depths), GreedyMethod, HyperND, nine treewidth back-ends, and the cotengra hyper-optimizer with SA refinement at four budgets. Open blue triangles and red crosses are this work, at budgets from 10 to 900\,s. Our tuned TreeSA port (not shown) coincides with the Julia TreeSA points wherever configurations overlap. The dashed line is the non-dominated front. Global cut surgery (crosses) holds the entire high-quality wall of the front on both instances; the insets zoom the wall region (dotted window), where the separation is explicit: on Sycamore the surgery column sits at $\ensuremath  {\mathrm  {tc}}= 59.85$--$59.9$ from 90\,s on while every TreeSA point stays at $60.5$--$61.8$ at \emph  {all} budgets, and on surface code surgery reaches the $47.4$ floor at 30\,s while no TreeSA configuration gets below $48.75$ at any measured budget. Orderings beyond the axis range (BFS/MCS-style treewidth, up to $\ensuremath  {\mathrm  {tc}}= 443$) are omitted.}}{9}{figure.4}\protected@file@percent }
 \newlabel{fig:pareto}{{4}{9}{Time-versus-quality Pareto view of the same-machine campaign (dedicated 2-core server, all runs single-threaded), in the presentation style of the OMEinsumContractionOrders benchmark study \cite {liu_2025_omeco_orders}. Each point is one optimizer configuration or repetition. Baselines are the published implementations: Julia TreeSA across a 14-configuration ladder (both memory-target settings, 1--8 restarts, five sweep depths), GreedyMethod, HyperND, nine treewidth back-ends, and the cotengra hyper-optimizer with SA refinement at four budgets. Open blue triangles and red crosses are this work, at budgets from 10 to 900\,s. Our tuned TreeSA port (not shown) coincides with the Julia TreeSA points wherever configurations overlap. The dashed line is the non-dominated front. Global cut surgery (crosses) holds the entire high-quality wall of the front on both instances; the insets zoom the wall region (dotted window), where the separation is explicit: on Sycamore the surgery column sits at $\tc = 59.85$--$59.9$ from 90\,s on while every TreeSA point stays at $60.5$--$61.8$ at \emph {all} budgets, and on surface code surgery reaches the $47.4$ floor at 30\,s while no TreeSA configuration gets below $48.75$ at any measured budget. Orderings beyond the axis range (BFS/MCS-style treewidth, up to $\tc = 443$) are omitted}{figure.4}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {8}Conclusions}{9}{section.8}\protected@file@percent }
 \newlabel{sec:conclusions}{{8}{9}{Conclusions}{section.8}{}}
-\citation{anon_2025_optimizing}
+\citation{geiger_2025_optimizing}
 \citation{gray_2020_hyper}
 \citation{orgler_2024_optimizing}
 \citation{strasser_2017_computing}
 \citation{staudt_2024_improved}
 \citation{dumitrescu_2018_benchmarking}
 \citation{ibrahim_2022_constructing}
-\citation{gray_2020_hyper}
-\citation{markov_2005_simulating}
 \@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Records versus external baselines, all measured on the same server. Julia columns: over the configuration ladder of the reference implementation (OMEinsumContractionOrders.jl: TreeSA at $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}\in \{20, \infty \}$ with 1/4/8 restarts, HyperND, treewidth back-ends, run through its own harness), the best row whose measured runtime fits budget $B$. Cotengra column: median of three 90\,s single-threaded runs of the hyper-optimizer followed by subtree simulated annealing; under this protocol it is starved of the parallel trial sampling that is its main strength, so these rows are a protocol-matched reference, not a claim about cotengra at large. Bold marks the winner per instance. The dbn\_13 row is won by the treewidth back-end (min-fill), instantly---see Sec.~\ref {sec:inference}. reg3\_1000 is not in the Julia suite. nqueens\_28 is excluded: no ordering is stable at these budgets (see text).}}{10}{table.2}\protected@file@percent }
 \newlabel{tab:external}{{2}{10}{Records versus external baselines, all measured on the same server. Julia columns: over the configuration ladder of the reference implementation (OMEinsumContractionOrders.jl: TreeSA at $\scT \in \{20, \infty \}$ with 1/4/8 restarts, HyperND, treewidth back-ends, run through its own harness), the best row whose measured runtime fits budget $B$. Cotengra column: median of three 90\,s single-threaded runs of the hyper-optimizer followed by subtree simulated annealing; under this protocol it is starved of the parallel trial sampling that is its main strength, so these rows are a protocol-matched reference, not a claim about cotengra at large. Bold marks the winner per instance. The dbn\_13 row is won by the treewidth back-end (min-fill), instantly---see Sec.~\ref {sec:inference}. reg3\_1000 is not in the Julia suite. nqueens\_28 is excluded: no ordering is stable at these budgets (see text)}{table.2}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {A}Why search control cannot win: a certified null}{10}{appendix.A}\protected@file@percent }
@@ -78,15 +88,17 @@
 \newlabel{sec:null}{{A}{10}{Why search control cannot win: a certified null}{appendix.A}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Thirteen mechanisms, two toolchains, one frontier}{10}{subsection.A.1}\protected@file@percent }
 \newlabel{sec:frontier}{{A.1}{10}{Thirteen mechanisms, two toolchains, one frontier}{subsection.A.1}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Certified bounds: width-optimality and an impossibility result}{10}{subsection.A.2}\protected@file@percent }
-\newlabel{sec:bounds}{{A.2}{10}{Certified bounds: width-optimality and an impossibility result}{subsection.A.2}{}}
+\citation{gray_2020_hyper}
+\citation{markov_2005_simulating}
 \@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces The ten hardest UAI-2014 MAR instances (from a 65-instance scan): each method's $\ensuremath  {\mathrm  {tc}}$ above the per-instance frontier, same machine, 90\,s budgets for search methods. Filled triangles: TensorInference.jl's signature default. Squares: best tuned TreeSA from the Julia ladder. Open triangles: best elimination method (min-fill treewidth / HyperND; KaHyPar segfaults on all four linkage instances, so its rows there are min-fill only). Crosses: this work (best method, median of five). Shaded bands mark the two regimes.}}{11}{figure.5}\protected@file@percent }
 \newlabel{fig:inference}{{5}{11}{The ten hardest UAI-2014 MAR instances (from a 65-instance scan): each method's $\tc $ above the per-instance frontier, same machine, 90\,s budgets for search methods. Filled triangles: TensorInference.jl's signature default. Squares: best tuned TreeSA from the Julia ladder. Open triangles: best elimination method (min-fill treewidth / HyperND; KaHyPar segfaults on all four linkage instances, so its rows there are min-fill only). Crosses: this work (best method, median of five). Shaded bands mark the two regimes}{figure.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Certified bounds: width-optimality and an impossibility result}{11}{subsection.A.2}\protected@file@percent }
+\newlabel{sec:bounds}{{A.2}{11}{Certified bounds: width-optimality and an impossibility result}{subsection.A.2}{}}
 \newlabel{eq:interval}{{2}{11}{Certified bounds: width-optimality and an impossibility result}{equation.2}{}}
-\newlabel{thm:sum}{{1}{11}{Sum-form profile bound}{theorem.1}{}}
-\newlabel{thm:window}{{2}{11}{Dyadic-window bound}{theorem.2}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Distance of every scored optimizer from the frontier value (dashed line at zero). Open triangles: the thirteen search mechanisms of this work. Filled symbols: the tuned TreeSA reference ($\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}=\infty $, circle), cotengra's SA refiner (triangle), cotengra's hyper-optimizer (square), and the shipped-default TreeSA (cross).}}{12}{figure.6}\protected@file@percent }
 \newlabel{fig:frontier}{{6}{12}{Distance of every scored optimizer from the frontier value (dashed line at zero). Open triangles: the thirteen search mechanisms of this work. Filled symbols: the tuned TreeSA reference ($\scT =\infty $, circle), cotengra's SA refiner (triangle), cotengra's hyper-optimizer (square), and the shipped-default TreeSA (cross)}{figure.6}{}}
+\newlabel{thm:sum}{{1}{12}{Sum-form profile bound}{theorem.1}{}}
+\newlabel{thm:window}{{2}{12}{Dyadic-window bound}{theorem.2}{}}
 \newlabel{obs:cap}{{1}{12}{Profile bounds are capped at the bisection width}{observation.1}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {B}What does not work: falsified alternatives}{12}{appendix.B}\protected@file@percent }
 \newlabel{app:taxonomy}{{B}{12}{What does not work: falsified alternatives}{appendix.B}{}}
@@ -97,39 +109,50 @@
 \newlabel{app:supp}{{C}{13}{Supplementary figures}{appendix.C}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {D}Methodology: a research loop that distrusts itself}{13}{appendix.D}\protected@file@percent }
 \newlabel{sec:method}{{D}{13}{Methodology: a research loop that distrusts itself}{appendix.D}{}}
+\citation{hoppe_2026_algorithmic}
 \@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Isoperimetric profiles. The empirical profile $b(k)$ (solid) dips well below the bisection width (dotted) at off-center sizes; the certified marker shows the 141-tensor sycamore\_m20 subset with boundary exactly 40. This dip is what caps all profile-based bounds (Observation~\ref {obs:cap}).}}{14}{figure.8}\protected@file@percent }
 \newlabel{fig:profiles}{{8}{14}{Isoperimetric profiles. The empirical profile $b(k)$ (solid) dips well below the bisection width (dotted) at off-center sizes; the certified marker shows the 141-tensor sycamore\_m20 subset with boundary exactly 40. This dip is what caps all profile-based bounds (Observation~\ref {obs:cap})}{figure.8}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {E}How the algorithm was found: steered autonomous research}{14}{appendix.E}\protected@file@percent }
 \newlabel{sec:roadmap}{{E}{14}{How the algorithm was found: steered autonomous research}{appendix.E}{}}
 \bibstyle{plain}
 \bibdata{references}
-\bibcite{anon_2025_optimizing}{1}
-\bibcite{dumitrescu_2018_benchmarking}{2}
-\bibcite{gray_2020_hyper}{3}
-\bibcite{ibrahim_2022_constructing}{4}
-\bibcite{kalachev_2021_multi}{5}
-\bibcite{liu_2025_omeco_orders}{6}
+\bibcite{bayraktar_2023_cuquantum}{1}
 \@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Cost-profile conservation at the frontier. Bars count contractions within $1.0$ (solid) and $2.0$ (outline) of the largest; labels give each tree's peak cost and $\ensuremath  {\mathrm  {tc}}$. Trees that lower the peak by one unit acquire several times more near-peak contractions at essentially unchanged $\ensuremath  {\mathrm  {tc}}$.}}{15}{figure.9}\protected@file@percent }
 \newlabel{fig:conservation}{{9}{15}{Cost-profile conservation at the frontier. Bars count contractions within $1.0$ (solid) and $2.0$ (outline) of the largest; labels give each tree's peak cost and $\tc $. Trees that lower the peak by one unit acquire several times more near-peak contractions at essentially unchanged $\tc $}{figure.9}{}}
-\bibcite{liu_2022_verifying}{7}
-\bibcite{markov_2005_simulating}{8}
-\bibcite{orgler_2024_optimizing}{9}
-\bibcite{pfeifer_2013_faster}{10}
-\bibcite{roa_2023_tensorinference}{11}
-\bibcite{tibenchmarks_2023}{12}
-\bibcite{staudt_2024_improved}{13}
-\bibcite{strasser_2017_computing}{14}
+\bibcite{dumitrescu_2018_benchmarking}{2}
+\bibcite{fiduccia_1982_linear}{3}
+\bibcite{geiger_2025_optimizing}{4}
+\bibcite{gray_2020_hyper}{5}
+\bibcite{guerrero_2026_bond}{6}
+\bibcite{hoppe_2026_algorithmic}{7}
+\bibcite{ibaraki_1984_optimal}{8}
+\bibcite{ibrahim_2022_constructing}{9}
+\bibcite{kalachev_2021_multi}{10}
 \@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces The falsified-mechanism taxonomy. Each row is an implemented, scored, and diagnosed attempt; attempt numbers index the public audit trail. The four families fail for four distinct measured reasons, and none of the failures is a tuning accident.}}{16}{table.3}\protected@file@percent }
 \newlabel{tab:taxonomy}{{3}{16}{The falsified-mechanism taxonomy. Each row is an implemented, scored, and diagnosed attempt; attempt numbers index the public audit trail. The four families fail for four distinct measured reasons, and none of the failures is a tuning accident}{table.3}{}}
-\bibcite{tamaki_2017_positive}{15}
+\bibcite{lam_1997_optimizing}{11}
+\bibcite{liu_2025_omeco_orders}{12}
+\bibcite{liu_2022_verifying}{13}
+\bibcite{markov_2005_simulating}{14}
+\bibcite{meirom_2022_optimizing}{15}
+\bibcite{orgler_2024_optimizing}{16}
+\bibcite{pfeifer_2013_faster}{17}
+\bibcite{roa_2023_tensorinference}{18}
+\bibcite{tibenchmarks_2023}{19}
+\bibcite{smith_2018_opt}{20}
 \@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Best $\ensuremath  {\mathrm  {tc}}$ reached in 90\,s of single-threaded annealing versus the memory target $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}$ (median of three runs; whiskers span the range). The dashed line marks the converged frontier of Appendix~\ref {app:null}; the dotted vertical line marks the natural space cost of optimum-quality trees. The transition is a cliff at the natural value: every smaller target is comparably harmful, and every target at or above it, including $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}=\infty $, reaches the frontier. The shipped default is $\ensuremath  {\mathrm  {sc}_{\mathrm  {target}}}=20$.}}{17}{figure.10}\protected@file@percent }
 \newlabel{fig:sweep}{{10}{17}{Best $\tc $ reached in 90\,s of single-threaded annealing versus the memory target $\scT $ (median of three runs; whiskers span the range). The dashed line marks the converged frontier of Appendix~\ref {app:null}; the dotted vertical line marks the natural space cost of optimum-quality trees. The transition is a cliff at the natural value: every smaller target is comparably harmful, and every target at or above it, including $\scT =\infty $, reaches the frontier. The shipped default is $\scT =20$}{figure.10}{}}
+\bibcite{staudt_2024_improved}{21}
+\bibcite{stoian_2022_optimal}{22}
+\bibcite{strasser_2017_computing}{23}
+\bibcite{tamaki_2017_positive}{24}
+\bibcite{xu_2023_np}{25}
 \@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces The preprocessing pass. (a)~Fraction of tensors removed by the exact rank-non-increasing pass; the random-regular control is untouched at $0\%$. (b)~The Sycamore 53q record march: the tuned reference (leftmost) and three successive simplify-then-anneal attempts. The same anneal without simplification reaches $76.0$ (off scale): preprocessing, not search, carries this improvement.}}{18}{figure.11}\protected@file@percent }
 \newlabel{fig:simplify}{{11}{18}{The preprocessing pass. (a)~Fraction of tensors removed by the exact rank-non-increasing pass; the random-regular control is untouched at $0\%$. (b)~The Sycamore 53q record march: the tuned reference (leftmost) and three successive simplify-then-anneal attempts. The same anneal without simplification reaches $76.0$ (off scale): preprocessing, not search, carries this improvement}{figure.11}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Run distributions of the same-machine campaign: all 15 repetitions per instance at 90\,s, centered on the tuned reference's median. Circles are the tuned reference, squares the best method per instance.}}{18}{figure.12}\protected@file@percent }
-\newlabel{fig:campaign}{{12}{18}{Run distributions of the same-machine campaign: all 15 repetitions per instance at 90\,s, centered on the tuned reference's median. Circles are the tuned reference, squares the best method per instance}{figure.12}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Run distributions of the same-machine campaign: all 15 repetitions per instance at 90\,s, centered on the tuned reference's median. Circles are the tuned reference, squares the best method per instance.}}{19}{figure.12}\protected@file@percent }
+\newlabel{fig:campaign}{{12}{19}{Run distributions of the same-machine campaign: all 15 repetitions per instance at 90\,s, centered on the tuned reference's median. Circles are the tuned reference, squares the best method per instance}{figure.12}{}}
 \@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Best verified $\ensuremath  {\mathrm  {tc}}$ over the research-loop cycles. Apparent progress in cycle~2 is reclaimed by the strengthened reference (cycle~2.5); thereafter the closed-instance frontier is flat while the certified picture grows, and cycles 7--10 move the record board on the large structured instances instead. Annotations mark the three instrument-caught failure modes.}}{19}{figure.13}\protected@file@percent }
 \newlabel{fig:timeline}{{13}{19}{Best verified $\tc $ over the research-loop cycles. Apparent progress in cycle~2 is reclaimed by the strengthened reference (cycle~2.5); thereafter the closed-instance frontier is flat while the certified picture grows, and cycles 7--10 move the record board on the large structured instances instead. Annotations mark the three instrument-caught failure modes}{figure.13}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces The research roadmap, left to right. Top row (grey): the human steering prompts, essentially verbatim. Bottom row: the result-carrying attempts only; most of the 56 attempts are controls and falsifications that feed Table~\ref {tab:taxonomy} and Appendix~\ref {sec:method}. Each numbered arrow is a transition forced by a measurement: (1) the gate was passed without an algorithm, so the gate was hardened and references ratcheted; (2) tc saturated and was certified locally optimal, so the objective axis changed to arrival time; (3) speed gains sat at the confirmation noise floor while scale budgets were non-converged, so the regime changed; (4) the winning mechanisms proved complementary, so they were composed while exploration continued; (5) every win injected global information as \emph  {input} while every search-control variant failed, so global information was aimed directly at the local search's blind spot---the dominant cut; (6) the mechanism portfolio was complete, so it was pointed at a second application domain to test transfer.}}{19}{figure.14}\protected@file@percent }
-\newlabel{fig:roadmap}{{14}{19}{The research roadmap, left to right. Top row (grey): the human steering prompts, essentially verbatim. Bottom row: the result-carrying attempts only; most of the 56 attempts are controls and falsifications that feed Table~\ref {tab:taxonomy} and Appendix~\ref {sec:method}. Each numbered arrow is a transition forced by a measurement: (1) the gate was passed without an algorithm, so the gate was hardened and references ratcheted; (2) tc saturated and was certified locally optimal, so the objective axis changed to arrival time; (3) speed gains sat at the confirmation noise floor while scale budgets were non-converged, so the regime changed; (4) the winning mechanisms proved complementary, so they were composed while exploration continued; (5) every win injected global information as \emph {input} while every search-control variant failed, so global information was aimed directly at the local search's blind spot---the dominant cut; (6) the mechanism portfolio was complete, so it was pointed at a second application domain to test transfer}{figure.14}{}}
-\gdef \@abspage@last{19}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces The research roadmap, left to right. Top row (grey): the human steering prompts, essentially verbatim. Bottom row: the result-carrying attempts only; most of the 56 attempts are controls and falsifications that feed Table~\ref {tab:taxonomy} and Appendix~\ref {sec:method}. Each numbered arrow is a transition forced by a measurement: (1) the gate was passed without an algorithm, so the gate was hardened and references ratcheted; (2) tc saturated and was certified locally optimal, so the objective axis changed to arrival time; (3) speed gains sat at the confirmation noise floor while scale budgets were non-converged, so the regime changed; (4) the winning mechanisms proved complementary, so they were composed while exploration continued; (5) every win injected global information as \emph  {input} while every search-control variant failed, so global information was aimed directly at the local search's blind spot---the dominant cut; (6) the mechanism portfolio was complete, so it was pointed at a second application domain to test transfer.}}{20}{figure.14}\protected@file@percent }
+\newlabel{fig:roadmap}{{14}{20}{The research roadmap, left to right. Top row (grey): the human steering prompts, essentially verbatim. Bottom row: the result-carrying attempts only; most of the 56 attempts are controls and falsifications that feed Table~\ref {tab:taxonomy} and Appendix~\ref {sec:method}. Each numbered arrow is a transition forced by a measurement: (1) the gate was passed without an algorithm, so the gate was hardened and references ratcheted; (2) tc saturated and was certified locally optimal, so the objective axis changed to arrival time; (3) speed gains sat at the confirmation noise floor while scale budgets were non-converged, so the regime changed; (4) the winning mechanisms proved complementary, so they were composed while exploration continued; (5) every win injected global information as \emph {input} while every search-control variant failed, so global information was aimed directly at the local search's blind spot---the dominant cut; (6) the mechanism portfolio was complete, so it was pointed at a second application domain to test transfer}{figure.14}{}}
+\gdef \@abspage@last{20}

@@ -3,50 +3,49 @@ Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: plain.bst
 Database file #1: references.bib
-Warning--to sort, need author or key in anon_2025_optimizing
-Warning--empty author in anon_2025_optimizing
-Warning--empty booktitle in anon_2025_optimizing
+Warning--empty booktitle in guerrero_2026_bond
+Warning--empty booktitle in hoppe_2026_algorithmic
 Warning--empty booktitle in kalachev_2021_multi
 Warning--empty journal in staudt_2024_improved
-You've used 15 entries,
+You've used 25 entries,
             2118 wiz_defined-function locations,
-            584 strings with 6906 characters,
-and the built_in function-call counts, 5062 in all, are:
-= -- 466
-> -- 296
-< -- 2
-+ -- 117
-- -- 102
-* -- 360
-:= -- 869
-add.period$ -- 44
-call.type$ -- 15
-change.case$ -- 96
+            644 strings with 9169 characters,
+and the built_in function-call counts, 9048 in all, are:
+= -- 828
+> -- 582
+< -- 3
++ -- 230
+- -- 204
+* -- 670
+:= -- 1580
+add.period$ -- 75
+call.type$ -- 25
+change.case$ -- 177
 chr.to.int$ -- 0
-cite$ -- 20
-duplicate$ -- 174
-empty$ -- 364
-format.name$ -- 102
-if$ -- 1034
+cite$ -- 29
+duplicate$ -- 293
+empty$ -- 605
+format.name$ -- 204
+if$ -- 1826
 int.to.chr$ -- 0
-int.to.str$ -- 15
-missing$ -- 13
-newline$ -- 77
-num.names$ -- 28
-pop$ -- 101
+int.to.str$ -- 25
+missing$ -- 23
+newline$ -- 128
+num.names$ -- 50
+pop$ -- 170
 preamble$ -- 1
-purify$ -- 81
+purify$ -- 152
 quote$ -- 0
-skip$ -- 133
+skip$ -- 220
 stack$ -- 0
-substring$ -- 241
-swap$ -- 30
-text.length$ -- 2
+substring$ -- 428
+swap$ -- 49
+text.length$ -- 3
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 60
-warning$ -- 5
-while$ -- 39
-width$ -- 17
-write$ -- 158
-(There were 5 warnings)
+type$ -- 100
+warning$ -- 4
+while$ -- 69
+width$ -- 27
+write$ -- 268
+(There were 4 warnings)

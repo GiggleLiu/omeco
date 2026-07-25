@@ -1,8 +1,15 @@
 \begin{thebibliography}{10}
 
-\bibitem{anon_2025_optimizing}
-Optimizing tensor network partitioning using simulated annealing.
-\newblock 2025.
+\bibitem{bayraktar_2023_cuquantum}
+H.~Bayraktar, A.~Charara, David Clark, S.~Cohen, Timothy~B. Costa, Yao-Lung~L.
+  Fang, Yang Gao, J.~Guan, John~A. Gunnels, A.~Haidar, A.~Hehn, Markus
+  Hohnerbach, Matthew~T. Jones, Tom Lubowe, Dmitry~I. Lyakh, S.~Morino,
+  P.~Springer, Sam~W. Stanwyck, I.~Terentyev, S.~Varadhan, Jonathan Wong, and
+  Takuma Yamaguchi.
+\newblock cuquantum sdk: A high-performance library for accelerating quantum
+  science.
+\newblock {\em 2023 IEEE International Conference on Quantum Computing and
+  Engineering (QCE)}, 01:1050--1061, 2023.
 
 \bibitem{dumitrescu_2018_benchmarking}
 E.~Dumitrescu, A.~L. Fisher, T.~Goodrich, T.~Humble, Blair~D. Sullivan, and
@@ -11,10 +18,39 @@ E.~Dumitrescu, A.~L. Fisher, T.~Goodrich, T.~Humble, Blair~D. Sullivan, and
   simulations.
 \newblock {\em PLoS ONE}, 13, 2018.
 
+\bibitem{fiduccia_1982_linear}
+C.~M. Fiduccia and R.~M. Mattheyses.
+\newblock A linear-time heuristic for improving network partitions.
+\newblock {\em 19th Design Automation Conference}, pages 175--181, 1982.
+
+\bibitem{geiger_2025_optimizing}
+Marcel Geiger, Qunsheng Huang, and Christian~B. Mendl.
+\newblock Optimizing tensor network partitioning using simulated annealing,
+  2025.
+\newblock arXiv:2507.20667.
+
 \bibitem{gray_2020_hyper}
 Johnnie Gray and S.~Kourtis.
 \newblock Hyper-optimized tensor network contraction.
 \newblock {\em Quantum}, 5:410, 2020.
+
+\bibitem{guerrero_2026_bond}
+Rubén~Darío Guerrero.
+\newblock Bond-dimension scaling of a local-refinement advantage over
+  hyperoptimized tensor-network contraction on sycamore like topologies.
+\newblock 2026.
+
+\bibitem{hoppe_2026_algorithmic}
+Fabian Hoppe, Melven Rohrig-Zollner, and Philipp Knechtges.
+\newblock Algorithmic algorithm development with llms: A case study on
+  llm-usage for contraction order optimization in tensor networks.
+\newblock 2026.
+
+\bibitem{ibaraki_1984_optimal}
+T.~Ibaraki and T.~Kameda.
+\newblock On the optimal nesting order for computing n-relational joins.
+\newblock {\em ACM Transactions on Database Systems (TODS)}, 9:482 -- 502,
+  1984.
 
 \bibitem{ibrahim_2022_constructing}
 Cameron Ibrahim, Danylo Lykov, Zichang He, Y.~Alexeev, and Ilya Safro.
@@ -28,12 +64,17 @@ G.~Kalachev, Pavel Panteleev, and M.~Yung.
 \newblock Multi-tensor contraction for xeb verification of quantum circuits.
 \newblock 2021.
 
+\bibitem{lam_1997_optimizing}
+Chi-Chung Lam, P.~Sadayappan, and R.~Wenger.
+\newblock On optimizing a class of multi-dimensional loops with reductions for
+  parallel execution.
+\newblock {\em Parallel Process. Lett.}, 7:157--168, 1997.
+
 \bibitem{liu_2025_omeco_orders}
 Jin-Guo Liu, Xuanzhao Gao, and Richard Samuelson.
-\newblock {OMEinsumContractionOrders}: A {Julia} package for tensor network
-  contraction order optimization, 2025.
-\newblock Manuscript; software at
-  \url{https://github.com/TensorBFS/OMEinsumContractionOrders.jl}.
+\newblock Omeinsumcontractionorders: A julia package for tensor network
+  contraction order optimization.
+\newblock {\em J. Open Source Softw.}, 11:9886, 2026.
 
 \bibitem{liu_2022_verifying}
 Yong Liu, Yaojian Chen, Chu Guo, Jiawei Song, X.~Shi, Lin Gan, Wenzhao Wu, Wei
@@ -47,6 +88,11 @@ Yong Liu, Yaojian Chen, Chu Guo, Jiawei Song, X.~Shi, Lin Gan, Wenzhao Wu, Wei
 Igor~L. Markov and Yaoyun Shi.
 \newblock Simulating quantum computation by contracting tensor networks.
 \newblock {\em SIAM Journal on Computing}, 38(3):963--981, 2008.
+
+\bibitem{meirom_2022_optimizing}
+E.~Meirom, Haggai Maron, Shie Mannor, and Gal Chechik.
+\newblock Optimizing tensor network contraction using reinforcement learning.
+\newblock {\em ArXiv}, abs/2204.09052, 2022.
 
 \bibitem{orgler_2024_optimizing}
 Sheela Orgler and Mark Blacher.
@@ -74,11 +120,23 @@ Martin {Roa-Villescas} and Jin-Guo Liu.
   {UAI} 2014 networks, 2023.
 \newblock \url{https://github.com/TensorBFS/TensorInferenceBenchmarks.jl}.
 
+\bibitem{smith_2018_opt}
+Daniel Smith and Johnnie Gray.
+\newblock opt\_einsum - a python package for optimizing contraction order for
+  einsum-like expressions.
+\newblock {\em J. Open Source Softw.}, 3:753, 2018.
+
 \bibitem{staudt_2024_improved}
 Christoph Staudt, Mark Blacher, Julien Klaus, Farin Lippmann, and Joachim
   Giesen.
 \newblock Improved cut strategy for tensor network contraction orders.
 \newblock pages 27:1--27:19, 2024.
+
+\bibitem{stoian_2022_optimal}
+Mihail Stoian, Richard~M. Milbradt, and C.~Mendl.
+\newblock On the optimal linear contraction order of tree tensor networks, and
+  beyond.
+\newblock {\em SIAM J. Sci. Comput.}, 46:647--, 2022.
 
 \bibitem{strasser_2017_computing}
 Ben Strasser.
@@ -89,5 +147,10 @@ Ben Strasser.
 H.~Tamaki.
 \newblock Positive-instance driven dynamic programming for treewidth.
 \newblock {\em Journal of Combinatorial Optimization}, 37:1283 -- 1311, 2017.
+
+\bibitem{xu_2023_np}
+Jianyu Xu, Hanwen Zhang, Ling Liang, Lei Deng, Yuan Xie, and Guoqi Li.
+\newblock Np-hardness of tensor network contraction ordering.
+\newblock {\em ArXiv}, abs/2310.06140, 2023.
 
 \end{thebibliography}

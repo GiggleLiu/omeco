@@ -84,8 +84,11 @@ simulated-annealing tree refiners \cite{kalachev_2021_multi},
 hyper-optimized portfolios over greedy and hypergraph-partitioning
 constructions \cite{gray_2020_hyper, staudt_2024_improved}, treewidth
 machinery from the parameterized-algorithms community
-\cite{dumitrescu_2018_benchmarking, tamaki_2017_positive}, and exact
-methods for small networks \cite{pfeifer_2013_faster}. Among these, tuned
+\cite{dumitrescu_2018_benchmarking, tamaki_2017_positive}, exact
+methods for small networks \cite{pfeifer_2013_faster}, and, recently,
+learned optimizers---reinforcement-learning policies
+\cite{meirom_2022_optimizing} and LLM-evolved heuristics
+\cite{hoppe_2026_algorithmic}. Among these, tuned
 simulated annealing over contraction trees is in practice the strongest
 general-purpose refiner: as we show below, thirteen mechanically distinct
 search paradigms and an independent toolchain all converge onto its
@@ -162,9 +165,15 @@ indices), the two standard quality measures are the total time cost
   \label{eq:tc}
 \end{equation}
 a log-sum-exp over all $|V|-1$ contractions, and the space cost $\sct$,
-the $\log_2$ size of the largest intermediate tensor. All numbers in this
-paper are $\log_2$ quantities; a difference of $1.0$ is a factor of two
-in flops. Equation~\eqref{eq:tc} is the root of everything that follows:
+the $\log_2$ size of the largest intermediate tensor. Minimizing
+\eqref{eq:tc} is NP-hard \cite{xu_2023_np}, a hardness discovered
+independently three times: for join ordering in relational databases
+\cite{ibaraki_1984_optimal}, for sum-of-products loop optimization in
+compilers \cite{lam_1997_optimizing}, and for tensor networks---and
+algorithms migrate across these communities, most recently join-ordering
+algorithms into tensor networks \cite{stoian_2022_optimal}. All numbers
+in this paper are $\log_2$ quantities; a difference of $1.0$ is a
+factor of two in flops. Equation~\eqref{eq:tc} is the root of everything that follows:
 because $\tc$ is a log-sum-exp, the converged tree's cost is carried
 almost entirely by its most expensive contraction---the \emph{waist}.
 
@@ -315,7 +324,8 @@ The question is whether the frozen waist is actually good \emph{as a
 cut}. We instrumented every surgery call of the algorithm of
 Sec.~\ref{sec:algorithm} on its two record runs: at each converged
 incumbent, extract the waist bipartition and run a bounded
-Fiduccia--Mattheyses (FM) search for a cheaper cut of comparable balance
+Fiduccia--Mattheyses (FM) \cite{fiduccia_1982_linear} search for a
+cheaper cut of comparable balance
 on the tensor hypergraph, recording the incumbent's cut weight, the best
 alternative found, and the structure of the improved cut.
 
@@ -396,16 +406,33 @@ $36.8$), while surgery without a competent annealed incumbent has
 nothing worth repairing. All knobs scale with instance size; nothing is
 tuned per instance.
 
+\emph{Relation to prior refiners.} Refinement layered on top of a
+construction is an active line: the TreeSA family itself
+\cite{kalachev_2021_multi}, simulated annealing over partition
+assignments \cite{geiger_2025_optimizing}, and, closest to this work,
+nearest-neighbor-interchange refinement of hyper-optimizer output,
+whose gain over cotengra grows with bond dimension
+\cite{guerrero_2026_bond}. All of these move the \emph{tree} locally.
+Surgery differs in kind: it improves the dominant \emph{cut} as a
+graph problem and hands the result back as input to a rebuild---and the
+measurement of Sec.~\ref{sec:frozenwaist} is precisely that the local
+refiners' fixed point leaves this cut improvable every time.
+
 \subsection{Preprocessing: exact simplification}
 \label{sec:simplify}
 
 Real-provenance networks carry large amounts of
 \emph{rank-non-increasing} structure: tensors whose contraction with a
 neighbor can never increase any intermediate rank (rank-1 spiders,
-dangling legs, series chains). Before any search, a preprocessing pass
-contracts this structure away greedily; the optimizer runs on the
-reduced network, and the contracted fragments are spliced back into the
-final tree as fixed subtrees. The pass is exact and costs milliseconds.
+dangling legs, series chains). Preprocessing of this kind is established practice
+(cuTensorNet's pathfinder simplifies before partitioning
+\cite{bayraktar_2023_cuquantum}, and opt\_einsum removes
+single-tensor reductions \cite{smith_2018_opt}); our pass is the exact
+rank-non-increasing closure with splice-back, so it composes with the
+record protocol. Before any search, the pass contracts this structure
+away greedily; the optimizer runs on the reduced network, and the
+contracted fragments are spliced back into the final tree as fixed
+subtrees. The pass is exact and costs milliseconds.
 
 Its effect is largest exactly where synthetic benchmarks never look
 (Fig.~\ref{fig:simplify}a, Appendix~\ref{app:supp}): $88.7\%$ of the real Sycamore network's 3369
@@ -733,7 +760,7 @@ anecdotal.
 We attempted to beat the tuned reference with mechanically distinct
 search paradigms, implemented independently and scored under the protocol
 of Sec.~\ref{sec:setup}: coarse subtree-transfer moves and basin hopping
-\cite{anon_2025_optimizing}, evolutionary replica populations,
+\cite{geiger_2025_optimizing}, evolutionary replica populations,
 exact-penalty ramps, tabu search with strategic oscillation,
 large-neighborhood destroy-and-repair, beam search with lookahead,
 Boltzmann-greedy portfolios \cite{gray_2020_hyper, orgler_2024_optimizing},
@@ -1036,7 +1063,10 @@ cycle reports) ships with the code.
 
 The algorithm of this paper was produced by an autonomous research loop
 (machine-proposed hypotheses, isolated implementations, hardened scoring)
-that was \emph{steered} by a small number of human decisions. Because the
+that was \emph{steered} by a small number of human decisions. (For
+LLM-driven \emph{heuristic evolution} on this same problem---automated
+search over code rather than a steered hypothesis loop---see
+\cite{hoppe_2026_algorithmic}.) Because the
 loop retained every artifact, the causal path from the opening question to
 the algorithm can be reconstructed exactly. Figure~\ref{fig:roadmap}
 shows that path left to right: the top row quotes the steering prompts,
