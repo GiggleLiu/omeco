@@ -1,0 +1,74 @@
+simplify: n_orig=828 n_reduced=184 shrink=0.7778 t_simp=4ms
+t_seed=604ms tc_seed=27.2324 seed_trials=61
+t_dp=892ms tc_greedy=26.0324
+t_mcts=14775ms mcts: backup=min rollouts=1984 rate=134/s depth=4 nodes=1985 improves=0 tc_mcts=26.0324
+ATTRIBUTION tc_greedy=26.0324 tc_mcts_prepolish=26.0324 mcts_beats_greedy=false
+t=14812ms polish_tc=25.4223
+t=14826ms polish_tc=25.3803
+t=14842ms polish_tc=25.2358
+t=14856ms polish_tc=24.3355
+t=14870ms polish_tc=23.9828
+t=14886ms polish_tc=23.9751
+t=14902ms polish_tc=23.9687
+t=14919ms polish_tc=23.8802
+t=14935ms polish_tc=23.7771
+t=14954ms polish_tc=23.7708
+t=14976ms polish_tc=23.7009
+t=14994ms polish_tc=23.6342
+t=15013ms polish_tc=23.6122
+t=15031ms polish_tc=23.6110
+t=15050ms polish_tc=23.6051
+t=15068ms polish_tc=23.5893
+t=15088ms polish_tc=23.5841
+t=15106ms polish_tc=23.5704
+t=15126ms polish_tc=23.5664
+t=15146ms polish_tc=23.5267
+t=15167ms polish_tc=23.4126
+t=15185ms polish_tc=23.3972
+t=15202ms polish_tc=23.3967
+t=15217ms polish_tc=23.3882
+t=15237ms polish_tc=23.3861
+t=15254ms polish_tc=23.3834
+t=15271ms polish_tc=23.3829
+t=15289ms polish_tc=23.3741
+t=15515ms polish_tc=23.3732
+t=15526ms polish_tc=23.3687
+t=15539ms polish_tc=23.3685
+t=15583ms polish_tc=23.3682
+t=15594ms polish_tc=23.3682
+t=15606ms polish_tc=23.3681
+t=15618ms polish_tc=23.3678
+t=15630ms polish_tc=23.3677
+t=15690ms polish_tc=23.3657
+t=15703ms polish_tc=23.3657
+t=15716ms polish_tc=23.3654
+t=15729ms polish_tc=23.3582
+t=15742ms polish_tc=23.3517
+t=15755ms polish_tc=23.3502
+t=15770ms polish_tc=23.3497
+t=15784ms polish_tc=23.3480
+t=15796ms polish_tc=23.3464
+t=15811ms polish_tc=23.3463
+t=15832ms polish_tc=23.3460
+t=15845ms polish_tc=23.3460
+t=15923ms polish_tc=23.3451
+t=15935ms polish_tc=23.3444
+t=15946ms polish_tc=23.3363
+t=15958ms polish_tc=23.3183
+t=15970ms polish_tc=23.3183
+t=15992ms polish_tc=23.3132
+t=16003ms polish_tc=23.3132
+t=16016ms polish_tc=23.3108
+t=16028ms polish_tc=23.3107
+t=16042ms polish_tc=23.3105
+t=16055ms polish_tc=23.3105
+t=17565ms polish_tc=23.3062
+t=20467ms polish_tc=23.3036
+t=20599ms polish_tc=23.3016
+t=20611ms polish_tc=23.3015
+t=20625ms polish_tc=23.3014
+t=23606ms polish_tc=23.3008
+t=23623ms polish_tc=23.3004
+t=23649ms polish_tc=23.3001
+anneal_sweeps=943288 cycles=96 fresh=78
+t_final=87302ms tc_greedy=26.0324 tc_mcts=26.0324 tc_final=23.3001 tc_full=23.3009 leaves=828

@@ -22,6 +22,9 @@ const INSTANCES = [
 
 function optimizers()
     opts = Any[
+        # TensorInference's TensorNetworkModel signature default:
+        ("TI-default-Greedy", GreedyMethod()),
+        # TensorInference's benchmark/docs TreeSA config:
         ("TI-default-TreeSA", TreeSA(ntrials=1, niters=5, βs=0.1:0.1:100.0)),
         ("HyperND", HyperND()),
         ("Treewidth-MF", Treewidth(alg=MF())),

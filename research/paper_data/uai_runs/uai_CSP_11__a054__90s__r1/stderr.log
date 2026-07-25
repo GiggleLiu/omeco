@@ -1,0 +1,1792 @@
+probe: instance=uai_CSP_11 n_orig=544 n=372 fusible=0.3162 nlabels=59 t=6ms
+seed_greedy tc=38.3322 t=514ms
+t=559ms iter=1 WAIST cost=28.0000 best_alt=23.0000 gap=5.0000 tried=5 sep_labels=16 clique_frac=0.76
+t=649ms iter=1 REBUILD ACCEPT new_tc=29.1870 (was 29.6551)
+t=702ms iter=1 incumb=29.1870 ratchet=28.0399 best=27.9957 since_improve=0
+t=710ms iter=2 WAIST cost=26.0000 best_alt=14.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.78
+t=804ms iter=2 REBUILD ACCEPT new_tc=27.6870 (was 28.0399)
+t=854ms iter=2 incumb=27.6870 ratchet=27.8188 best=27.6870 since_improve=1
+t=860ms iter=3 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=949ms iter=3 REBUILD reject new_tc=28.9173 (was 27.6870)
+t=998ms iter=3 incumb=27.6870 ratchet=27.8602 best=27.6870 since_improve=2
+t=1003ms iter=4 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=1093ms iter=4 REBUILD reject new_tc=28.7468 (was 27.6870)
+t=1143ms iter=4 incumb=27.6870 ratchet=28.6913 best=27.6870 since_improve=3
+t=1150ms iter=5 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=1240ms iter=5 REBUILD reject new_tc=28.8395 (was 27.6870)
+t=1289ms iter=5 incumb=27.6870 ratchet=28.3751 best=27.6870 since_improve=4
+t=1295ms iter=6 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=1386ms iter=6 REBUILD reject new_tc=28.5966 (was 27.6870)
+t=1435ms iter=6 incumb=27.6870 ratchet=28.3257 best=27.6870 since_improve=5
+t=1442ms iter=7 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=1533ms iter=7 REBUILD reject new_tc=29.3370 (was 27.6870)
+t=1581ms iter=7 incumb=27.6870 ratchet=27.8889 best=27.6870 since_improve=6
+t=1591ms iter=8 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=1682ms iter=8 REBUILD reject new_tc=28.3534 (was 27.6870)
+t=1732ms iter=8 incumb=27.6870 ratchet=28.6140 best=27.6870 since_improve=7
+t=1738ms iter=9 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=1827ms iter=9 REBUILD reject new_tc=28.9798 (was 27.6870)
+t=1877ms iter=9 incumb=27.6870 ratchet=27.7808 best=27.6870 since_improve=8
+t=1883ms iter=10 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=1973ms iter=10 REBUILD reject new_tc=29.4853 (was 27.6870)
+t=2022ms iter=10 incumb=27.6870 ratchet=28.4523 best=27.6870 since_improve=9
+t=2029ms iter=11 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=2119ms iter=11 REBUILD reject new_tc=28.4454 (was 27.6870)
+t=2170ms iter=11 incumb=27.6870 ratchet=29.1391 best=27.6870 since_improve=10
+t=2177ms iter=12 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=2267ms iter=12 REBUILD reject new_tc=28.5058 (was 27.6870)
+t=2328ms iter=12 incumb=27.6870 ratchet=27.5842 best=27.5505 since_improve=0
+t=2332ms iter=13 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=2432ms iter=13 REBUILD reject new_tc=28.7289 (was 27.5842)
+t=2481ms iter=13 incumb=27.5842 ratchet=28.0727 best=27.5505 since_improve=1
+t=2486ms iter=14 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=2582ms iter=14 REBUILD reject new_tc=28.7264 (was 27.5842)
+t=2632ms iter=14 incumb=27.5842 ratchet=28.8012 best=27.5505 since_improve=2
+t=2637ms iter=15 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=2732ms iter=15 REBUILD reject new_tc=28.0157 (was 27.5842)
+t=2781ms iter=15 incumb=27.5842 ratchet=28.3803 best=27.5505 since_improve=3
+t=2787ms iter=16 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=2878ms iter=16 REBUILD reject new_tc=28.4418 (was 27.5842)
+t=2926ms iter=16 incumb=27.5842 ratchet=27.7650 best=27.5505 since_improve=4
+t=2930ms iter=17 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=3023ms iter=17 REBUILD reject new_tc=28.7481 (was 27.5842)
+t=3072ms iter=17 incumb=27.5842 ratchet=27.6010 best=27.5505 since_improve=5
+t=3078ms iter=18 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=3172ms iter=18 REBUILD reject new_tc=28.5795 (was 27.5842)
+t=3221ms iter=18 incumb=27.5842 ratchet=27.8893 best=27.5505 since_improve=6
+t=3227ms iter=19 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=3320ms iter=19 REBUILD reject new_tc=28.7370 (was 27.5842)
+t=3370ms iter=19 incumb=27.5842 ratchet=27.8096 best=27.5505 since_improve=7
+t=3374ms iter=20 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=3465ms iter=20 REBUILD reject new_tc=28.1555 (was 27.5842)
+t=3515ms iter=20 incumb=27.5842 ratchet=27.9819 best=27.5505 since_improve=8
+t=3518ms iter=21 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=3614ms iter=21 REBUILD reject new_tc=29.5023 (was 27.5842)
+t=3663ms iter=21 incumb=27.5842 ratchet=27.7698 best=27.5505 since_improve=9
+t=3668ms iter=22 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=3761ms iter=22 REBUILD reject new_tc=28.5833 (was 27.5842)
+t=3821ms iter=22 incumb=27.5842 ratchet=27.8601 best=27.5478 since_improve=10
+t=3828ms iter=23 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=3919ms iter=23 REBUILD reject new_tc=27.9548 (was 27.5842)
+t=3970ms iter=23 incumb=27.5842 ratchet=28.5790 best=27.5478 since_improve=11
+t=3975ms iter=24 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=4070ms iter=24 REBUILD reject new_tc=29.4006 (was 27.5842)
+t=4119ms iter=24 incumb=27.5842 ratchet=27.6946 best=27.5478 since_improve=12
+t=4125ms iter=25 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=4221ms iter=25 REBUILD reject new_tc=29.2699 (was 27.5842)
+t=4270ms iter=25 incumb=27.5842 ratchet=28.4265 best=27.5478 since_improve=13
+t=4275ms iter=26 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=4368ms iter=26 REBUILD reject new_tc=29.4333 (was 27.5842)
+t=4418ms iter=26 incumb=27.5842 ratchet=28.9830 best=27.5478 since_improve=14
+t=4421ms iter=27 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=4517ms iter=27 REBUILD reject new_tc=28.9304 (was 27.5842)
+t=4567ms iter=27 incumb=27.5842 ratchet=27.7438 best=27.5478 since_improve=15
+t=4573ms iter=28 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=4666ms iter=28 REBUILD reject new_tc=28.2667 (was 27.5842)
+t=4716ms iter=28 incumb=27.5842 ratchet=28.6079 best=27.5478 since_improve=16
+t=4722ms iter=29 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=4814ms iter=29 REBUILD reject new_tc=28.7317 (was 27.5842)
+t=4863ms iter=29 incumb=27.5842 ratchet=28.4307 best=27.5478 since_improve=17
+t=4869ms iter=30 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=4963ms iter=30 REBUILD reject new_tc=28.7574 (was 27.5842)
+t=5011ms iter=30 incumb=27.5842 ratchet=27.9697 best=27.5478 since_improve=18
+t=5018ms iter=31 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=5117ms iter=31 REBUILD reject new_tc=27.7097 (was 27.5842)
+t=5167ms iter=31 incumb=27.5842 ratchet=27.9264 best=27.5478 since_improve=19
+t=5171ms iter=32 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=5266ms iter=32 REBUILD reject new_tc=28.5498 (was 27.5842)
+t=5315ms iter=32 incumb=27.5842 ratchet=27.9865 best=27.5478 since_improve=20
+t=5321ms iter=33 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=5416ms iter=33 REBUILD reject new_tc=28.7503 (was 27.5842)
+t=5466ms iter=33 incumb=27.5842 ratchet=29.3998 best=27.5478 since_improve=21
+t=5473ms iter=34 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=5566ms iter=34 REBUILD reject new_tc=28.4563 (was 27.5842)
+t=5624ms iter=34 incumb=27.5842 ratchet=27.5380 best=27.5380 since_improve=0
+t=5632ms iter=35 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=5714ms iter=35 REBUILD reject new_tc=28.1141 (was 27.5380)
+t=5764ms iter=35 incumb=27.5380 ratchet=27.6005 best=27.5380 since_improve=1
+t=5769ms iter=36 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=5850ms iter=36 REBUILD reject new_tc=28.2503 (was 27.5380)
+t=5899ms iter=36 incumb=27.5380 ratchet=28.3824 best=27.5380 since_improve=2
+t=5905ms iter=37 WAIST cost=26.0000 best_alt=19.0000 gap=7.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=5991ms iter=37 REBUILD reject new_tc=27.7718 (was 27.5380)
+t=6041ms iter=37 incumb=27.5380 ratchet=28.0923 best=27.5380 since_improve=3
+t=6045ms iter=38 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=6125ms iter=38 REBUILD reject new_tc=28.6448 (was 27.5380)
+t=6175ms iter=38 incumb=27.5380 ratchet=28.6738 best=27.5380 since_improve=4
+t=6182ms iter=39 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=6265ms iter=39 REBUILD reject new_tc=28.0459 (was 27.5380)
+t=6314ms iter=39 incumb=27.5380 ratchet=28.2171 best=27.5380 since_improve=5
+t=6324ms iter=40 WAIST cost=26.0000 best_alt=5.0000 gap=21.0000 tried=5 sep_labels=3 clique_frac=1.00
+t=6418ms iter=40 REBUILD reject new_tc=28.7412 (was 27.5380)
+t=6468ms iter=40 incumb=27.5380 ratchet=27.6868 best=27.5380 since_improve=6
+t=6473ms iter=41 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=6556ms iter=41 REBUILD reject new_tc=28.1762 (was 27.5380)
+t=6605ms iter=41 incumb=27.5380 ratchet=27.7361 best=27.5380 since_improve=7
+t=6610ms iter=42 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=6695ms iter=42 REBUILD reject new_tc=27.9150 (was 27.5380)
+t=6746ms iter=42 incumb=27.5380 ratchet=28.8096 best=27.5380 since_improve=8
+t=6751ms iter=43 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=6835ms iter=43 REBUILD reject new_tc=27.6697 (was 27.5380)
+t=6884ms iter=43 incumb=27.5380 ratchet=27.6867 best=27.5380 since_improve=9
+t=6890ms iter=44 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=6972ms iter=44 REBUILD reject new_tc=28.4682 (was 27.5380)
+t=7021ms iter=44 incumb=27.5380 ratchet=29.3485 best=27.5380 since_improve=10
+t=7027ms iter=45 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=7112ms iter=45 REBUILD reject new_tc=29.5969 (was 27.5380)
+t=7162ms iter=45 incumb=27.5380 ratchet=29.0788 best=27.5380 since_improve=11
+t=7171ms iter=46 WAIST cost=26.0000 best_alt=10.0000 gap=16.0000 tried=5 sep_labels=6 clique_frac=0.93
+t=7264ms iter=46 REBUILD reject new_tc=28.7928 (was 27.5380)
+t=7313ms iter=46 incumb=27.5380 ratchet=28.1445 best=27.5380 since_improve=12
+t=7317ms iter=47 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=7399ms iter=47 REBUILD reject new_tc=27.6821 (was 27.5380)
+t=7449ms iter=47 incumb=27.5380 ratchet=28.4409 best=27.5380 since_improve=13
+t=7454ms iter=48 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=7538ms iter=48 REBUILD reject new_tc=28.4044 (was 27.5380)
+t=7587ms iter=48 incumb=27.5380 ratchet=28.0641 best=27.5380 since_improve=14
+t=7591ms iter=49 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=7674ms iter=49 REBUILD reject new_tc=28.0248 (was 27.5380)
+t=7724ms iter=49 incumb=27.5380 ratchet=28.7354 best=27.5380 since_improve=15
+t=7730ms iter=50 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=7813ms iter=50 REBUILD reject new_tc=28.1745 (was 27.5380)
+t=7863ms iter=50 incumb=27.5380 ratchet=27.7771 best=27.5380 since_improve=16
+t=7869ms iter=51 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=7950ms iter=51 REBUILD reject new_tc=29.0141 (was 27.5380)
+t=8000ms iter=51 incumb=27.5380 ratchet=27.5570 best=27.5380 since_improve=17
+t=8005ms iter=52 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=8084ms iter=52 REBUILD reject new_tc=28.0735 (was 27.5380)
+t=8134ms iter=52 incumb=27.5380 ratchet=27.7718 best=27.5380 since_improve=18
+t=8137ms iter=53 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=8220ms iter=53 REBUILD reject new_tc=28.8777 (was 27.5380)
+t=8271ms iter=53 incumb=27.5380 ratchet=28.1110 best=27.5380 since_improve=19
+t=8276ms iter=54 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=8362ms iter=54 REBUILD reject new_tc=28.4163 (was 27.5380)
+t=8411ms iter=54 incumb=27.5380 ratchet=28.0434 best=27.5380 since_improve=20
+t=8415ms iter=55 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=8496ms iter=55 REBUILD reject new_tc=28.7474 (was 27.5380)
+t=8546ms iter=55 incumb=27.5380 ratchet=29.1321 best=27.5380 since_improve=21
+t=8551ms iter=56 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=8633ms iter=56 REBUILD reject new_tc=28.1776 (was 27.5380)
+t=8682ms iter=56 incumb=27.5380 ratchet=28.4282 best=27.5380 since_improve=22
+t=8689ms iter=57 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=8770ms iter=57 REBUILD reject new_tc=28.5276 (was 27.5380)
+t=8820ms iter=57 incumb=27.5380 ratchet=28.0284 best=27.5380 since_improve=23
+t=8827ms iter=58 WAIST cost=26.0000 best_alt=21.0000 gap=5.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=8909ms iter=58 REBUILD reject new_tc=27.6028 (was 27.5380)
+t=8969ms iter=58 incumb=27.5380 ratchet=27.5260 best=27.4577 since_improve=0
+t=8974ms iter=59 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=9069ms iter=59 REBUILD reject new_tc=30.4025 (was 27.5260)
+t=9118ms iter=59 incumb=27.5260 ratchet=27.7407 best=27.4577 since_improve=1
+t=9123ms iter=60 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=9216ms iter=60 REBUILD reject new_tc=28.6684 (was 27.5260)
+t=9276ms iter=60 incumb=27.5260 ratchet=27.5248 best=27.4532 since_improve=0
+t=9282ms iter=61 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=9379ms iter=61 REBUILD reject new_tc=28.3176 (was 27.5248)
+t=9428ms iter=61 incumb=27.5248 ratchet=27.9909 best=27.4532 since_improve=1
+t=9434ms iter=62 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=9526ms iter=62 REBUILD reject new_tc=28.8841 (was 27.5248)
+t=9575ms iter=62 incumb=27.5248 ratchet=27.6528 best=27.4532 since_improve=2
+t=9580ms iter=63 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=9672ms iter=63 REBUILD reject new_tc=28.5142 (was 27.5248)
+t=9722ms iter=63 incumb=27.5248 ratchet=28.9466 best=27.4532 since_improve=3
+t=9728ms iter=64 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=9822ms iter=64 REBUILD reject new_tc=28.8597 (was 27.5248)
+t=9872ms iter=64 incumb=27.5248 ratchet=27.9084 best=27.4532 since_improve=4
+t=9877ms iter=65 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=9969ms iter=65 REBUILD reject new_tc=28.8616 (was 27.5248)
+t=10018ms iter=65 incumb=27.5248 ratchet=28.3537 best=27.4532 since_improve=5
+t=10023ms iter=66 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=10116ms iter=66 REBUILD reject new_tc=28.6286 (was 27.5248)
+t=10166ms iter=66 incumb=27.5248 ratchet=28.7894 best=27.4532 since_improve=6
+t=10172ms iter=67 WAIST cost=26.0000 best_alt=0.0000 gap=26.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=10265ms iter=67 REBUILD reject new_tc=28.7353 (was 27.5248)
+t=10325ms iter=67 incumb=27.5248 ratchet=27.2259 best=27.2250 since_improve=0
+t=10332ms iter=68 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=10423ms iter=68 REBUILD reject new_tc=28.0387 (was 27.2259)
+t=10473ms iter=68 incumb=27.2259 ratchet=27.6787 best=27.2250 since_improve=1
+t=10480ms iter=69 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=10575ms iter=69 REBUILD reject new_tc=28.5468 (was 27.2259)
+t=10636ms iter=69 incumb=27.2259 ratchet=27.1924 best=27.1924 since_improve=0
+t=10640ms iter=70 WAIST cost=25.0000 best_alt=6.0000 gap=19.0000 tried=5 sep_labels=6 clique_frac=0.87
+t=10738ms iter=70 REBUILD reject new_tc=29.5568 (was 27.1924)
+t=10789ms iter=70 incumb=27.1924 ratchet=27.5659 best=27.1924 since_improve=1
+t=10794ms iter=71 WAIST cost=25.0000 best_alt=7.0000 gap=18.0000 tried=5 sep_labels=7 clique_frac=0.90
+t=10889ms iter=71 REBUILD reject new_tc=28.5096 (was 27.1924)
+t=10939ms iter=71 incumb=27.1924 ratchet=28.5379 best=27.1924 since_improve=2
+t=10944ms iter=72 WAIST cost=25.0000 best_alt=7.0000 gap=18.0000 tried=5 sep_labels=7 clique_frac=0.90
+t=11042ms iter=72 REBUILD reject new_tc=29.5240 (was 27.1924)
+t=11092ms iter=72 incumb=27.1924 ratchet=29.6576 best=27.1924 since_improve=3
+t=11099ms iter=73 WAIST cost=25.0000 best_alt=7.0000 gap=18.0000 tried=5 sep_labels=7 clique_frac=0.90
+t=11229ms iter=73 REBUILD reject new_tc=28.4286 (was 27.1924)
+t=11281ms iter=73 incumb=27.1924 ratchet=27.4738 best=27.1924 since_improve=4
+t=11287ms iter=74 WAIST cost=25.0000 best_alt=7.0000 gap=18.0000 tried=5 sep_labels=7 clique_frac=0.90
+t=11382ms iter=74 REBUILD reject new_tc=29.6959 (was 27.1924)
+t=11441ms iter=74 incumb=27.1924 ratchet=26.8721 best=26.8721 since_improve=0
+t=11447ms iter=75 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=11540ms iter=75 REBUILD reject new_tc=27.6964 (was 26.8721)
+t=11589ms iter=75 incumb=26.8721 ratchet=29.4591 best=26.8721 since_improve=1
+t=11592ms iter=76 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=11682ms iter=76 REBUILD reject new_tc=28.4989 (was 26.8721)
+t=11784ms iter=76 incumb=26.8721 ratchet=26.9071 best=26.8721 since_improve=2
+t=11791ms iter=77 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=11885ms iter=77 REBUILD reject new_tc=28.6915 (was 26.8721)
+t=11935ms iter=77 incumb=26.8721 ratchet=27.4309 best=26.8721 since_improve=3
+t=11939ms iter=78 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=12034ms iter=78 REBUILD reject new_tc=28.4479 (was 26.8721)
+t=12084ms iter=78 incumb=26.8721 ratchet=27.7056 best=26.8721 since_improve=4
+t=12089ms iter=79 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=12184ms iter=79 REBUILD reject new_tc=28.8169 (was 26.8721)
+t=12232ms iter=79 incumb=26.8721 ratchet=27.6126 best=26.8721 since_improve=5
+t=12236ms iter=80 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=12336ms iter=80 REBUILD reject new_tc=29.4867 (was 26.8721)
+t=12385ms iter=80 incumb=26.8721 ratchet=28.5502 best=26.8721 since_improve=6
+t=12390ms iter=81 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=12488ms iter=81 REBUILD reject new_tc=28.1849 (was 26.8721)
+t=12536ms iter=81 incumb=26.8721 ratchet=28.5780 best=26.8721 since_improve=7
+t=12544ms iter=82 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=12636ms iter=82 REBUILD reject new_tc=30.5812 (was 26.8721)
+t=12685ms iter=82 incumb=26.8721 ratchet=28.4288 best=26.8721 since_improve=8
+t=12690ms iter=83 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=12781ms iter=83 REBUILD reject new_tc=28.4825 (was 26.8721)
+t=12830ms iter=83 incumb=26.8721 ratchet=27.8292 best=26.8721 since_improve=9
+t=12835ms iter=84 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=12932ms iter=84 REBUILD reject new_tc=32.6528 (was 26.8721)
+t=12981ms iter=84 incumb=26.8721 ratchet=27.0937 best=26.8721 since_improve=10
+t=12985ms iter=85 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=13082ms iter=85 REBUILD reject new_tc=28.3695 (was 26.8721)
+t=13130ms iter=85 incumb=26.8721 ratchet=28.0267 best=26.8721 since_improve=11
+t=13137ms iter=86 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=13232ms iter=86 REBUILD reject new_tc=30.7310 (was 26.8721)
+t=13281ms iter=86 incumb=26.8721 ratchet=28.0739 best=26.8721 since_improve=12
+t=13286ms iter=87 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=13381ms iter=87 REBUILD reject new_tc=29.1758 (was 26.8721)
+t=13430ms iter=87 incumb=26.8721 ratchet=27.9243 best=26.8721 since_improve=13
+t=13435ms iter=88 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=13526ms iter=88 REBUILD reject new_tc=30.4318 (was 26.8721)
+t=13575ms iter=88 incumb=26.8721 ratchet=27.0005 best=26.8721 since_improve=14
+t=13580ms iter=89 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=13675ms iter=89 REBUILD reject new_tc=29.4629 (was 26.8721)
+t=13726ms iter=89 incumb=26.8721 ratchet=28.3416 best=26.8721 since_improve=15
+t=13731ms iter=90 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=13827ms iter=90 REBUILD reject new_tc=28.4445 (was 26.8721)
+t=13875ms iter=90 incumb=26.8721 ratchet=27.4554 best=26.8721 since_improve=16
+t=13882ms iter=91 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=13977ms iter=91 REBUILD reject new_tc=29.2940 (was 26.8721)
+t=14026ms iter=91 incumb=26.8721 ratchet=28.0989 best=26.8721 since_improve=17
+t=14032ms iter=92 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=14129ms iter=92 REBUILD reject new_tc=28.5938 (was 26.8721)
+t=14179ms iter=92 incumb=26.8721 ratchet=27.5421 best=26.8721 since_improve=18
+t=14185ms iter=93 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=14278ms iter=93 REBUILD reject new_tc=29.8364 (was 26.8721)
+t=14328ms iter=93 incumb=26.8721 ratchet=28.6525 best=26.8721 since_improve=19
+t=14332ms iter=94 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=14424ms iter=94 REBUILD reject new_tc=28.4826 (was 26.8721)
+t=14472ms iter=94 incumb=26.8721 ratchet=27.2674 best=26.8721 since_improve=20
+t=14478ms iter=95 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=14570ms iter=95 REBUILD reject new_tc=29.5283 (was 26.8721)
+t=14620ms iter=95 incumb=26.8721 ratchet=28.8366 best=26.8721 since_improve=21
+t=14626ms iter=96 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=14717ms iter=96 REBUILD reject new_tc=29.3627 (was 26.8721)
+t=14765ms iter=96 incumb=26.8721 ratchet=27.4191 best=26.8721 since_improve=22
+t=14771ms iter=97 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=14864ms iter=97 REBUILD reject new_tc=28.8636 (was 26.8721)
+t=14914ms iter=97 incumb=26.8721 ratchet=27.5801 best=26.8721 since_improve=23
+t=14919ms iter=98 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=15011ms iter=98 REBUILD reject new_tc=28.7406 (was 26.8721)
+t=15057ms iter=98 incumb=26.8721 ratchet=27.0931 best=26.8721 since_improve=24
+t=15063ms iter=99 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=15157ms iter=99 REBUILD reject new_tc=28.3057 (was 26.8721)
+t=15205ms iter=99 incumb=26.8721 ratchet=27.4023 best=26.8721 since_improve=25
+t=15210ms iter=100 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=15303ms iter=100 REBUILD reject new_tc=28.3315 (was 26.8721)
+t=15353ms iter=100 incumb=26.8721 ratchet=28.3926 best=26.8721 since_improve=26
+t=15358ms iter=101 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=15450ms iter=101 REBUILD reject new_tc=28.7387 (was 26.8721)
+t=15498ms iter=101 incumb=26.8721 ratchet=27.4784 best=26.8721 since_improve=27
+t=15502ms iter=102 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=15595ms iter=102 REBUILD reject new_tc=29.0406 (was 26.8721)
+t=15643ms iter=102 incumb=26.8721 ratchet=27.3274 best=26.8721 since_improve=28
+t=15650ms iter=103 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=15740ms iter=103 REBUILD reject new_tc=28.6305 (was 26.8721)
+t=15788ms iter=103 incumb=26.8721 ratchet=27.7930 best=26.8721 since_improve=29
+t=15794ms iter=104 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=15890ms iter=104 REBUILD reject new_tc=28.3669 (was 26.8721)
+t=15947ms iter=104 incumb=26.8721 ratchet=26.5199 best=26.5199 since_improve=0
+t=15952ms iter=105 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=16035ms iter=105 REBUILD reject new_tc=27.2412 (was 26.5199)
+t=16084ms iter=105 incumb=26.5199 ratchet=26.6012 best=26.5199 since_improve=1
+t=16089ms iter=106 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=16174ms iter=106 REBUILD reject new_tc=28.3186 (was 26.5199)
+t=16223ms iter=106 incumb=26.5199 ratchet=28.8411 best=26.5199 since_improve=2
+t=16228ms iter=107 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=16310ms iter=107 REBUILD reject new_tc=28.4372 (was 26.5199)
+t=16360ms iter=107 incumb=26.5199 ratchet=26.7681 best=26.5199 since_improve=3
+t=16367ms iter=108 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=16457ms iter=108 REBUILD reject new_tc=29.6750 (was 26.5199)
+t=16506ms iter=108 incumb=26.5199 ratchet=27.2297 best=26.5199 since_improve=4
+t=16511ms iter=109 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=16595ms iter=109 REBUILD reject new_tc=28.0891 (was 26.5199)
+t=16653ms iter=109 incumb=26.5199 ratchet=26.7260 best=26.4444 since_improve=5
+t=16658ms iter=110 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=16742ms iter=110 REBUILD reject new_tc=27.9277 (was 26.5199)
+t=16799ms iter=110 incumb=26.5199 ratchet=26.3161 best=26.2717 since_improve=0
+t=16802ms iter=111 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=16894ms iter=111 REBUILD reject new_tc=28.7002 (was 26.3161)
+t=16944ms iter=111 incumb=26.3161 ratchet=27.0715 best=26.2717 since_improve=1
+t=16952ms iter=112 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=17049ms iter=112 REBUILD reject new_tc=28.6244 (was 26.3161)
+t=17098ms iter=112 incumb=26.3161 ratchet=26.8765 best=26.2717 since_improve=2
+t=17103ms iter=113 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=17194ms iter=113 REBUILD reject new_tc=28.8726 (was 26.3161)
+t=17241ms iter=113 incumb=26.3161 ratchet=27.4918 best=26.2717 since_improve=3
+t=17246ms iter=114 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=17341ms iter=114 REBUILD reject new_tc=29.6996 (was 26.3161)
+t=17390ms iter=114 incumb=26.3161 ratchet=26.8611 best=26.2717 since_improve=4
+t=17394ms iter=115 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=17485ms iter=115 REBUILD reject new_tc=28.4278 (was 26.3161)
+t=17533ms iter=115 incumb=26.3161 ratchet=27.0963 best=26.2717 since_improve=5
+t=17538ms iter=116 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=17628ms iter=116 REBUILD reject new_tc=27.6883 (was 26.3161)
+t=17677ms iter=116 incumb=26.3161 ratchet=27.0644 best=26.2717 since_improve=6
+t=17682ms iter=117 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=17777ms iter=117 REBUILD reject new_tc=28.4677 (was 26.3161)
+t=17826ms iter=117 incumb=26.3161 ratchet=27.5187 best=26.2717 since_improve=7
+t=17830ms iter=118 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=17924ms iter=118 REBUILD reject new_tc=28.6560 (was 26.3161)
+t=17973ms iter=118 incumb=26.3161 ratchet=26.8710 best=26.2717 since_improve=8
+t=17977ms iter=119 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=18070ms iter=119 REBUILD reject new_tc=28.7563 (was 26.3161)
+t=18119ms iter=119 incumb=26.3161 ratchet=27.3659 best=26.2717 since_improve=9
+t=18128ms iter=120 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=18220ms iter=120 REBUILD reject new_tc=28.8058 (was 26.3161)
+t=18270ms iter=120 incumb=26.3161 ratchet=27.0844 best=26.2717 since_improve=10
+t=18274ms iter=121 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=18365ms iter=121 REBUILD reject new_tc=29.1293 (was 26.3161)
+t=18413ms iter=121 incumb=26.3161 ratchet=27.8052 best=26.2717 since_improve=11
+t=18418ms iter=122 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=18510ms iter=122 REBUILD reject new_tc=28.3173 (was 26.3161)
+t=18559ms iter=122 incumb=26.3161 ratchet=27.1110 best=26.2717 since_improve=12
+t=18563ms iter=123 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=18654ms iter=123 REBUILD reject new_tc=28.4049 (was 26.3161)
+t=18704ms iter=123 incumb=26.3161 ratchet=27.6641 best=26.2717 since_improve=13
+t=18709ms iter=124 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=18802ms iter=124 REBUILD reject new_tc=28.5397 (was 26.3161)
+t=18850ms iter=124 incumb=26.3161 ratchet=27.1090 best=26.2717 since_improve=14
+t=18857ms iter=125 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=18948ms iter=125 REBUILD reject new_tc=28.3843 (was 26.3161)
+t=18997ms iter=125 incumb=26.3161 ratchet=28.2295 best=26.2717 since_improve=15
+t=19001ms iter=126 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=19093ms iter=126 REBUILD reject new_tc=29.1021 (was 26.3161)
+t=19142ms iter=126 incumb=26.3161 ratchet=27.6999 best=26.2717 since_improve=16
+t=19148ms iter=127 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=19244ms iter=127 REBUILD reject new_tc=28.9827 (was 26.3161)
+t=19292ms iter=127 incumb=26.3161 ratchet=26.3676 best=26.2717 since_improve=17
+t=19297ms iter=128 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=19390ms iter=128 REBUILD reject new_tc=28.4376 (was 26.3161)
+t=19439ms iter=128 incumb=26.3161 ratchet=27.6731 best=26.2717 since_improve=18
+t=19443ms iter=129 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=19537ms iter=129 REBUILD reject new_tc=29.0363 (was 26.3161)
+t=19586ms iter=129 incumb=26.3161 ratchet=27.7095 best=26.2717 since_improve=19
+t=19590ms iter=130 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=19683ms iter=130 REBUILD reject new_tc=28.3897 (was 26.3161)
+t=19731ms iter=130 incumb=26.3161 ratchet=26.8986 best=26.2717 since_improve=20
+t=19735ms iter=131 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=19827ms iter=131 REBUILD reject new_tc=28.7431 (was 26.3161)
+t=19876ms iter=131 incumb=26.3161 ratchet=27.1760 best=26.2717 since_improve=21
+t=19882ms iter=132 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=19977ms iter=132 REBUILD reject new_tc=28.7203 (was 26.3161)
+t=20025ms iter=132 incumb=26.3161 ratchet=26.4838 best=26.2717 since_improve=22
+t=20034ms iter=133 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=20128ms iter=133 REBUILD reject new_tc=28.7188 (was 26.3161)
+t=20175ms iter=133 incumb=26.3161 ratchet=26.3453 best=26.2717 since_improve=23
+t=20180ms iter=134 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=20277ms iter=134 REBUILD reject new_tc=28.0218 (was 26.3161)
+t=20325ms iter=134 incumb=26.3161 ratchet=26.3315 best=26.2717 since_improve=24
+t=20331ms iter=135 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=20421ms iter=135 REBUILD reject new_tc=28.8636 (was 26.3161)
+t=20472ms iter=135 incumb=26.3161 ratchet=31.7833 best=26.2717 since_improve=25
+t=20479ms iter=136 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=20573ms iter=136 REBUILD reject new_tc=28.7360 (was 26.3161)
+t=20621ms iter=136 incumb=26.3161 ratchet=26.5776 best=26.2717 since_improve=26
+t=20627ms iter=137 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=20719ms iter=137 REBUILD reject new_tc=28.6699 (was 26.3161)
+t=20767ms iter=137 incumb=26.3161 ratchet=27.7172 best=26.2717 since_improve=27
+t=20770ms iter=138 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=20862ms iter=138 REBUILD reject new_tc=29.5809 (was 26.3161)
+t=20910ms iter=138 incumb=26.3161 ratchet=26.8989 best=26.2717 since_improve=28
+t=20915ms iter=139 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=21011ms iter=139 REBUILD reject new_tc=28.5262 (was 26.3161)
+t=21058ms iter=139 incumb=26.3161 ratchet=27.1256 best=26.2717 since_improve=29
+t=21063ms iter=140 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=21154ms iter=140 REBUILD reject new_tc=28.6319 (was 26.3161)
+t=21203ms iter=140 incumb=26.3161 ratchet=26.6458 best=26.2717 since_improve=30
+t=21208ms iter=141 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=21301ms iter=141 REBUILD reject new_tc=28.7521 (was 26.3161)
+t=21350ms iter=141 incumb=26.3161 ratchet=26.6947 best=26.2717 since_improve=31
+t=21357ms iter=142 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=21451ms iter=142 REBUILD reject new_tc=28.6580 (was 26.3161)
+t=21500ms iter=142 incumb=26.3161 ratchet=26.3911 best=26.2717 since_improve=32
+t=21507ms iter=143 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=21598ms iter=143 REBUILD reject new_tc=28.3480 (was 26.3161)
+t=21647ms iter=143 incumb=26.3161 ratchet=26.8904 best=26.2717 since_improve=33
+t=21653ms iter=144 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=21745ms iter=144 REBUILD reject new_tc=28.4904 (was 26.3161)
+t=21793ms iter=144 incumb=26.3161 ratchet=26.5642 best=26.2717 since_improve=34
+t=21798ms iter=145 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=21892ms iter=145 REBUILD reject new_tc=28.8046 (was 26.3161)
+t=21941ms iter=145 incumb=26.3161 ratchet=28.6259 best=26.2717 since_improve=35
+t=21945ms iter=146 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=22040ms iter=146 REBUILD reject new_tc=28.6941 (was 26.3161)
+t=22090ms iter=146 incumb=26.3161 ratchet=27.4162 best=26.2717 since_improve=36
+t=22095ms iter=147 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=22186ms iter=147 REBUILD reject new_tc=28.5625 (was 26.3161)
+t=22235ms iter=147 incumb=26.3161 ratchet=27.0615 best=26.2717 since_improve=37
+t=22239ms iter=148 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=22332ms iter=148 REBUILD reject new_tc=28.7464 (was 26.3161)
+t=22380ms iter=148 incumb=26.3161 ratchet=26.8997 best=26.2717 since_improve=38
+t=22383ms iter=149 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=22474ms iter=149 REBUILD reject new_tc=29.1214 (was 26.3161)
+t=22523ms iter=149 incumb=26.3161 ratchet=28.1021 best=26.2717 since_improve=39
+t=22530ms iter=150 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=22621ms iter=150 REBUILD reject new_tc=28.2946 (was 26.3161)
+t=22671ms iter=150 incumb=26.3161 ratchet=26.9813 best=26.2717 since_improve=40
+t=22677ms iter=151 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=22769ms iter=151 REBUILD reject new_tc=29.5998 (was 26.3161)
+t=22819ms iter=151 incumb=26.3161 ratchet=29.3940 best=26.2717 since_improve=41
+t=22826ms iter=152 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=22920ms iter=152 REBUILD reject new_tc=28.6293 (was 26.3161)
+t=22969ms iter=152 incumb=26.3161 ratchet=27.5022 best=26.2717 since_improve=42
+t=22972ms iter=153 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=23063ms iter=153 REBUILD reject new_tc=28.5431 (was 26.3161)
+t=23111ms iter=153 incumb=26.3161 ratchet=27.6587 best=26.2717 since_improve=43
+t=23117ms iter=154 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=23222ms iter=154 REBUILD reject new_tc=28.0044 (was 26.3161)
+t=23270ms iter=154 incumb=26.3161 ratchet=27.0767 best=26.2717 since_improve=44
+t=23274ms iter=155 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=23368ms iter=155 REBUILD reject new_tc=29.1846 (was 26.3161)
+t=23430ms iter=155 incumb=26.3161 ratchet=27.1657 best=26.2717 since_improve=45
+t=23436ms iter=156 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=23528ms iter=156 REBUILD reject new_tc=28.6016 (was 26.3161)
+t=23577ms iter=156 incumb=26.3161 ratchet=27.7539 best=26.2717 since_improve=46
+t=23584ms iter=157 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=23676ms iter=157 REBUILD reject new_tc=28.6992 (was 26.3161)
+t=23725ms iter=157 incumb=26.3161 ratchet=26.8125 best=26.2717 since_improve=47
+t=23730ms iter=158 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=23822ms iter=158 REBUILD reject new_tc=29.0554 (was 26.3161)
+t=23871ms iter=158 incumb=26.3161 ratchet=27.8302 best=26.2717 since_improve=48
+t=23875ms iter=159 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=23969ms iter=159 REBUILD reject new_tc=28.6865 (was 26.3161)
+t=24016ms iter=159 incumb=26.3161 ratchet=26.5568 best=26.2717 since_improve=49
+t=24020ms iter=160 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=24117ms iter=160 REBUILD reject new_tc=28.8558 (was 26.3161)
+t=24165ms iter=160 incumb=26.3161 ratchet=26.4927 best=26.2717 since_improve=50
+t=24171ms iter=161 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=24265ms iter=161 REBUILD reject new_tc=28.5774 (was 26.3161)
+t=24312ms iter=161 incumb=26.3161 ratchet=27.5929 best=26.2717 since_improve=51
+t=24317ms iter=162 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=24408ms iter=162 REBUILD reject new_tc=28.1826 (was 26.3161)
+t=24457ms iter=162 incumb=26.3161 ratchet=26.4527 best=26.2717 since_improve=52
+t=24461ms iter=163 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=24556ms iter=163 REBUILD reject new_tc=29.5290 (was 26.3161)
+t=24604ms iter=163 incumb=26.3161 ratchet=27.8864 best=26.2717 since_improve=53
+t=24608ms iter=164 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=24701ms iter=164 REBUILD reject new_tc=28.3754 (was 26.3161)
+t=24751ms iter=164 incumb=26.3161 ratchet=28.3756 best=26.2717 since_improve=54
+t=24755ms iter=165 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=24845ms iter=165 REBUILD reject new_tc=27.9995 (was 26.3161)
+t=24894ms iter=165 incumb=26.3161 ratchet=29.7826 best=26.2717 since_improve=55
+t=24900ms iter=166 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=24994ms iter=166 REBUILD reject new_tc=28.6059 (was 26.3161)
+t=25043ms iter=166 incumb=26.3161 ratchet=27.5509 best=26.2717 since_improve=56
+t=25049ms iter=167 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=25144ms iter=167 REBUILD reject new_tc=29.5751 (was 26.3161)
+t=25192ms iter=167 incumb=26.3161 ratchet=26.9624 best=26.2717 since_improve=57
+t=25198ms iter=168 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=25290ms iter=168 REBUILD reject new_tc=28.4263 (was 26.3161)
+t=25340ms iter=168 incumb=26.3161 ratchet=27.0177 best=26.2717 since_improve=58
+t=25349ms iter=169 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=25447ms iter=169 REBUILD reject new_tc=28.3530 (was 26.3161)
+t=25496ms iter=169 incumb=26.3161 ratchet=27.1099 best=26.2717 since_improve=59
+t=25502ms iter=170 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=25596ms iter=170 REBUILD reject new_tc=29.2768 (was 26.3161)
+t=25644ms iter=170 incumb=26.3161 ratchet=27.2510 best=26.2717 since_improve=60
+t=25649ms iter=171 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=25745ms iter=171 REBUILD reject new_tc=29.2996 (was 26.3161)
+t=25795ms iter=171 incumb=26.3161 ratchet=27.1256 best=26.2717 since_improve=61
+t=25799ms iter=172 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=25890ms iter=172 REBUILD reject new_tc=28.4070 (was 26.3161)
+t=25939ms iter=172 incumb=26.3161 ratchet=28.1299 best=26.2717 since_improve=62
+t=25943ms iter=173 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=26036ms iter=173 REBUILD reject new_tc=28.5635 (was 26.3161)
+t=26086ms iter=173 incumb=26.3161 ratchet=27.9178 best=26.2717 since_improve=63
+t=26091ms iter=174 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=26182ms iter=174 REBUILD reject new_tc=29.5962 (was 26.3161)
+t=26231ms iter=174 incumb=26.3161 ratchet=27.0049 best=26.2717 since_improve=64
+t=26235ms iter=175 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=26328ms iter=175 REBUILD reject new_tc=28.5270 (was 26.3161)
+t=26377ms iter=175 incumb=26.3161 ratchet=28.3364 best=26.2717 since_improve=65
+t=26384ms iter=176 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=26478ms iter=176 REBUILD reject new_tc=28.4271 (was 26.3161)
+t=26527ms iter=176 incumb=26.3161 ratchet=26.9884 best=26.2717 since_improve=66
+t=26532ms iter=177 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=26625ms iter=177 REBUILD reject new_tc=28.7303 (was 26.3161)
+t=26674ms iter=177 incumb=26.3161 ratchet=27.4034 best=26.2717 since_improve=67
+t=26681ms iter=178 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=26776ms iter=178 REBUILD reject new_tc=29.2579 (was 26.3161)
+t=26823ms iter=178 incumb=26.3161 ratchet=26.6236 best=26.2717 since_improve=68
+t=26827ms iter=179 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=26920ms iter=179 REBUILD reject new_tc=28.2084 (was 26.3161)
+t=26969ms iter=179 incumb=26.3161 ratchet=27.6643 best=26.2717 since_improve=69
+t=26975ms iter=180 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=27071ms iter=180 REBUILD reject new_tc=28.7592 (was 26.3161)
+t=27119ms iter=180 incumb=26.3161 ratchet=27.3014 best=26.2717 since_improve=70
+t=27126ms iter=181 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=27219ms iter=181 REBUILD reject new_tc=29.5079 (was 26.3161)
+t=27267ms iter=181 incumb=26.3161 ratchet=26.7367 best=26.2717 since_improve=71
+t=27273ms iter=182 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=27367ms iter=182 REBUILD reject new_tc=28.7553 (was 26.3161)
+t=27416ms iter=182 incumb=26.3161 ratchet=27.6115 best=26.2717 since_improve=72
+t=27422ms iter=183 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=27516ms iter=183 REBUILD reject new_tc=28.5459 (was 26.3161)
+t=27565ms iter=183 incumb=26.3161 ratchet=27.8044 best=26.2717 since_improve=73
+t=27571ms iter=184 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=27662ms iter=184 REBUILD reject new_tc=28.5827 (was 26.3161)
+t=27712ms iter=184 incumb=26.3161 ratchet=28.7694 best=26.2717 since_improve=74
+t=27717ms iter=185 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=27811ms iter=185 REBUILD reject new_tc=28.4241 (was 26.3161)
+t=27860ms iter=185 incumb=26.3161 ratchet=26.8806 best=26.2717 since_improve=75
+t=27866ms iter=186 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=27956ms iter=186 REBUILD reject new_tc=28.9429 (was 26.3161)
+t=28005ms iter=186 incumb=26.3161 ratchet=27.4438 best=26.2717 since_improve=76
+t=28009ms iter=187 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=28105ms iter=187 REBUILD reject new_tc=28.4263 (was 26.3161)
+t=28154ms iter=187 incumb=26.3161 ratchet=27.7777 best=26.2717 since_improve=77
+t=28160ms iter=188 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=28253ms iter=188 REBUILD reject new_tc=29.4242 (was 26.3161)
+t=28303ms iter=188 incumb=26.3161 ratchet=26.7309 best=26.2717 since_improve=78
+t=28309ms iter=189 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=28400ms iter=189 REBUILD reject new_tc=28.9686 (was 26.3161)
+t=28449ms iter=189 incumb=26.3161 ratchet=28.1412 best=26.2717 since_improve=79
+t=28455ms iter=190 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=28545ms iter=190 REBUILD reject new_tc=28.7248 (was 26.3161)
+t=28594ms iter=190 incumb=26.3161 ratchet=27.3533 best=26.2717 since_improve=80
+t=28600ms iter=191 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=28693ms iter=191 REBUILD reject new_tc=28.3959 (was 26.3161)
+t=28741ms iter=191 incumb=26.3161 ratchet=28.6429 best=26.2717 since_improve=81
+t=28745ms iter=192 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=28838ms iter=192 REBUILD reject new_tc=28.8570 (was 26.3161)
+t=28887ms iter=192 incumb=26.3161 ratchet=26.8167 best=26.2717 since_improve=82
+t=28893ms iter=193 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=28991ms iter=193 REBUILD reject new_tc=28.5102 (was 26.3161)
+t=29041ms iter=193 incumb=26.3161 ratchet=28.1131 best=26.2717 since_improve=83
+t=29049ms iter=194 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=29146ms iter=194 REBUILD reject new_tc=28.8894 (was 26.3161)
+t=29195ms iter=194 incumb=26.3161 ratchet=27.7088 best=26.2717 since_improve=84
+t=29203ms iter=195 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=29307ms iter=195 REBUILD reject new_tc=28.3819 (was 26.3161)
+t=29355ms iter=195 incumb=26.3161 ratchet=26.5832 best=26.2717 since_improve=85
+t=29358ms iter=196 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=29451ms iter=196 REBUILD reject new_tc=27.9546 (was 26.3161)
+t=29499ms iter=196 incumb=26.3161 ratchet=27.7192 best=26.2717 since_improve=86
+t=29504ms iter=197 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=29597ms iter=197 REBUILD reject new_tc=29.3592 (was 26.3161)
+t=29647ms iter=197 incumb=26.3161 ratchet=27.9851 best=26.2717 since_improve=87
+t=29651ms iter=198 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=29743ms iter=198 REBUILD reject new_tc=28.3829 (was 26.3161)
+t=29792ms iter=198 incumb=26.3161 ratchet=26.6149 best=26.2717 since_improve=88
+t=29796ms iter=199 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=29890ms iter=199 REBUILD reject new_tc=29.0210 (was 26.3161)
+t=29940ms iter=199 incumb=26.3161 ratchet=27.9676 best=26.2717 since_improve=89
+t=29944ms iter=200 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=30040ms iter=200 REBUILD reject new_tc=28.1602 (was 26.3161)
+t=30088ms iter=200 incumb=26.3161 ratchet=27.2543 best=26.2717 since_improve=90
+t=30093ms iter=201 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=30188ms iter=201 REBUILD reject new_tc=28.5768 (was 26.3161)
+t=30238ms iter=201 incumb=26.3161 ratchet=27.6135 best=26.2717 since_improve=91
+t=30244ms iter=202 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=30334ms iter=202 REBUILD reject new_tc=28.7738 (was 26.3161)
+t=30383ms iter=202 incumb=26.3161 ratchet=27.8683 best=26.2717 since_improve=92
+t=30389ms iter=203 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=30483ms iter=203 REBUILD reject new_tc=28.9119 (was 26.3161)
+t=30531ms iter=203 incumb=26.3161 ratchet=27.0947 best=26.2717 since_improve=93
+t=30537ms iter=204 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=30632ms iter=204 REBUILD reject new_tc=28.1232 (was 26.3161)
+t=30680ms iter=204 incumb=26.3161 ratchet=27.9811 best=26.2717 since_improve=94
+t=30687ms iter=205 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=30779ms iter=205 REBUILD reject new_tc=27.7639 (was 26.3161)
+t=30827ms iter=205 incumb=26.3161 ratchet=26.5299 best=26.2717 since_improve=95
+t=30834ms iter=206 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=30926ms iter=206 REBUILD reject new_tc=28.6261 (was 26.3161)
+t=30974ms iter=206 incumb=26.3161 ratchet=26.5479 best=26.2717 since_improve=96
+t=30982ms iter=207 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=31073ms iter=207 REBUILD reject new_tc=28.9834 (was 26.3161)
+t=31123ms iter=207 incumb=26.3161 ratchet=27.4640 best=26.2717 since_improve=97
+t=31129ms iter=208 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=31225ms iter=208 REBUILD reject new_tc=28.7892 (was 26.3161)
+t=31272ms iter=208 incumb=26.3161 ratchet=26.9754 best=26.2717 since_improve=98
+t=31278ms iter=209 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=31374ms iter=209 REBUILD reject new_tc=29.0761 (was 26.3161)
+t=31424ms iter=209 incumb=26.3161 ratchet=26.7831 best=26.2717 since_improve=99
+t=31430ms iter=210 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=31520ms iter=210 REBUILD reject new_tc=28.9528 (was 26.3161)
+t=31570ms iter=210 incumb=26.3161 ratchet=28.4725 best=26.2717 since_improve=100
+t=31576ms iter=211 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=31669ms iter=211 REBUILD reject new_tc=28.3799 (was 26.3161)
+t=31717ms iter=211 incumb=26.3161 ratchet=27.2359 best=26.2717 since_improve=101
+t=31724ms iter=212 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=31815ms iter=212 REBUILD reject new_tc=29.0110 (was 26.3161)
+t=31865ms iter=212 incumb=26.3161 ratchet=27.1306 best=26.2717 since_improve=102
+t=31869ms iter=213 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=31963ms iter=213 REBUILD reject new_tc=29.0243 (was 26.3161)
+t=32011ms iter=213 incumb=26.3161 ratchet=26.8323 best=26.2717 since_improve=103
+t=32017ms iter=214 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=32108ms iter=214 REBUILD reject new_tc=27.9252 (was 26.3161)
+t=32158ms iter=214 incumb=26.3161 ratchet=27.5348 best=26.2717 since_improve=104
+t=32165ms iter=215 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=32261ms iter=215 REBUILD reject new_tc=28.9734 (was 26.3161)
+t=32312ms iter=215 incumb=26.3161 ratchet=29.1509 best=26.2717 since_improve=105
+t=32315ms iter=216 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=32407ms iter=216 REBUILD reject new_tc=28.3208 (was 26.3161)
+t=32457ms iter=216 incumb=26.3161 ratchet=27.1094 best=26.2717 since_improve=106
+t=32462ms iter=217 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=32557ms iter=217 REBUILD reject new_tc=28.9685 (was 26.3161)
+t=32606ms iter=217 incumb=26.3161 ratchet=27.6863 best=26.2717 since_improve=107
+t=32611ms iter=218 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=32707ms iter=218 REBUILD reject new_tc=29.0338 (was 26.3161)
+t=32757ms iter=218 incumb=26.3161 ratchet=26.5196 best=26.2717 since_improve=108
+t=32763ms iter=219 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=32855ms iter=219 REBUILD reject new_tc=28.5334 (was 26.3161)
+t=32904ms iter=219 incumb=26.3161 ratchet=26.8145 best=26.2717 since_improve=109
+t=32908ms iter=220 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=33002ms iter=220 REBUILD reject new_tc=28.7469 (was 26.3161)
+t=33051ms iter=220 incumb=26.3161 ratchet=28.0931 best=26.2717 since_improve=110
+t=33055ms iter=221 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=33151ms iter=221 REBUILD reject new_tc=29.1040 (was 26.3161)
+t=33199ms iter=221 incumb=26.3161 ratchet=27.0816 best=26.2717 since_improve=111
+t=33205ms iter=222 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=33299ms iter=222 REBUILD reject new_tc=28.0094 (was 26.3161)
+t=33349ms iter=222 incumb=26.3161 ratchet=26.4330 best=26.2717 since_improve=112
+t=33354ms iter=223 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=33446ms iter=223 REBUILD reject new_tc=28.5790 (was 26.3161)
+t=33495ms iter=223 incumb=26.3161 ratchet=27.4450 best=26.2717 since_improve=113
+t=33500ms iter=224 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=33594ms iter=224 REBUILD reject new_tc=29.3783 (was 26.3161)
+t=33644ms iter=224 incumb=26.3161 ratchet=27.8880 best=26.2717 since_improve=114
+t=33648ms iter=225 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=33743ms iter=225 REBUILD reject new_tc=28.3477 (was 26.3161)
+t=33792ms iter=225 incumb=26.3161 ratchet=27.4378 best=26.2717 since_improve=115
+t=33796ms iter=226 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=33892ms iter=226 REBUILD reject new_tc=28.2795 (was 26.3161)
+t=33942ms iter=226 incumb=26.3161 ratchet=27.4386 best=26.2717 since_improve=116
+t=33946ms iter=227 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=34039ms iter=227 REBUILD reject new_tc=28.9319 (was 26.3161)
+t=34088ms iter=227 incumb=26.3161 ratchet=28.4188 best=26.2717 since_improve=117
+t=34094ms iter=228 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=34187ms iter=228 REBUILD reject new_tc=28.4298 (was 26.3161)
+t=34237ms iter=228 incumb=26.3161 ratchet=27.8582 best=26.2717 since_improve=118
+t=34242ms iter=229 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=34335ms iter=229 REBUILD reject new_tc=28.5592 (was 26.3161)
+t=34383ms iter=229 incumb=26.3161 ratchet=26.9052 best=26.2717 since_improve=119
+t=34386ms iter=230 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=34483ms iter=230 REBUILD reject new_tc=28.7830 (was 26.3161)
+t=34532ms iter=230 incumb=26.3161 ratchet=27.7135 best=26.2717 since_improve=120
+t=34539ms iter=231 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=34631ms iter=231 REBUILD reject new_tc=28.4458 (was 26.3161)
+t=34680ms iter=231 incumb=26.3161 ratchet=27.6978 best=26.2717 since_improve=121
+t=34685ms iter=232 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=34778ms iter=232 REBUILD reject new_tc=28.5107 (was 26.3161)
+t=34828ms iter=232 incumb=26.3161 ratchet=26.9403 best=26.2717 since_improve=122
+t=34833ms iter=233 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=34929ms iter=233 REBUILD reject new_tc=28.5611 (was 26.3161)
+t=34977ms iter=233 incumb=26.3161 ratchet=27.0354 best=26.2717 since_improve=123
+t=34982ms iter=234 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=35073ms iter=234 REBUILD reject new_tc=28.2899 (was 26.3161)
+t=35122ms iter=234 incumb=26.3161 ratchet=26.5390 best=26.2717 since_improve=124
+t=35126ms iter=235 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=35217ms iter=235 REBUILD reject new_tc=28.6185 (was 26.3161)
+t=35266ms iter=235 incumb=26.3161 ratchet=26.6728 best=26.2717 since_improve=125
+t=35271ms iter=236 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=35365ms iter=236 REBUILD reject new_tc=28.6432 (was 26.3161)
+t=35415ms iter=236 incumb=26.3161 ratchet=28.2201 best=26.2717 since_improve=126
+t=35420ms iter=237 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=35514ms iter=237 REBUILD reject new_tc=28.6666 (was 26.3161)
+t=35563ms iter=237 incumb=26.3161 ratchet=27.5511 best=26.2717 since_improve=127
+t=35568ms iter=238 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=35659ms iter=238 REBUILD reject new_tc=28.2179 (was 26.3161)
+t=35708ms iter=238 incumb=26.3161 ratchet=26.9717 best=26.2717 since_improve=128
+t=35713ms iter=239 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=35807ms iter=239 REBUILD reject new_tc=29.3968 (was 26.3161)
+t=35856ms iter=239 incumb=26.3161 ratchet=27.6709 best=26.2717 since_improve=129
+t=35862ms iter=240 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=35958ms iter=240 REBUILD reject new_tc=29.4701 (was 26.3161)
+t=36007ms iter=240 incumb=26.3161 ratchet=27.4168 best=26.2717 since_improve=130
+t=36013ms iter=241 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=36103ms iter=241 REBUILD reject new_tc=28.7786 (was 26.3161)
+t=36152ms iter=241 incumb=26.3161 ratchet=27.7213 best=26.2717 since_improve=131
+t=36157ms iter=242 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=36253ms iter=242 REBUILD reject new_tc=28.8116 (was 26.3161)
+t=36301ms iter=242 incumb=26.3161 ratchet=27.0339 best=26.2717 since_improve=132
+t=36306ms iter=243 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=36398ms iter=243 REBUILD reject new_tc=28.8470 (was 26.3161)
+t=36447ms iter=243 incumb=26.3161 ratchet=26.9163 best=26.2717 since_improve=133
+t=36452ms iter=244 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=36545ms iter=244 REBUILD reject new_tc=29.0767 (was 26.3161)
+t=36594ms iter=244 incumb=26.3161 ratchet=27.3435 best=26.2717 since_improve=134
+t=36599ms iter=245 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=36691ms iter=245 REBUILD reject new_tc=30.0617 (was 26.3161)
+t=36741ms iter=245 incumb=26.3161 ratchet=27.8780 best=26.2717 since_improve=135
+t=36746ms iter=246 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=36843ms iter=246 REBUILD reject new_tc=29.8034 (was 26.3161)
+t=36892ms iter=246 incumb=26.3161 ratchet=27.1628 best=26.2717 since_improve=136
+t=36897ms iter=247 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=36988ms iter=247 REBUILD reject new_tc=29.1060 (was 26.3161)
+t=37038ms iter=247 incumb=26.3161 ratchet=27.9602 best=26.2717 since_improve=137
+t=37043ms iter=248 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=37138ms iter=248 REBUILD reject new_tc=28.3891 (was 26.3161)
+t=37186ms iter=248 incumb=26.3161 ratchet=27.8550 best=26.2717 since_improve=138
+t=37191ms iter=249 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=37282ms iter=249 REBUILD reject new_tc=28.8139 (was 26.3161)
+t=37331ms iter=249 incumb=26.3161 ratchet=26.8351 best=26.2717 since_improve=139
+t=37335ms iter=250 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=37429ms iter=250 REBUILD reject new_tc=28.7041 (was 26.3161)
+t=37478ms iter=250 incumb=26.3161 ratchet=27.0858 best=26.2717 since_improve=140
+t=37483ms iter=251 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=37577ms iter=251 REBUILD reject new_tc=28.8548 (was 26.3161)
+t=37628ms iter=251 incumb=26.3161 ratchet=28.9881 best=26.2717 since_improve=141
+t=37632ms iter=252 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=37725ms iter=252 REBUILD reject new_tc=27.7815 (was 26.3161)
+t=37776ms iter=252 incumb=26.3161 ratchet=29.9666 best=26.2717 since_improve=142
+t=37783ms iter=253 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=37875ms iter=253 REBUILD reject new_tc=28.4964 (was 26.3161)
+t=37923ms iter=253 incumb=26.3161 ratchet=26.5704 best=26.2717 since_improve=143
+t=37928ms iter=254 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=38020ms iter=254 REBUILD reject new_tc=28.7381 (was 26.3161)
+t=38069ms iter=254 incumb=26.3161 ratchet=28.5173 best=26.2717 since_improve=144
+t=38074ms iter=255 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=38167ms iter=255 REBUILD reject new_tc=28.5484 (was 26.3161)
+t=38215ms iter=255 incumb=26.3161 ratchet=26.5087 best=26.2717 since_improve=145
+t=38220ms iter=256 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=38313ms iter=256 REBUILD reject new_tc=28.4284 (was 26.3161)
+t=38362ms iter=256 incumb=26.3161 ratchet=27.2912 best=26.2717 since_improve=146
+t=38366ms iter=257 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=38460ms iter=257 REBUILD reject new_tc=28.7961 (was 26.3161)
+t=38509ms iter=257 incumb=26.3161 ratchet=26.5086 best=26.2717 since_improve=147
+t=38514ms iter=258 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=38608ms iter=258 REBUILD reject new_tc=30.0044 (was 26.3161)
+t=38656ms iter=258 incumb=26.3161 ratchet=27.6985 best=26.2717 since_improve=148
+t=38660ms iter=259 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=38752ms iter=259 REBUILD reject new_tc=29.5895 (was 26.3161)
+t=38801ms iter=259 incumb=26.3161 ratchet=27.5051 best=26.2717 since_improve=149
+t=38805ms iter=260 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=38901ms iter=260 REBUILD reject new_tc=28.8467 (was 26.3161)
+t=38951ms iter=260 incumb=26.3161 ratchet=27.6643 best=26.2717 since_improve=150
+t=38956ms iter=261 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=39050ms iter=261 REBUILD reject new_tc=28.5378 (was 26.3161)
+t=39098ms iter=261 incumb=26.3161 ratchet=27.7024 best=26.2717 since_improve=151
+t=39107ms iter=262 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=39203ms iter=262 REBUILD reject new_tc=28.6815 (was 26.3161)
+t=39252ms iter=262 incumb=26.3161 ratchet=27.3611 best=26.2717 since_improve=152
+t=39257ms iter=263 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=39350ms iter=263 REBUILD reject new_tc=28.8362 (was 26.3161)
+t=39399ms iter=263 incumb=26.3161 ratchet=27.6354 best=26.2717 since_improve=153
+t=39404ms iter=264 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=39496ms iter=264 REBUILD reject new_tc=28.4582 (was 26.3161)
+t=39544ms iter=264 incumb=26.3161 ratchet=27.2132 best=26.2717 since_improve=154
+t=39550ms iter=265 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=39650ms iter=265 REBUILD reject new_tc=28.8118 (was 26.3161)
+t=39699ms iter=265 incumb=26.3161 ratchet=26.8025 best=26.2717 since_improve=155
+t=39705ms iter=266 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=39799ms iter=266 REBUILD reject new_tc=28.6378 (was 26.3161)
+t=39848ms iter=266 incumb=26.3161 ratchet=26.9510 best=26.2717 since_improve=156
+t=39852ms iter=267 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=39947ms iter=267 REBUILD reject new_tc=29.1027 (was 26.3161)
+t=39996ms iter=267 incumb=26.3161 ratchet=26.5102 best=26.2717 since_improve=157
+t=40001ms iter=268 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=40093ms iter=268 REBUILD reject new_tc=28.1657 (was 26.3161)
+t=40142ms iter=268 incumb=26.3161 ratchet=26.6983 best=26.2717 since_improve=158
+t=40147ms iter=269 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=40242ms iter=269 REBUILD reject new_tc=28.5356 (was 26.3161)
+t=40290ms iter=269 incumb=26.3161 ratchet=27.6126 best=26.2717 since_improve=159
+t=40296ms iter=270 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=40392ms iter=270 REBUILD reject new_tc=28.7096 (was 26.3161)
+t=40441ms iter=270 incumb=26.3161 ratchet=26.6180 best=26.2717 since_improve=160
+t=40445ms iter=271 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=40539ms iter=271 REBUILD reject new_tc=29.2467 (was 26.3161)
+t=40586ms iter=271 incumb=26.3161 ratchet=26.7637 best=26.2717 since_improve=161
+t=40592ms iter=272 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=40689ms iter=272 REBUILD reject new_tc=28.4735 (was 26.3161)
+t=40738ms iter=272 incumb=26.3161 ratchet=26.8426 best=26.2717 since_improve=162
+t=40747ms iter=273 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=40843ms iter=273 REBUILD reject new_tc=28.5716 (was 26.3161)
+t=40891ms iter=273 incumb=26.3161 ratchet=27.3114 best=26.2717 since_improve=163
+t=40895ms iter=274 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=40991ms iter=274 REBUILD reject new_tc=28.4263 (was 26.3161)
+t=41041ms iter=274 incumb=26.3161 ratchet=27.8804 best=26.2717 since_improve=164
+t=41045ms iter=275 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=41141ms iter=275 REBUILD reject new_tc=29.2427 (was 26.3161)
+t=41188ms iter=275 incumb=26.3161 ratchet=26.6627 best=26.2717 since_improve=165
+t=41193ms iter=276 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=41286ms iter=276 REBUILD reject new_tc=28.8345 (was 26.3161)
+t=41334ms iter=276 incumb=26.3161 ratchet=26.9361 best=26.2717 since_improve=166
+t=41341ms iter=277 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=41436ms iter=277 REBUILD reject new_tc=28.9785 (was 26.3161)
+t=41488ms iter=277 incumb=26.3161 ratchet=32.5956 best=26.2717 since_improve=167
+t=41492ms iter=278 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=41584ms iter=278 REBUILD reject new_tc=28.2314 (was 26.3161)
+t=41633ms iter=278 incumb=26.3161 ratchet=28.4089 best=26.2717 since_improve=168
+t=41640ms iter=279 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=41731ms iter=279 REBUILD reject new_tc=28.9065 (was 26.3161)
+t=41780ms iter=279 incumb=26.3161 ratchet=26.4213 best=26.2717 since_improve=169
+t=41789ms iter=280 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=41881ms iter=280 REBUILD reject new_tc=29.1426 (was 26.3161)
+t=41929ms iter=280 incumb=26.3161 ratchet=26.2768 best=26.2717 since_improve=0
+t=41933ms iter=281 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=42016ms iter=281 REBUILD reject new_tc=27.7056 (was 26.2768)
+t=42065ms iter=281 incumb=26.2768 ratchet=27.0259 best=26.2717 since_improve=1
+t=42070ms iter=282 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=42153ms iter=282 REBUILD reject new_tc=28.3547 (was 26.2768)
+t=42201ms iter=282 incumb=26.2768 ratchet=26.4887 best=26.2717 since_improve=2
+t=42206ms iter=283 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=42289ms iter=283 REBUILD reject new_tc=28.4667 (was 26.2768)
+t=42338ms iter=283 incumb=26.2768 ratchet=28.7742 best=26.2717 since_improve=3
+t=42345ms iter=284 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=42428ms iter=284 REBUILD reject new_tc=28.4482 (was 26.2768)
+t=42478ms iter=284 incumb=26.2768 ratchet=27.6386 best=26.2717 since_improve=4
+t=42486ms iter=285 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=42570ms iter=285 REBUILD reject new_tc=28.7011 (was 26.2768)
+t=42619ms iter=285 incumb=26.2768 ratchet=28.3837 best=26.2717 since_improve=5
+t=42626ms iter=286 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=42710ms iter=286 REBUILD reject new_tc=27.9658 (was 26.2768)
+t=42758ms iter=286 incumb=26.2768 ratchet=26.8756 best=26.2717 since_improve=6
+t=42764ms iter=287 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=42848ms iter=287 REBUILD reject new_tc=28.3822 (was 26.2768)
+t=42897ms iter=287 incumb=26.2768 ratchet=27.3414 best=26.2717 since_improve=7
+t=42902ms iter=288 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=42984ms iter=288 REBUILD reject new_tc=27.9733 (was 26.2768)
+t=43033ms iter=288 incumb=26.2768 ratchet=27.1937 best=26.2717 since_improve=8
+t=43039ms iter=289 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=43121ms iter=289 REBUILD reject new_tc=28.5902 (was 26.2768)
+t=43170ms iter=289 incumb=26.2768 ratchet=26.8593 best=26.2717 since_improve=9
+t=43175ms iter=290 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=43257ms iter=290 REBUILD reject new_tc=27.6884 (was 26.2768)
+t=43307ms iter=290 incumb=26.2768 ratchet=28.9774 best=26.2717 since_improve=10
+t=43315ms iter=291 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=43406ms iter=291 REBUILD reject new_tc=28.4559 (was 26.2768)
+t=43455ms iter=291 incumb=26.2768 ratchet=26.7861 best=26.2717 since_improve=11
+t=43460ms iter=292 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=43543ms iter=292 REBUILD reject new_tc=27.2771 (was 26.2768)
+t=43591ms iter=292 incumb=26.2768 ratchet=26.3465 best=26.2717 since_improve=12
+t=43595ms iter=293 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=43679ms iter=293 REBUILD reject new_tc=28.4663 (was 26.2768)
+t=43728ms iter=293 incumb=26.2768 ratchet=28.3014 best=26.2717 since_improve=13
+t=43732ms iter=294 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=43817ms iter=294 REBUILD reject new_tc=28.7308 (was 26.2768)
+t=43867ms iter=294 incumb=26.2768 ratchet=27.1032 best=26.2717 since_improve=14
+t=43872ms iter=295 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=43956ms iter=295 REBUILD reject new_tc=28.2100 (was 26.2768)
+t=44005ms iter=295 incumb=26.2768 ratchet=26.4795 best=26.2717 since_improve=15
+t=44010ms iter=296 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=44093ms iter=296 REBUILD reject new_tc=26.9678 (was 26.2768)
+t=44142ms iter=296 incumb=26.2768 ratchet=28.0440 best=26.2717 since_improve=16
+t=44146ms iter=297 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=44229ms iter=297 REBUILD reject new_tc=28.0489 (was 26.2768)
+t=44277ms iter=297 incumb=26.2768 ratchet=27.2152 best=26.2717 since_improve=17
+t=44282ms iter=298 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=44365ms iter=298 REBUILD reject new_tc=28.5072 (was 26.2768)
+t=44413ms iter=298 incumb=26.2768 ratchet=26.6004 best=26.2717 since_improve=18
+t=44417ms iter=299 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=44501ms iter=299 REBUILD reject new_tc=28.1964 (was 26.2768)
+t=44549ms iter=299 incumb=26.2768 ratchet=27.4828 best=26.2717 since_improve=19
+t=44556ms iter=300 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=44641ms iter=300 REBUILD reject new_tc=27.7299 (was 26.2768)
+t=44690ms iter=300 incumb=26.2768 ratchet=27.6732 best=26.2717 since_improve=20
+t=44696ms iter=301 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=44777ms iter=301 REBUILD reject new_tc=28.3372 (was 26.2768)
+t=44825ms iter=301 incumb=26.2768 ratchet=26.4202 best=26.2717 since_improve=21
+t=44828ms iter=302 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=44913ms iter=302 REBUILD reject new_tc=28.3888 (was 26.2768)
+t=44960ms iter=302 incumb=26.2768 ratchet=26.3523 best=26.2717 since_improve=22
+t=44966ms iter=303 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=45050ms iter=303 REBUILD reject new_tc=28.0450 (was 26.2768)
+t=45100ms iter=303 incumb=26.2768 ratchet=27.8797 best=26.2717 since_improve=23
+t=45105ms iter=304 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=45190ms iter=304 REBUILD reject new_tc=28.3990 (was 26.2768)
+t=45240ms iter=304 incumb=26.2768 ratchet=26.8759 best=26.2717 since_improve=24
+t=45245ms iter=305 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=45328ms iter=305 REBUILD reject new_tc=27.7711 (was 26.2768)
+t=45377ms iter=305 incumb=26.2768 ratchet=28.0149 best=26.2717 since_improve=25
+t=45382ms iter=306 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=45466ms iter=306 REBUILD reject new_tc=28.1463 (was 26.2768)
+t=45515ms iter=306 incumb=26.2768 ratchet=26.8769 best=26.2717 since_improve=26
+t=45519ms iter=307 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=45604ms iter=307 REBUILD reject new_tc=28.1610 (was 26.2768)
+t=45654ms iter=307 incumb=26.2768 ratchet=27.8476 best=26.2717 since_improve=27
+t=45661ms iter=308 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=45744ms iter=308 REBUILD reject new_tc=28.0708 (was 26.2768)
+t=45793ms iter=308 incumb=26.2768 ratchet=26.9069 best=26.2717 since_improve=28
+t=45799ms iter=309 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=45884ms iter=309 REBUILD reject new_tc=28.5227 (was 26.2768)
+t=45934ms iter=309 incumb=26.2768 ratchet=28.0770 best=26.2717 since_improve=29
+t=45940ms iter=310 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=46027ms iter=310 REBUILD reject new_tc=28.4416 (was 26.2768)
+t=46075ms iter=310 incumb=26.2768 ratchet=26.4213 best=26.2717 since_improve=30
+t=46083ms iter=311 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=46172ms iter=311 REBUILD reject new_tc=28.6524 (was 26.2768)
+t=46222ms iter=311 incumb=26.2768 ratchet=27.9942 best=26.2717 since_improve=31
+t=46228ms iter=312 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=46311ms iter=312 REBUILD reject new_tc=28.1286 (was 26.2768)
+t=46361ms iter=312 incumb=26.2768 ratchet=27.3463 best=26.2717 since_improve=32
+t=46366ms iter=313 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=46449ms iter=313 REBUILD reject new_tc=28.2922 (was 26.2768)
+t=46499ms iter=313 incumb=26.2768 ratchet=27.1086 best=26.2717 since_improve=33
+t=46504ms iter=314 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=46587ms iter=314 REBUILD reject new_tc=28.3683 (was 26.2768)
+t=46636ms iter=314 incumb=26.2768 ratchet=26.9797 best=26.2717 since_improve=34
+t=46642ms iter=315 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=46735ms iter=315 REBUILD reject new_tc=27.7274 (was 26.2768)
+t=46784ms iter=315 incumb=26.2768 ratchet=26.7705 best=26.2717 since_improve=35
+t=46789ms iter=316 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=46872ms iter=316 REBUILD reject new_tc=27.4127 (was 26.2768)
+t=46921ms iter=316 incumb=26.2768 ratchet=27.3609 best=26.2717 since_improve=36
+t=46925ms iter=317 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=47008ms iter=317 REBUILD reject new_tc=28.7952 (was 26.2768)
+t=47057ms iter=317 incumb=26.2768 ratchet=26.3565 best=26.2717 since_improve=37
+t=47062ms iter=318 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=47145ms iter=318 REBUILD reject new_tc=28.0455 (was 26.2768)
+t=47194ms iter=318 incumb=26.2768 ratchet=28.3081 best=26.2717 since_improve=38
+t=47198ms iter=319 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=47281ms iter=319 REBUILD reject new_tc=28.7028 (was 26.2768)
+t=47331ms iter=319 incumb=26.2768 ratchet=27.3331 best=26.2717 since_improve=39
+t=47339ms iter=320 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=47424ms iter=320 REBUILD reject new_tc=27.9569 (was 26.2768)
+t=47474ms iter=320 incumb=26.2768 ratchet=26.7695 best=26.2717 since_improve=40
+t=47479ms iter=321 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=47563ms iter=321 REBUILD reject new_tc=28.3779 (was 26.2768)
+t=47612ms iter=321 incumb=26.2768 ratchet=28.5498 best=26.2717 since_improve=41
+t=47619ms iter=322 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=47711ms iter=322 REBUILD reject new_tc=28.4642 (was 26.2768)
+t=47759ms iter=322 incumb=26.2768 ratchet=26.8630 best=26.2717 since_improve=42
+t=47768ms iter=323 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=47858ms iter=323 REBUILD reject new_tc=28.8204 (was 26.2768)
+t=47906ms iter=323 incumb=26.2768 ratchet=28.4128 best=26.2717 since_improve=43
+t=47909ms iter=324 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=47992ms iter=324 REBUILD reject new_tc=28.4131 (was 26.2768)
+t=48041ms iter=324 incumb=26.2768 ratchet=27.7094 best=26.2717 since_improve=44
+t=48046ms iter=325 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=48130ms iter=325 REBUILD reject new_tc=27.9437 (was 26.2768)
+t=48179ms iter=325 incumb=26.2768 ratchet=26.4555 best=26.2717 since_improve=45
+t=48182ms iter=326 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=48267ms iter=326 REBUILD reject new_tc=28.4304 (was 26.2768)
+t=48317ms iter=326 incumb=26.2768 ratchet=27.5074 best=26.2717 since_improve=46
+t=48324ms iter=327 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=9 clique_frac=0.78
+t=48419ms iter=327 REBUILD reject new_tc=30.2880 (was 26.2768)
+t=48468ms iter=327 incumb=26.2768 ratchet=27.3794 best=26.2717 since_improve=47
+t=48487ms iter=328 WAIST cost=25.0000 best_alt=5.0000 gap=20.0000 tried=5 sep_labels=3 clique_frac=1.00
+t=48582ms iter=328 REBUILD reject new_tc=29.0438 (was 26.2768)
+t=48631ms iter=328 incumb=26.2768 ratchet=27.4241 best=26.2717 since_improve=48
+t=48637ms iter=329 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=9 clique_frac=0.78
+t=48731ms iter=329 REBUILD reject new_tc=30.3605 (was 26.2768)
+t=48780ms iter=329 incumb=26.2768 ratchet=27.3287 best=26.2717 since_improve=49
+t=48788ms iter=330 WAIST cost=25.0000 best_alt=8.0000 gap=17.0000 tried=5 sep_labels=5 clique_frac=0.90
+t=48882ms iter=330 REBUILD reject new_tc=28.5853 (was 26.2768)
+t=48931ms iter=330 incumb=26.2768 ratchet=26.4148 best=26.2717 since_improve=50
+t=48937ms iter=331 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=49019ms iter=331 REBUILD reject new_tc=27.8175 (was 26.2768)
+t=49069ms iter=331 incumb=26.2768 ratchet=27.4216 best=26.2717 since_improve=51
+t=49073ms iter=332 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=49155ms iter=332 REBUILD reject new_tc=28.3892 (was 26.2768)
+t=49204ms iter=332 incumb=26.2768 ratchet=28.0384 best=26.2717 since_improve=52
+t=49209ms iter=333 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=49293ms iter=333 REBUILD reject new_tc=28.6576 (was 26.2768)
+t=49342ms iter=333 incumb=26.2768 ratchet=27.2169 best=26.2717 since_improve=53
+t=49346ms iter=334 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=49431ms iter=334 REBUILD reject new_tc=28.1967 (was 26.2768)
+t=49479ms iter=334 incumb=26.2768 ratchet=26.3751 best=26.2717 since_improve=54
+t=49486ms iter=335 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=49575ms iter=335 REBUILD reject new_tc=30.3989 (was 26.2768)
+t=49626ms iter=335 incumb=26.2768 ratchet=29.5492 best=26.2717 since_improve=55
+t=49631ms iter=336 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=49714ms iter=336 REBUILD reject new_tc=28.4978 (was 26.2768)
+t=49763ms iter=336 incumb=26.2768 ratchet=26.5365 best=26.2717 since_improve=56
+t=49768ms iter=337 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=49852ms iter=337 REBUILD reject new_tc=27.5431 (was 26.2768)
+t=49902ms iter=337 incumb=26.2768 ratchet=27.8910 best=26.2717 since_improve=57
+t=49909ms iter=338 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=50006ms iter=338 REBUILD reject new_tc=29.0421 (was 26.2768)
+t=50055ms iter=338 incumb=26.2768 ratchet=26.7078 best=26.2717 since_improve=58
+t=50059ms iter=339 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=50142ms iter=339 REBUILD reject new_tc=28.7441 (was 26.2768)
+t=50192ms iter=339 incumb=26.2768 ratchet=27.4631 best=26.2717 since_improve=59
+t=50201ms iter=340 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=50291ms iter=340 REBUILD reject new_tc=28.5024 (was 26.2768)
+t=50340ms iter=340 incumb=26.2768 ratchet=27.0404 best=26.2717 since_improve=60
+t=50345ms iter=341 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=50430ms iter=341 REBUILD reject new_tc=27.5558 (was 26.2768)
+t=50478ms iter=341 incumb=26.2768 ratchet=26.6637 best=26.2717 since_improve=61
+t=50482ms iter=342 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=50566ms iter=342 REBUILD reject new_tc=28.5132 (was 26.2768)
+t=50616ms iter=342 incumb=26.2768 ratchet=27.5502 best=26.2717 since_improve=62
+t=50623ms iter=343 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=50709ms iter=343 REBUILD reject new_tc=28.5157 (was 26.2768)
+t=50759ms iter=343 incumb=26.2768 ratchet=26.4658 best=26.2717 since_improve=63
+t=50764ms iter=344 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=50849ms iter=344 REBUILD reject new_tc=28.8976 (was 26.2768)
+t=50899ms iter=344 incumb=26.2768 ratchet=26.9793 best=26.2717 since_improve=64
+t=50904ms iter=345 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=50986ms iter=345 REBUILD reject new_tc=27.3196 (was 26.2768)
+t=51035ms iter=345 incumb=26.2768 ratchet=26.5707 best=26.2717 since_improve=65
+t=51039ms iter=346 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=51125ms iter=346 REBUILD reject new_tc=27.9119 (was 26.2768)
+t=51175ms iter=346 incumb=26.2768 ratchet=27.4965 best=26.2717 since_improve=66
+t=51181ms iter=347 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=51263ms iter=347 REBUILD reject new_tc=27.9934 (was 26.2768)
+t=51311ms iter=347 incumb=26.2768 ratchet=26.7621 best=26.2717 since_improve=67
+t=51316ms iter=348 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=51401ms iter=348 REBUILD reject new_tc=28.7387 (was 26.2768)
+t=51450ms iter=348 incumb=26.2768 ratchet=28.0547 best=26.2717 since_improve=68
+t=51455ms iter=349 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=51537ms iter=349 REBUILD reject new_tc=27.7300 (was 26.2768)
+t=51586ms iter=349 incumb=26.2768 ratchet=26.7748 best=26.2717 since_improve=69
+t=51593ms iter=350 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=51676ms iter=350 REBUILD reject new_tc=28.7278 (was 26.2768)
+t=51725ms iter=350 incumb=26.2768 ratchet=26.9872 best=26.2717 since_improve=70
+t=51733ms iter=351 WAIST cost=25.0000 best_alt=5.0000 gap=20.0000 tried=5 sep_labels=3 clique_frac=1.00
+t=51827ms iter=351 REBUILD reject new_tc=27.8306 (was 26.2768)
+t=51878ms iter=351 incumb=26.2768 ratchet=27.7697 best=26.2717 since_improve=71
+t=51884ms iter=352 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=51976ms iter=352 REBUILD reject new_tc=28.7163 (was 26.2768)
+t=52027ms iter=352 incumb=26.2768 ratchet=30.9008 best=26.2717 since_improve=72
+t=52032ms iter=353 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=52116ms iter=353 REBUILD reject new_tc=28.5494 (was 26.2768)
+t=52165ms iter=353 incumb=26.2768 ratchet=27.5664 best=26.2717 since_improve=73
+t=52171ms iter=354 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=52255ms iter=354 REBUILD reject new_tc=28.2722 (was 26.2768)
+t=52305ms iter=354 incumb=26.2768 ratchet=30.0215 best=26.2717 since_improve=74
+t=52313ms iter=355 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=52405ms iter=355 REBUILD reject new_tc=29.3405 (was 26.2768)
+t=52453ms iter=355 incumb=26.2768 ratchet=26.7289 best=26.2717 since_improve=75
+t=52460ms iter=356 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=52545ms iter=356 REBUILD reject new_tc=28.9079 (was 26.2768)
+t=52594ms iter=356 incumb=26.2768 ratchet=28.0170 best=26.2717 since_improve=76
+t=52599ms iter=357 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=52682ms iter=357 REBUILD reject new_tc=28.6902 (was 26.2768)
+t=52731ms iter=357 incumb=26.2768 ratchet=26.6817 best=26.2717 since_improve=77
+t=52742ms iter=358 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=52833ms iter=358 REBUILD reject new_tc=27.7776 (was 26.2768)
+t=52883ms iter=358 incumb=26.2768 ratchet=27.0668 best=26.2717 since_improve=78
+t=52892ms iter=359 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=52982ms iter=359 REBUILD reject new_tc=29.5154 (was 26.2768)
+t=53032ms iter=359 incumb=26.2768 ratchet=27.5646 best=26.2717 since_improve=79
+t=53037ms iter=360 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=53121ms iter=360 REBUILD reject new_tc=27.7408 (was 26.2768)
+t=53171ms iter=360 incumb=26.2768 ratchet=27.0503 best=26.2717 since_improve=80
+t=53176ms iter=361 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=53262ms iter=361 REBUILD reject new_tc=28.7389 (was 26.2768)
+t=53310ms iter=361 incumb=26.2768 ratchet=27.4193 best=26.2717 since_improve=81
+t=53316ms iter=362 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=53402ms iter=362 REBUILD reject new_tc=28.2097 (was 26.2768)
+t=53451ms iter=362 incumb=26.2768 ratchet=27.5168 best=26.2717 since_improve=82
+t=53457ms iter=363 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=53551ms iter=363 REBUILD reject new_tc=28.8147 (was 26.2768)
+t=53600ms iter=363 incumb=26.2768 ratchet=26.6355 best=26.2717 since_improve=83
+t=53607ms iter=364 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=53697ms iter=364 REBUILD reject new_tc=28.5761 (was 26.2768)
+t=53745ms iter=364 incumb=26.2768 ratchet=27.0820 best=26.2717 since_improve=84
+t=53756ms iter=365 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=53847ms iter=365 REBUILD reject new_tc=29.3062 (was 26.2768)
+t=53896ms iter=365 incumb=26.2768 ratchet=26.3366 best=26.2717 since_improve=85
+t=53902ms iter=366 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=53992ms iter=366 REBUILD reject new_tc=28.9802 (was 26.2768)
+t=54041ms iter=366 incumb=26.2768 ratchet=27.2267 best=26.2717 since_improve=86
+t=54048ms iter=367 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=54139ms iter=367 REBUILD reject new_tc=28.5804 (was 26.2768)
+t=54187ms iter=367 incumb=26.2768 ratchet=26.8212 best=26.2717 since_improve=87
+t=54192ms iter=368 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=54278ms iter=368 REBUILD reject new_tc=28.1137 (was 26.2768)
+t=54328ms iter=368 incumb=26.2768 ratchet=27.9517 best=26.2717 since_improve=88
+t=54334ms iter=369 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=54417ms iter=369 REBUILD reject new_tc=27.8069 (was 26.2768)
+t=54465ms iter=369 incumb=26.2768 ratchet=26.9679 best=26.2717 since_improve=89
+t=54469ms iter=370 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=54556ms iter=370 REBUILD reject new_tc=28.3752 (was 26.2768)
+t=54604ms iter=370 incumb=26.2768 ratchet=27.3434 best=26.2717 since_improve=90
+t=54609ms iter=371 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=54697ms iter=371 REBUILD reject new_tc=28.8568 (was 26.2768)
+t=54745ms iter=371 incumb=26.2768 ratchet=27.0690 best=26.2717 since_improve=91
+t=54749ms iter=372 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=54834ms iter=372 REBUILD reject new_tc=27.8741 (was 26.2768)
+t=54882ms iter=372 incumb=26.2768 ratchet=26.8178 best=26.2717 since_improve=92
+t=54887ms iter=373 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=54970ms iter=373 REBUILD reject new_tc=28.3090 (was 26.2768)
+t=55019ms iter=373 incumb=26.2768 ratchet=27.0312 best=26.2717 since_improve=93
+t=55024ms iter=374 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=55108ms iter=374 REBUILD reject new_tc=29.2762 (was 26.2768)
+t=55157ms iter=374 incumb=26.2768 ratchet=27.6067 best=26.2717 since_improve=94
+t=55162ms iter=375 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=55246ms iter=375 REBUILD reject new_tc=27.7617 (was 26.2768)
+t=55296ms iter=375 incumb=26.2768 ratchet=31.9684 best=26.2717 since_improve=95
+t=55300ms iter=376 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=55385ms iter=376 REBUILD reject new_tc=27.8893 (was 26.2768)
+t=55434ms iter=376 incumb=26.2768 ratchet=26.8974 best=26.2717 since_improve=96
+t=55439ms iter=377 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=55521ms iter=377 REBUILD reject new_tc=28.1156 (was 26.2768)
+t=55569ms iter=377 incumb=26.2768 ratchet=26.6639 best=26.2717 since_improve=97
+t=55573ms iter=378 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=55658ms iter=378 REBUILD reject new_tc=29.0169 (was 26.2768)
+t=55707ms iter=378 incumb=26.2768 ratchet=26.5218 best=26.2717 since_improve=98
+t=55714ms iter=379 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=55806ms iter=379 REBUILD reject new_tc=28.9156 (was 26.2768)
+t=55856ms iter=379 incumb=26.2768 ratchet=27.5982 best=26.2717 since_improve=99
+t=55861ms iter=380 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=55943ms iter=380 REBUILD reject new_tc=27.4585 (was 26.2768)
+t=55992ms iter=380 incumb=26.2768 ratchet=27.6384 best=26.2717 since_improve=100
+t=55998ms iter=381 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=56082ms iter=381 REBUILD reject new_tc=27.4730 (was 26.2768)
+t=56130ms iter=381 incumb=26.2768 ratchet=26.4345 best=26.2717 since_improve=101
+t=56135ms iter=382 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=56220ms iter=382 REBUILD reject new_tc=27.9191 (was 26.2768)
+t=56269ms iter=382 incumb=26.2768 ratchet=27.6467 best=26.2717 since_improve=102
+t=56274ms iter=383 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=56357ms iter=383 REBUILD reject new_tc=27.6789 (was 26.2768)
+t=56406ms iter=383 incumb=26.2768 ratchet=28.2932 best=26.2717 since_improve=103
+t=56411ms iter=384 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=56494ms iter=384 REBUILD reject new_tc=27.5380 (was 26.2768)
+t=56542ms iter=384 incumb=26.2768 ratchet=26.5701 best=26.2717 since_improve=104
+t=56548ms iter=385 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=56632ms iter=385 REBUILD reject new_tc=28.5145 (was 26.2768)
+t=56682ms iter=385 incumb=26.2768 ratchet=28.0805 best=26.2717 since_improve=105
+t=56688ms iter=386 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=56770ms iter=386 REBUILD reject new_tc=27.7934 (was 26.2768)
+t=56818ms iter=386 incumb=26.2768 ratchet=27.0696 best=26.2717 since_improve=106
+t=56826ms iter=387 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=56917ms iter=387 REBUILD reject new_tc=28.7327 (was 26.2768)
+t=56965ms iter=387 incumb=26.2768 ratchet=26.5402 best=26.2717 since_improve=107
+t=56974ms iter=388 WAIST cost=25.0000 best_alt=5.0000 gap=20.0000 tried=5 sep_labels=3 clique_frac=1.00
+t=57069ms iter=388 REBUILD reject new_tc=28.8120 (was 26.2768)
+t=57118ms iter=388 incumb=26.2768 ratchet=26.9253 best=26.2717 since_improve=108
+t=57124ms iter=389 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=57214ms iter=389 REBUILD reject new_tc=29.1768 (was 26.2768)
+t=57262ms iter=389 incumb=26.2768 ratchet=26.3727 best=26.2717 since_improve=109
+t=57268ms iter=390 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=57354ms iter=390 REBUILD reject new_tc=28.1620 (was 26.2768)
+t=57403ms iter=390 incumb=26.2768 ratchet=27.1103 best=26.2717 since_improve=110
+t=57409ms iter=391 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=57492ms iter=391 REBUILD reject new_tc=28.0124 (was 26.2768)
+t=57540ms iter=391 incumb=26.2768 ratchet=27.0778 best=26.2717 since_improve=111
+t=57547ms iter=392 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=57631ms iter=392 REBUILD reject new_tc=28.4353 (was 26.2768)
+t=57680ms iter=392 incumb=26.2768 ratchet=26.8785 best=26.2717 since_improve=112
+t=57685ms iter=393 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=57769ms iter=393 REBUILD reject new_tc=27.8387 (was 26.2768)
+t=57819ms iter=393 incumb=26.2768 ratchet=27.7190 best=26.2717 since_improve=113
+t=57824ms iter=394 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=57909ms iter=394 REBUILD reject new_tc=28.2085 (was 26.2768)
+t=57960ms iter=394 incumb=26.2768 ratchet=30.4934 best=26.2717 since_improve=114
+t=57968ms iter=395 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=58050ms iter=395 REBUILD reject new_tc=27.7705 (was 26.2768)
+t=58100ms iter=395 incumb=26.2768 ratchet=26.7699 best=26.2717 since_improve=115
+t=58103ms iter=396 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=58188ms iter=396 REBUILD reject new_tc=27.9283 (was 26.2768)
+t=58238ms iter=396 incumb=26.2768 ratchet=27.4910 best=26.2717 since_improve=116
+t=58243ms iter=397 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=58324ms iter=397 REBUILD reject new_tc=27.5584 (was 26.2768)
+t=58372ms iter=397 incumb=26.2768 ratchet=26.6277 best=26.2717 since_improve=117
+t=58379ms iter=398 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=58462ms iter=398 REBUILD reject new_tc=27.9499 (was 26.2768)
+t=58510ms iter=398 incumb=26.2768 ratchet=27.0553 best=26.2717 since_improve=118
+t=58516ms iter=399 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=58601ms iter=399 REBUILD reject new_tc=28.1278 (was 26.2768)
+t=58655ms iter=399 incumb=26.2768 ratchet=27.2111 best=26.2717 since_improve=119
+t=58661ms iter=400 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=58745ms iter=400 REBUILD reject new_tc=27.9562 (was 26.2768)
+t=58795ms iter=400 incumb=26.2768 ratchet=26.7979 best=26.2717 since_improve=120
+t=58800ms iter=401 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=58884ms iter=401 REBUILD reject new_tc=27.9193 (was 26.2768)
+t=58934ms iter=401 incumb=26.2768 ratchet=28.4229 best=26.2717 since_improve=121
+t=58938ms iter=402 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=59022ms iter=402 REBUILD reject new_tc=28.1447 (was 26.2768)
+t=59071ms iter=402 incumb=26.2768 ratchet=27.7605 best=26.2717 since_improve=122
+t=59075ms iter=403 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=59158ms iter=403 REBUILD reject new_tc=28.0824 (was 26.2768)
+t=59207ms iter=403 incumb=26.2768 ratchet=27.4396 best=26.2717 since_improve=123
+t=59210ms iter=404 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=59295ms iter=404 REBUILD reject new_tc=27.4549 (was 26.2768)
+t=59342ms iter=404 incumb=26.2768 ratchet=27.0915 best=26.2717 since_improve=124
+t=59347ms iter=405 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=59432ms iter=405 REBUILD reject new_tc=28.3435 (was 26.2768)
+t=59480ms iter=405 incumb=26.2768 ratchet=27.6578 best=26.2717 since_improve=125
+t=59485ms iter=406 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=59570ms iter=406 REBUILD reject new_tc=28.3326 (was 26.2768)
+t=59619ms iter=406 incumb=26.2768 ratchet=28.2678 best=26.2717 since_improve=126
+t=59625ms iter=407 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=59707ms iter=407 REBUILD reject new_tc=28.0512 (was 26.2768)
+t=59755ms iter=407 incumb=26.2768 ratchet=27.2421 best=26.2717 since_improve=127
+t=59760ms iter=408 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=59847ms iter=408 REBUILD reject new_tc=28.2229 (was 26.2768)
+t=59895ms iter=408 incumb=26.2768 ratchet=26.7728 best=26.2717 since_improve=128
+t=59902ms iter=409 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=59986ms iter=409 REBUILD reject new_tc=28.3104 (was 26.2768)
+t=60036ms iter=409 incumb=26.2768 ratchet=26.8575 best=26.2717 since_improve=129
+t=60043ms iter=410 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=60134ms iter=410 REBUILD reject new_tc=28.6295 (was 26.2768)
+t=60183ms iter=410 incumb=26.2768 ratchet=26.4276 best=26.2717 since_improve=130
+t=60188ms iter=411 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=60273ms iter=411 REBUILD reject new_tc=27.7394 (was 26.2768)
+t=60323ms iter=411 incumb=26.2768 ratchet=27.0092 best=26.2717 since_improve=131
+t=60328ms iter=412 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=60410ms iter=412 REBUILD reject new_tc=28.4991 (was 26.2768)
+t=60459ms iter=412 incumb=26.2768 ratchet=27.6217 best=26.2717 since_improve=132
+t=60463ms iter=413 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=60547ms iter=413 REBUILD reject new_tc=27.0369 (was 26.2768)
+t=60596ms iter=413 incumb=26.2768 ratchet=26.8103 best=26.2717 since_improve=133
+t=60601ms iter=414 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=60685ms iter=414 REBUILD reject new_tc=28.2258 (was 26.2768)
+t=60734ms iter=414 incumb=26.2768 ratchet=27.1180 best=26.2717 since_improve=134
+t=60740ms iter=415 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=60822ms iter=415 REBUILD reject new_tc=28.1783 (was 26.2768)
+t=60872ms iter=415 incumb=26.2768 ratchet=27.0331 best=26.2717 since_improve=135
+t=60878ms iter=416 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=60961ms iter=416 REBUILD reject new_tc=27.9751 (was 26.2768)
+t=61010ms iter=416 incumb=26.2768 ratchet=27.0367 best=26.2717 since_improve=136
+t=61016ms iter=417 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=61099ms iter=417 REBUILD reject new_tc=28.0369 (was 26.2768)
+t=61149ms iter=417 incumb=26.2768 ratchet=27.6264 best=26.2717 since_improve=137
+t=61159ms iter=418 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=61250ms iter=418 REBUILD reject new_tc=28.2938 (was 26.2768)
+t=61299ms iter=418 incumb=26.2768 ratchet=26.9037 best=26.2717 since_improve=138
+t=61304ms iter=419 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=61388ms iter=419 REBUILD reject new_tc=28.1130 (was 26.2768)
+t=61437ms iter=419 incumb=26.2768 ratchet=27.6322 best=26.2717 since_improve=139
+t=61446ms iter=420 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=61529ms iter=420 REBUILD reject new_tc=27.4182 (was 26.2768)
+t=61578ms iter=420 incumb=26.2768 ratchet=26.3164 best=26.2717 since_improve=140
+t=61585ms iter=421 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=61669ms iter=421 REBUILD reject new_tc=27.6682 (was 26.2768)
+t=61718ms iter=421 incumb=26.2768 ratchet=27.8477 best=26.2717 since_improve=141
+t=61724ms iter=422 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=61809ms iter=422 REBUILD reject new_tc=28.5190 (was 26.2768)
+t=61857ms iter=422 incumb=26.2768 ratchet=26.3768 best=26.2717 since_improve=142
+t=61865ms iter=423 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=61948ms iter=423 REBUILD reject new_tc=28.4209 (was 26.2768)
+t=61998ms iter=423 incumb=26.2768 ratchet=27.2970 best=26.2717 since_improve=143
+t=62002ms iter=424 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=62085ms iter=424 REBUILD reject new_tc=28.8663 (was 26.2768)
+t=62135ms iter=424 incumb=26.2768 ratchet=27.5623 best=26.2717 since_improve=144
+t=62139ms iter=425 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=62224ms iter=425 REBUILD reject new_tc=28.5355 (was 26.2768)
+t=62273ms iter=425 incumb=26.2768 ratchet=28.5919 best=26.2717 since_improve=145
+t=62280ms iter=426 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=62377ms iter=426 REBUILD reject new_tc=29.6694 (was 26.2768)
+t=62426ms iter=426 incumb=26.2768 ratchet=27.1231 best=26.2717 since_improve=146
+t=62431ms iter=427 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=62518ms iter=427 REBUILD reject new_tc=27.8331 (was 26.2768)
+t=62566ms iter=427 incumb=26.2768 ratchet=26.9199 best=26.2717 since_improve=147
+t=62572ms iter=428 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=62654ms iter=428 REBUILD reject new_tc=28.4965 (was 26.2768)
+t=62703ms iter=428 incumb=26.2768 ratchet=27.7538 best=26.2717 since_improve=148
+t=62710ms iter=429 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=62795ms iter=429 REBUILD reject new_tc=28.0873 (was 26.2768)
+t=62844ms iter=429 incumb=26.2768 ratchet=26.3746 best=26.2717 since_improve=149
+t=62851ms iter=430 WAIST cost=25.0000 best_alt=7.0000 gap=18.0000 tried=5 sep_labels=4 clique_frac=1.00
+t=62944ms iter=430 REBUILD reject new_tc=28.5577 (was 26.2768)
+t=62994ms iter=430 incumb=26.2768 ratchet=27.2450 best=26.2717 since_improve=150
+t=62999ms iter=431 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=63085ms iter=431 REBUILD reject new_tc=27.9680 (was 26.2768)
+t=63134ms iter=431 incumb=26.2768 ratchet=27.3667 best=26.2717 since_improve=151
+t=63139ms iter=432 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=63224ms iter=432 REBUILD reject new_tc=27.9756 (was 26.2768)
+t=63272ms iter=432 incumb=26.2768 ratchet=26.7586 best=26.2717 since_improve=152
+t=63276ms iter=433 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=63361ms iter=433 REBUILD reject new_tc=28.8381 (was 26.2768)
+t=63411ms iter=433 incumb=26.2768 ratchet=27.3697 best=26.2717 since_improve=153
+t=63416ms iter=434 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=63499ms iter=434 REBUILD reject new_tc=28.3155 (was 26.2768)
+t=63548ms iter=434 incumb=26.2768 ratchet=27.2626 best=26.2717 since_improve=154
+t=63553ms iter=435 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=63636ms iter=435 REBUILD reject new_tc=28.4276 (was 26.2768)
+t=63685ms iter=435 incumb=26.2768 ratchet=26.9475 best=26.2717 since_improve=155
+t=63691ms iter=436 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=63776ms iter=436 REBUILD reject new_tc=28.4198 (was 26.2768)
+t=63825ms iter=436 incumb=26.2768 ratchet=27.0520 best=26.2717 since_improve=156
+t=63833ms iter=437 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=63922ms iter=437 REBUILD reject new_tc=28.7940 (was 26.2768)
+t=63970ms iter=437 incumb=26.2768 ratchet=26.9490 best=26.2717 since_improve=157
+t=63974ms iter=438 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=64060ms iter=438 REBUILD reject new_tc=28.2036 (was 26.2768)
+t=64110ms iter=438 incumb=26.2768 ratchet=27.9418 best=26.2717 since_improve=158
+t=64116ms iter=439 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=64209ms iter=439 REBUILD reject new_tc=27.6377 (was 26.2768)
+t=64258ms iter=439 incumb=26.2768 ratchet=27.3499 best=26.2717 since_improve=159
+t=64264ms iter=440 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=64350ms iter=440 REBUILD reject new_tc=28.3823 (was 26.2768)
+t=64400ms iter=440 incumb=26.2768 ratchet=27.2120 best=26.2717 since_improve=160
+t=64405ms iter=441 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=64492ms iter=441 REBUILD reject new_tc=28.4700 (was 26.2768)
+t=64542ms iter=441 incumb=26.2768 ratchet=26.5794 best=26.2717 since_improve=161
+t=64549ms iter=442 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=64633ms iter=442 REBUILD reject new_tc=28.8189 (was 26.2768)
+t=64682ms iter=442 incumb=26.2768 ratchet=27.5986 best=26.2717 since_improve=162
+t=64690ms iter=443 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=64772ms iter=443 REBUILD reject new_tc=27.8398 (was 26.2768)
+t=64820ms iter=443 incumb=26.2768 ratchet=26.3888 best=26.2717 since_improve=163
+t=64824ms iter=444 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=64907ms iter=444 REBUILD reject new_tc=28.2568 (was 26.2768)
+t=64956ms iter=444 incumb=26.2768 ratchet=27.4794 best=26.2717 since_improve=164
+t=64966ms iter=445 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=65056ms iter=445 REBUILD reject new_tc=29.3873 (was 26.2768)
+t=65105ms iter=445 incumb=26.2768 ratchet=26.5974 best=26.2717 since_improve=165
+t=65109ms iter=446 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=65192ms iter=446 REBUILD reject new_tc=28.3681 (was 26.2768)
+t=65242ms iter=446 incumb=26.2768 ratchet=28.3915 best=26.2717 since_improve=166
+t=65246ms iter=447 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=65329ms iter=447 REBUILD reject new_tc=28.2880 (was 26.2768)
+t=65378ms iter=447 incumb=26.2768 ratchet=27.6543 best=26.2717 since_improve=167
+t=65384ms iter=448 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=65466ms iter=448 REBUILD reject new_tc=28.1612 (was 26.2768)
+t=65515ms iter=448 incumb=26.2768 ratchet=27.6553 best=26.2717 since_improve=168
+t=65519ms iter=449 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=65604ms iter=449 REBUILD reject new_tc=28.3935 (was 26.2768)
+t=65653ms iter=449 incumb=26.2768 ratchet=26.9797 best=26.2717 since_improve=169
+t=65657ms iter=450 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=65742ms iter=450 REBUILD reject new_tc=28.6034 (was 26.2768)
+t=65792ms iter=450 incumb=26.2768 ratchet=28.1354 best=26.2717 since_improve=170
+t=65797ms iter=451 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=65881ms iter=451 REBUILD reject new_tc=28.4837 (was 26.2768)
+t=65928ms iter=451 incumb=26.2768 ratchet=26.3668 best=26.2717 since_improve=171
+t=65932ms iter=452 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=66016ms iter=452 REBUILD reject new_tc=28.4727 (was 26.2768)
+t=66065ms iter=452 incumb=26.2768 ratchet=28.4000 best=26.2717 since_improve=172
+t=66070ms iter=453 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=66155ms iter=453 REBUILD reject new_tc=28.5500 (was 26.2768)
+t=66203ms iter=453 incumb=26.2768 ratchet=26.7251 best=26.2717 since_improve=173
+t=66208ms iter=454 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=66292ms iter=454 REBUILD reject new_tc=27.6689 (was 26.2768)
+t=66341ms iter=454 incumb=26.2768 ratchet=27.4127 best=26.2717 since_improve=174
+t=66346ms iter=455 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=66432ms iter=455 REBUILD reject new_tc=28.4366 (was 26.2768)
+t=66480ms iter=455 incumb=26.2768 ratchet=27.1155 best=26.2717 since_improve=175
+t=66485ms iter=456 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=66570ms iter=456 REBUILD reject new_tc=28.2837 (was 26.2768)
+t=66619ms iter=456 incumb=26.2768 ratchet=26.7078 best=26.2717 since_improve=176
+t=66624ms iter=457 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=66708ms iter=457 REBUILD reject new_tc=28.3069 (was 26.2768)
+t=66758ms iter=457 incumb=26.2768 ratchet=26.7045 best=26.2717 since_improve=177
+t=66764ms iter=458 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=66847ms iter=458 REBUILD reject new_tc=28.3263 (was 26.2768)
+t=66897ms iter=458 incumb=26.2768 ratchet=28.0282 best=26.2717 since_improve=178
+t=66903ms iter=459 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=66987ms iter=459 REBUILD reject new_tc=28.4408 (was 26.2768)
+t=67037ms iter=459 incumb=26.2768 ratchet=27.0476 best=26.2717 since_improve=179
+t=67041ms iter=460 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=67124ms iter=460 REBUILD reject new_tc=27.6392 (was 26.2768)
+t=67173ms iter=460 incumb=26.2768 ratchet=28.6582 best=26.2717 since_improve=180
+t=67178ms iter=461 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=67263ms iter=461 REBUILD reject new_tc=28.5329 (was 26.2768)
+t=67312ms iter=461 incumb=26.2768 ratchet=27.1471 best=26.2717 since_improve=181
+t=67320ms iter=462 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=67408ms iter=462 REBUILD reject new_tc=28.5015 (was 26.2768)
+t=67459ms iter=462 incumb=26.2768 ratchet=27.4789 best=26.2717 since_improve=182
+t=67466ms iter=463 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=67549ms iter=463 REBUILD reject new_tc=28.4068 (was 26.2768)
+t=67599ms iter=463 incumb=26.2768 ratchet=27.6466 best=26.2717 since_improve=183
+t=67603ms iter=464 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=67687ms iter=464 REBUILD reject new_tc=28.4773 (was 26.2768)
+t=67738ms iter=464 incumb=26.2768 ratchet=28.2454 best=26.2717 since_improve=184
+t=67744ms iter=465 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=67827ms iter=465 REBUILD reject new_tc=27.6333 (was 26.2768)
+t=67877ms iter=465 incumb=26.2768 ratchet=28.6490 best=26.2717 since_improve=185
+t=67883ms iter=466 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=67974ms iter=466 REBUILD reject new_tc=28.8137 (was 26.2768)
+t=68025ms iter=466 incumb=26.2768 ratchet=27.4342 best=26.2717 since_improve=186
+t=68030ms iter=467 WAIST cost=25.0000 best_alt=19.0000 gap=6.0000 tried=5 sep_labels=14 clique_frac=0.74
+t=68115ms iter=467 REBUILD reject new_tc=27.7578 (was 26.2768)
+t=68174ms iter=467 incumb=26.2768 ratchet=26.2294 best=26.2294 since_improve=0
+t=68180ms iter=468 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=68274ms iter=468 REBUILD reject new_tc=28.8539 (was 26.2294)
+t=68323ms iter=468 incumb=26.2294 ratchet=26.4429 best=26.2294 since_improve=1
+t=68328ms iter=469 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=68421ms iter=469 REBUILD reject new_tc=28.6064 (was 26.2294)
+t=68470ms iter=469 incumb=26.2294 ratchet=26.3272 best=26.2294 since_improve=2
+t=68474ms iter=470 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=68568ms iter=470 REBUILD reject new_tc=28.5867 (was 26.2294)
+t=68619ms iter=470 incumb=26.2294 ratchet=27.7196 best=26.2294 since_improve=3
+t=68625ms iter=471 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=68718ms iter=471 REBUILD reject new_tc=28.6150 (was 26.2294)
+t=68768ms iter=471 incumb=26.2294 ratchet=27.5349 best=26.2294 since_improve=4
+t=68775ms iter=472 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=68870ms iter=472 REBUILD reject new_tc=28.3781 (was 26.2294)
+t=68918ms iter=472 incumb=26.2294 ratchet=26.9235 best=26.2294 since_improve=5
+t=68923ms iter=473 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=69014ms iter=473 REBUILD reject new_tc=28.7201 (was 26.2294)
+t=69064ms iter=473 incumb=26.2294 ratchet=27.3638 best=26.2294 since_improve=6
+t=69070ms iter=474 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=69168ms iter=474 REBUILD reject new_tc=28.4180 (was 26.2294)
+t=69224ms iter=474 incumb=26.2294 ratchet=28.0896 best=26.2294 since_improve=7
+t=69230ms iter=475 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=69326ms iter=475 REBUILD reject new_tc=28.2596 (was 26.2294)
+t=69376ms iter=475 incumb=26.2294 ratchet=27.0532 best=26.2294 since_improve=8
+t=69380ms iter=476 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=69473ms iter=476 REBUILD reject new_tc=28.4235 (was 26.2294)
+t=69521ms iter=476 incumb=26.2294 ratchet=26.4342 best=26.2294 since_improve=9
+t=69526ms iter=477 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=69624ms iter=477 REBUILD reject new_tc=28.6621 (was 26.2294)
+t=69674ms iter=477 incumb=26.2294 ratchet=27.8286 best=26.2294 since_improve=10
+t=69679ms iter=478 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=69775ms iter=478 REBUILD reject new_tc=29.7372 (was 26.2294)
+t=69824ms iter=478 incumb=26.2294 ratchet=26.8491 best=26.2294 since_improve=11
+t=69827ms iter=479 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=69921ms iter=479 REBUILD reject new_tc=28.5530 (was 26.2294)
+t=69971ms iter=479 incumb=26.2294 ratchet=27.5796 best=26.2294 since_improve=12
+t=69976ms iter=480 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=70072ms iter=480 REBUILD reject new_tc=28.5650 (was 26.2294)
+t=70121ms iter=480 incumb=26.2294 ratchet=26.8402 best=26.2294 since_improve=13
+t=70126ms iter=481 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=70222ms iter=481 REBUILD reject new_tc=28.5893 (was 26.2294)
+t=70272ms iter=481 incumb=26.2294 ratchet=27.0232 best=26.2294 since_improve=14
+t=70280ms iter=482 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=70372ms iter=482 REBUILD reject new_tc=28.7713 (was 26.2294)
+t=70421ms iter=482 incumb=26.2294 ratchet=27.5000 best=26.2294 since_improve=15
+t=70426ms iter=483 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=70516ms iter=483 REBUILD reject new_tc=28.8046 (was 26.2294)
+t=70565ms iter=483 incumb=26.2294 ratchet=27.7315 best=26.2294 since_improve=16
+t=70570ms iter=484 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=70665ms iter=484 REBUILD reject new_tc=28.9838 (was 26.2294)
+t=70715ms iter=484 incumb=26.2294 ratchet=27.0950 best=26.2294 since_improve=17
+t=70720ms iter=485 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=70815ms iter=485 REBUILD reject new_tc=28.5432 (was 26.2294)
+t=70865ms iter=485 incumb=26.2294 ratchet=28.0266 best=26.2294 since_improve=18
+t=70870ms iter=486 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=70966ms iter=486 REBUILD reject new_tc=28.3128 (was 26.2294)
+t=71016ms iter=486 incumb=26.2294 ratchet=27.0389 best=26.2294 since_improve=19
+t=71024ms iter=487 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=71144ms iter=487 REBUILD reject new_tc=28.3591 (was 26.2294)
+t=71201ms iter=487 incumb=26.2294 ratchet=28.0714 best=26.2294 since_improve=20
+t=71207ms iter=488 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=71301ms iter=488 REBUILD reject new_tc=29.0686 (was 26.2294)
+t=71351ms iter=488 incumb=26.2294 ratchet=27.7569 best=26.2294 since_improve=21
+t=71357ms iter=489 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=71450ms iter=489 REBUILD reject new_tc=28.4908 (was 26.2294)
+t=71499ms iter=489 incumb=26.2294 ratchet=27.0679 best=26.2294 since_improve=22
+t=71503ms iter=490 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=71598ms iter=490 REBUILD reject new_tc=28.4053 (was 26.2294)
+t=71648ms iter=490 incumb=26.2294 ratchet=26.4881 best=26.2294 since_improve=23
+t=71652ms iter=491 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=71761ms iter=491 REBUILD reject new_tc=29.7608 (was 26.2294)
+t=71811ms iter=491 incumb=26.2294 ratchet=26.7662 best=26.2294 since_improve=24
+t=71816ms iter=492 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=71910ms iter=492 REBUILD reject new_tc=28.4594 (was 26.2294)
+t=71959ms iter=492 incumb=26.2294 ratchet=27.8469 best=26.2294 since_improve=25
+t=71967ms iter=493 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=72060ms iter=493 REBUILD reject new_tc=28.5443 (was 26.2294)
+t=72109ms iter=493 incumb=26.2294 ratchet=28.3471 best=26.2294 since_improve=26
+t=72117ms iter=494 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=72212ms iter=494 REBUILD reject new_tc=28.5041 (was 26.2294)
+t=72261ms iter=494 incumb=26.2294 ratchet=26.3763 best=26.2294 since_improve=27
+t=72265ms iter=495 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=72357ms iter=495 REBUILD reject new_tc=28.4376 (was 26.2294)
+t=72406ms iter=495 incumb=26.2294 ratchet=26.2515 best=26.2294 since_improve=28
+t=72411ms iter=496 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=72503ms iter=496 REBUILD reject new_tc=27.9446 (was 26.2294)
+t=72554ms iter=496 incumb=26.2294 ratchet=28.0217 best=26.2294 since_improve=29
+t=72557ms iter=497 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=72651ms iter=497 REBUILD reject new_tc=28.6340 (was 26.2294)
+t=72701ms iter=497 incumb=26.2294 ratchet=28.4762 best=26.2294 since_improve=30
+t=72705ms iter=498 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=72798ms iter=498 REBUILD reject new_tc=28.5391 (was 26.2294)
+t=72848ms iter=498 incumb=26.2294 ratchet=27.5949 best=26.2294 since_improve=31
+t=72854ms iter=499 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=72949ms iter=499 REBUILD reject new_tc=28.6885 (was 26.2294)
+t=72999ms iter=499 incumb=26.2294 ratchet=27.0541 best=26.2294 since_improve=32
+t=73003ms iter=500 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=73098ms iter=500 REBUILD reject new_tc=28.9419 (was 26.2294)
+t=73147ms iter=500 incumb=26.2294 ratchet=26.6147 best=26.2294 since_improve=33
+t=73150ms iter=501 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=73244ms iter=501 REBUILD reject new_tc=29.1692 (was 26.2294)
+t=73292ms iter=501 incumb=26.2294 ratchet=27.8344 best=26.2294 since_improve=34
+t=73296ms iter=502 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=73390ms iter=502 REBUILD reject new_tc=28.5177 (was 26.2294)
+t=73440ms iter=502 incumb=26.2294 ratchet=26.3669 best=26.2294 since_improve=35
+t=73443ms iter=503 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=73543ms iter=503 REBUILD reject new_tc=28.7483 (was 26.2294)
+t=73592ms iter=503 incumb=26.2294 ratchet=27.4492 best=26.2294 since_improve=36
+t=73598ms iter=504 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=73690ms iter=504 REBUILD reject new_tc=28.0999 (was 26.2294)
+t=73740ms iter=504 incumb=26.2294 ratchet=26.8258 best=26.2294 since_improve=37
+t=73745ms iter=505 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=73839ms iter=505 REBUILD reject new_tc=28.0765 (was 26.2294)
+t=73887ms iter=505 incumb=26.2294 ratchet=27.6454 best=26.2294 since_improve=38
+t=73891ms iter=506 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=73981ms iter=506 REBUILD reject new_tc=28.6339 (was 26.2294)
+t=74031ms iter=506 incumb=26.2294 ratchet=29.2066 best=26.2294 since_improve=39
+t=74035ms iter=507 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=74129ms iter=507 REBUILD reject new_tc=28.7697 (was 26.2294)
+t=74178ms iter=507 incumb=26.2294 ratchet=26.9745 best=26.2294 since_improve=40
+t=74182ms iter=508 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=74274ms iter=508 REBUILD reject new_tc=28.7309 (was 26.2294)
+t=74323ms iter=508 incumb=26.2294 ratchet=26.4245 best=26.2294 since_improve=41
+t=74329ms iter=509 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=74425ms iter=509 REBUILD reject new_tc=28.0881 (was 26.2294)
+t=74474ms iter=509 incumb=26.2294 ratchet=26.4259 best=26.2294 since_improve=42
+t=74477ms iter=510 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=74572ms iter=510 REBUILD reject new_tc=28.3348 (was 26.2294)
+t=74621ms iter=510 incumb=26.2294 ratchet=26.8626 best=26.2294 since_improve=43
+t=74626ms iter=511 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=74720ms iter=511 REBUILD reject new_tc=28.3977 (was 26.2294)
+t=74769ms iter=511 incumb=26.2294 ratchet=26.4699 best=26.2294 since_improve=44
+t=74776ms iter=512 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=74872ms iter=512 REBUILD reject new_tc=28.7850 (was 26.2294)
+t=74921ms iter=512 incumb=26.2294 ratchet=26.9332 best=26.2294 since_improve=45
+t=74925ms iter=513 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=75017ms iter=513 REBUILD reject new_tc=28.9762 (was 26.2294)
+t=75066ms iter=513 incumb=26.2294 ratchet=26.6231 best=26.2294 since_improve=46
+t=75075ms iter=514 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=75168ms iter=514 REBUILD reject new_tc=28.6515 (was 26.2294)
+t=75217ms iter=514 incumb=26.2294 ratchet=27.3661 best=26.2294 since_improve=47
+t=75222ms iter=515 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=75316ms iter=515 REBUILD reject new_tc=28.7668 (was 26.2294)
+t=75365ms iter=515 incumb=26.2294 ratchet=26.9097 best=26.2294 since_improve=48
+t=75369ms iter=516 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=75462ms iter=516 REBUILD reject new_tc=29.2756 (was 26.2294)
+t=75512ms iter=516 incumb=26.2294 ratchet=26.7715 best=26.2294 since_improve=49
+t=75516ms iter=517 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=75608ms iter=517 REBUILD reject new_tc=28.4654 (was 26.2294)
+t=75658ms iter=517 incumb=26.2294 ratchet=26.8905 best=26.2294 since_improve=50
+t=75662ms iter=518 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=75756ms iter=518 REBUILD reject new_tc=28.6387 (was 26.2294)
+t=75806ms iter=518 incumb=26.2294 ratchet=27.6489 best=26.2294 since_improve=51
+t=75814ms iter=519 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=75910ms iter=519 REBUILD reject new_tc=29.7326 (was 26.2294)
+t=75960ms iter=519 incumb=26.2294 ratchet=27.1376 best=26.2294 since_improve=52
+t=75965ms iter=520 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=76058ms iter=520 REBUILD reject new_tc=29.4909 (was 26.2294)
+t=76107ms iter=520 incumb=26.2294 ratchet=27.1875 best=26.2294 since_improve=53
+t=76113ms iter=521 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=76205ms iter=521 REBUILD reject new_tc=28.3625 (was 26.2294)
+t=76255ms iter=521 incumb=26.2294 ratchet=27.4960 best=26.2294 since_improve=54
+t=76260ms iter=522 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=76355ms iter=522 REBUILD reject new_tc=28.6760 (was 26.2294)
+t=76404ms iter=522 incumb=26.2294 ratchet=26.9998 best=26.2294 since_improve=55
+t=76412ms iter=523 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=76506ms iter=523 REBUILD reject new_tc=28.5207 (was 26.2294)
+t=76556ms iter=523 incumb=26.2294 ratchet=27.5999 best=26.2294 since_improve=56
+t=76563ms iter=524 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=76659ms iter=524 REBUILD reject new_tc=28.5201 (was 26.2294)
+t=76709ms iter=524 incumb=26.2294 ratchet=27.9445 best=26.2294 since_improve=57
+t=76713ms iter=525 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=76808ms iter=525 REBUILD reject new_tc=28.7687 (was 26.2294)
+t=76857ms iter=525 incumb=26.2294 ratchet=26.9559 best=26.2294 since_improve=58
+t=76860ms iter=526 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=76953ms iter=526 REBUILD reject new_tc=28.5118 (was 26.2294)
+t=77003ms iter=526 incumb=26.2294 ratchet=26.8999 best=26.2294 since_improve=59
+t=77007ms iter=527 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=77102ms iter=527 REBUILD reject new_tc=29.1233 (was 26.2294)
+t=77151ms iter=527 incumb=26.2294 ratchet=26.9105 best=26.2294 since_improve=60
+t=77157ms iter=528 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=77249ms iter=528 REBUILD reject new_tc=28.1990 (was 26.2294)
+t=77299ms iter=528 incumb=26.2294 ratchet=26.6832 best=26.2294 since_improve=61
+t=77305ms iter=529 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=77397ms iter=529 REBUILD reject new_tc=28.7692 (was 26.2294)
+t=77446ms iter=529 incumb=26.2294 ratchet=26.6040 best=26.2294 since_improve=62
+t=77451ms iter=530 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=77543ms iter=530 REBUILD reject new_tc=28.8698 (was 26.2294)
+t=77592ms iter=530 incumb=26.2294 ratchet=26.6099 best=26.2294 since_improve=63
+t=77597ms iter=531 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=77692ms iter=531 REBUILD reject new_tc=28.6185 (was 26.2294)
+t=77741ms iter=531 incumb=26.2294 ratchet=26.3863 best=26.2294 since_improve=64
+t=77745ms iter=532 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=77840ms iter=532 REBUILD reject new_tc=28.9166 (was 26.2294)
+t=77890ms iter=532 incumb=26.2294 ratchet=28.2748 best=26.2294 since_improve=65
+t=77895ms iter=533 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=77993ms iter=533 REBUILD reject new_tc=29.8032 (was 26.2294)
+t=78042ms iter=533 incumb=26.2294 ratchet=26.9102 best=26.2294 since_improve=66
+t=78049ms iter=534 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=78144ms iter=534 REBUILD reject new_tc=28.8013 (was 26.2294)
+t=78192ms iter=534 incumb=26.2294 ratchet=26.7890 best=26.2294 since_improve=67
+t=78197ms iter=535 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=78293ms iter=535 REBUILD reject new_tc=27.7996 (was 26.2294)
+t=78341ms iter=535 incumb=26.2294 ratchet=27.2137 best=26.2294 since_improve=68
+t=78345ms iter=536 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=78438ms iter=536 REBUILD reject new_tc=28.1818 (was 26.2294)
+t=78488ms iter=536 incumb=26.2294 ratchet=26.8204 best=26.2294 since_improve=69
+t=78494ms iter=537 WAIST cost=25.0000 best_alt=0.0000 gap=25.0000 tried=5 sep_labels=0 clique_frac=1.00
+t=78589ms iter=537 REBUILD reject new_tc=28.6955 (was 26.2294)
+t=78651ms iter=537 incumb=26.2294 ratchet=26.1914 best=26.1914 since_improve=0
+t=78657ms iter=538 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=9 clique_frac=0.64
+t=78746ms iter=538 REBUILD reject new_tc=28.5619 (was 26.1914)
+t=78795ms iter=538 incumb=26.1914 ratchet=27.3361 best=26.1914 since_improve=1
+t=78804ms iter=539 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=78890ms iter=539 REBUILD reject new_tc=27.8390 (was 26.1914)
+t=78940ms iter=539 incumb=26.1914 ratchet=26.8745 best=26.1914 since_improve=2
+t=78948ms iter=540 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=10 clique_frac=0.84
+t=79036ms iter=540 REBUILD reject new_tc=28.2582 (was 26.1914)
+t=79086ms iter=540 incumb=26.1914 ratchet=27.1043 best=26.1914 since_improve=3
+t=79091ms iter=541 WAIST cost=25.0000 best_alt=18.0000 gap=7.0000 tried=5 sep_labels=13 clique_frac=0.58
+t=79181ms iter=541 REBUILD reject new_tc=32.7032 (was 26.1914)
+t=79230ms iter=541 incumb=26.1914 ratchet=26.9550 best=26.1914 since_improve=4
+t=79234ms iter=542 WAIST cost=25.0000 best_alt=21.0000 gap=4.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=79327ms iter=542 REBUILD reject new_tc=28.4711 (was 26.1914)
+t=79390ms iter=542 incumb=26.1914 ratchet=26.3384 best=26.1914 since_improve=5
+t=79396ms iter=543 WAIST cost=25.0000 best_alt=16.0000 gap=9.0000 tried=5 sep_labels=11 clique_frac=0.75
+t=79481ms iter=543 REBUILD reject new_tc=28.5886 (was 26.1914)
+t=79531ms iter=543 incumb=26.1914 ratchet=27.2331 best=26.1914 since_improve=6
+t=79541ms iter=544 WAIST cost=25.0000 best_alt=11.0000 gap=14.0000 tried=5 sep_labels=8 clique_frac=0.79
+t=79630ms iter=544 REBUILD reject new_tc=28.1325 (was 26.1914)
+t=79680ms iter=544 incumb=26.1914 ratchet=26.9291 best=26.1914 since_improve=7
+t=79686ms iter=545 WAIST cost=25.0000 best_alt=18.0000 gap=7.0000 tried=5 sep_labels=10 clique_frac=0.78
+t=79775ms iter=545 REBUILD reject new_tc=28.5506 (was 26.1914)
+t=79824ms iter=545 incumb=26.1914 ratchet=27.6698 best=26.1914 since_improve=8
+t=79830ms iter=546 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=10 clique_frac=0.56
+t=79920ms iter=546 REBUILD reject new_tc=30.3168 (was 26.1914)
+t=79971ms iter=546 incumb=26.1914 ratchet=28.5463 best=26.1914 since_improve=9
+t=79978ms iter=547 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=9 clique_frac=0.83
+t=80067ms iter=547 REBUILD reject new_tc=29.2349 (was 26.1914)
+t=80117ms iter=547 incumb=26.1914 ratchet=28.8245 best=26.1914 since_improve=10
+t=80127ms iter=548 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.67
+t=80215ms iter=548 REBUILD reject new_tc=28.4302 (was 26.1914)
+t=80265ms iter=548 incumb=26.1914 ratchet=27.7436 best=26.1914 since_improve=11
+t=80271ms iter=549 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.75
+t=80360ms iter=549 REBUILD reject new_tc=28.8656 (was 26.1914)
+t=80411ms iter=549 incumb=26.1914 ratchet=27.1973 best=26.1914 since_improve=12
+t=80419ms iter=550 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=11 clique_frac=0.55
+t=80507ms iter=550 REBUILD reject new_tc=29.1591 (was 26.1914)
+t=80557ms iter=550 incumb=26.1914 ratchet=27.1888 best=26.1914 since_improve=13
+t=80567ms iter=551 WAIST cost=25.0000 best_alt=16.0000 gap=9.0000 tried=5 sep_labels=13 clique_frac=0.51
+t=80652ms iter=551 REBUILD reject new_tc=28.9552 (was 26.1914)
+t=80702ms iter=551 incumb=26.1914 ratchet=28.8312 best=26.1914 since_improve=14
+t=80712ms iter=552 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=80800ms iter=552 REBUILD reject new_tc=28.7404 (was 26.1914)
+t=80850ms iter=552 incumb=26.1914 ratchet=27.7377 best=26.1914 since_improve=15
+t=80859ms iter=553 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=8 clique_frac=0.96
+t=80947ms iter=553 REBUILD reject new_tc=28.9221 (was 26.1914)
+t=80997ms iter=553 incumb=26.1914 ratchet=27.1138 best=26.1914 since_improve=16
+t=81006ms iter=554 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=9 clique_frac=0.72
+t=81094ms iter=554 REBUILD reject new_tc=28.1341 (was 26.1914)
+t=81142ms iter=554 incumb=26.1914 ratchet=26.3461 best=26.1914 since_improve=17
+t=81150ms iter=555 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=9 clique_frac=0.83
+t=81239ms iter=555 REBUILD reject new_tc=28.0307 (was 26.1914)
+t=81288ms iter=555 incumb=26.1914 ratchet=26.2241 best=26.1914 since_improve=18
+t=81296ms iter=556 WAIST cost=25.0000 best_alt=17.0000 gap=8.0000 tried=5 sep_labels=9 clique_frac=0.89
+t=81393ms iter=556 REBUILD reject new_tc=28.0757 (was 26.1914)
+t=81442ms iter=556 incumb=26.1914 ratchet=28.1151 best=26.1914 since_improve=19
+t=81451ms iter=557 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=11 clique_frac=0.55
+t=81541ms iter=557 REBUILD reject new_tc=29.5095 (was 26.1914)
+t=81591ms iter=557 incumb=26.1914 ratchet=26.6001 best=26.1914 since_improve=20
+t=81599ms iter=558 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=11 clique_frac=0.53
+t=81688ms iter=558 REBUILD reject new_tc=29.3982 (was 26.1914)
+t=81738ms iter=558 incumb=26.1914 ratchet=27.0104 best=26.1914 since_improve=21
+t=81748ms iter=559 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=10 clique_frac=0.82
+t=81836ms iter=559 REBUILD reject new_tc=28.7750 (was 26.1914)
+t=81885ms iter=559 incumb=26.1914 ratchet=26.8765 best=26.1914 since_improve=22
+t=81894ms iter=560 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.92
+t=81984ms iter=560 REBUILD reject new_tc=29.8965 (was 26.1914)
+t=82033ms iter=560 incumb=26.1914 ratchet=27.6223 best=26.1914 since_improve=23
+t=82041ms iter=561 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=11 clique_frac=0.69
+t=82130ms iter=561 REBUILD reject new_tc=28.8490 (was 26.1914)
+t=82180ms iter=561 incumb=26.1914 ratchet=27.1529 best=26.1914 since_improve=24
+t=82188ms iter=562 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=10 clique_frac=0.76
+t=82276ms iter=562 REBUILD reject new_tc=28.4239 (was 26.1914)
+t=82326ms iter=562 incumb=26.1914 ratchet=27.3707 best=26.1914 since_improve=25
+t=82332ms iter=563 WAIST cost=25.0000 best_alt=16.0000 gap=9.0000 tried=5 sep_labels=9 clique_frac=0.83
+t=82421ms iter=563 REBUILD reject new_tc=29.3359 (was 26.1914)
+t=82471ms iter=563 incumb=26.1914 ratchet=27.2602 best=26.1914 since_improve=26
+t=82481ms iter=564 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.64
+t=82569ms iter=564 REBUILD reject new_tc=30.1232 (was 26.1914)
+t=82619ms iter=564 incumb=26.1914 ratchet=26.9292 best=26.1914 since_improve=27
+t=82628ms iter=565 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.64
+t=82719ms iter=565 REBUILD reject new_tc=30.1810 (was 26.1914)
+t=82769ms iter=565 incumb=26.1914 ratchet=27.0790 best=26.1914 since_improve=28
+t=82775ms iter=566 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=10 clique_frac=0.73
+t=82862ms iter=566 REBUILD reject new_tc=29.3910 (was 26.1914)
+t=82912ms iter=566 incumb=26.1914 ratchet=27.2283 best=26.1914 since_improve=29
+t=82918ms iter=567 WAIST cost=25.0000 best_alt=18.0000 gap=7.0000 tried=5 sep_labels=12 clique_frac=0.64
+t=83006ms iter=567 REBUILD reject new_tc=29.9646 (was 26.1914)
+t=83055ms iter=567 incumb=26.1914 ratchet=26.4275 best=26.1914 since_improve=30
+t=83063ms iter=568 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.72
+t=83150ms iter=568 REBUILD reject new_tc=29.3333 (was 26.1914)
+t=83200ms iter=568 incumb=26.1914 ratchet=27.4470 best=26.1914 since_improve=31
+t=83208ms iter=569 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=8 clique_frac=0.79
+t=83297ms iter=569 REBUILD reject new_tc=28.3495 (was 26.1914)
+t=83347ms iter=569 incumb=26.1914 ratchet=28.5413 best=26.1914 since_improve=32
+t=83354ms iter=570 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=10 clique_frac=0.62
+t=83443ms iter=570 REBUILD reject new_tc=30.5491 (was 26.1914)
+t=83494ms iter=570 incumb=26.1914 ratchet=28.0505 best=26.1914 since_improve=33
+t=83503ms iter=571 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.64
+t=83591ms iter=571 REBUILD reject new_tc=31.1880 (was 26.1914)
+t=83641ms iter=571 incumb=26.1914 ratchet=27.0200 best=26.1914 since_improve=34
+t=83649ms iter=572 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=9 clique_frac=0.92
+t=83740ms iter=572 REBUILD reject new_tc=27.9531 (was 26.1914)
+t=83788ms iter=572 incumb=26.1914 ratchet=27.1962 best=26.1914 since_improve=35
+t=83799ms iter=573 WAIST cost=25.0000 best_alt=11.0000 gap=14.0000 tried=5 sep_labels=8 clique_frac=0.79
+t=83888ms iter=573 REBUILD reject new_tc=28.6297 (was 26.1914)
+t=83939ms iter=573 incumb=26.1914 ratchet=29.3169 best=26.1914 since_improve=36
+t=83947ms iter=574 WAIST cost=25.0000 best_alt=18.0000 gap=7.0000 tried=5 sep_labels=12 clique_frac=0.62
+t=84035ms iter=574 REBUILD reject new_tc=31.5361 (was 26.1914)
+t=84084ms iter=574 incumb=26.1914 ratchet=27.5562 best=26.1914 since_improve=37
+t=84092ms iter=575 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=11 clique_frac=0.51
+t=84179ms iter=575 REBUILD reject new_tc=28.6111 (was 26.1914)
+t=84229ms iter=575 incumb=26.1914 ratchet=26.7216 best=26.1914 since_improve=38
+t=84238ms iter=576 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=8 clique_frac=0.82
+t=84327ms iter=576 REBUILD reject new_tc=27.7028 (was 26.1914)
+t=84376ms iter=576 incumb=26.1914 ratchet=26.3435 best=26.1914 since_improve=39
+t=84385ms iter=577 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=11 clique_frac=0.55
+t=84473ms iter=577 REBUILD reject new_tc=30.1052 (was 26.1914)
+t=84522ms iter=577 incumb=26.1914 ratchet=26.6097 best=26.1914 since_improve=40
+t=84532ms iter=578 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.64
+t=84619ms iter=578 REBUILD reject new_tc=29.8821 (was 26.1914)
+t=84669ms iter=578 incumb=26.1914 ratchet=27.0815 best=26.1914 since_improve=41
+t=84678ms iter=579 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=84766ms iter=579 REBUILD reject new_tc=27.7985 (was 26.1914)
+t=84816ms iter=579 incumb=26.1914 ratchet=27.7293 best=26.1914 since_improve=42
+t=84823ms iter=580 WAIST cost=25.0000 best_alt=18.0000 gap=7.0000 tried=5 sep_labels=11 clique_frac=0.56
+t=84913ms iter=580 REBUILD reject new_tc=29.4334 (was 26.1914)
+t=84963ms iter=580 incumb=26.1914 ratchet=27.2100 best=26.1914 since_improve=43
+t=84971ms iter=581 WAIST cost=25.0000 best_alt=21.0000 gap=4.0000 tried=5 sep_labels=15 clique_frac=0.76
+t=85063ms iter=581 REBUILD reject new_tc=27.4658 (was 26.1914)
+t=85113ms iter=581 incumb=26.1914 ratchet=27.3255 best=26.1914 since_improve=44
+t=85122ms iter=582 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=10 clique_frac=0.76
+t=85211ms iter=582 REBUILD reject new_tc=28.7679 (was 26.1914)
+t=85261ms iter=582 incumb=26.1914 ratchet=27.6215 best=26.1914 since_improve=45
+t=85270ms iter=583 WAIST cost=25.0000 best_alt=15.0000 gap=10.0000 tried=5 sep_labels=11 clique_frac=0.55
+t=85359ms iter=583 REBUILD reject new_tc=30.7992 (was 26.1914)
+t=85408ms iter=583 incumb=26.1914 ratchet=26.5382 best=26.1914 since_improve=46
+t=85416ms iter=584 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=8 clique_frac=0.86
+t=85504ms iter=584 REBUILD reject new_tc=28.8042 (was 26.1914)
+t=85554ms iter=584 incumb=26.1914 ratchet=27.1258 best=26.1914 since_improve=47
+t=85565ms iter=585 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=9 clique_frac=0.81
+t=85657ms iter=585 REBUILD reject new_tc=28.2731 (was 26.1914)
+t=85706ms iter=585 incumb=26.1914 ratchet=26.8971 best=26.1914 since_improve=48
+t=85714ms iter=586 WAIST cost=25.0000 best_alt=16.0000 gap=9.0000 tried=5 sep_labels=11 clique_frac=0.65
+t=85801ms iter=586 REBUILD reject new_tc=29.3051 (was 26.1914)
+t=85851ms iter=586 incumb=26.1914 ratchet=27.2354 best=26.1914 since_improve=49
+t=85860ms iter=587 WAIST cost=25.0000 best_alt=12.0000 gap=13.0000 tried=5 sep_labels=8 clique_frac=0.82
+t=85948ms iter=587 REBUILD reject new_tc=29.2471 (was 26.1914)
+t=85999ms iter=587 incumb=26.1914 ratchet=27.9176 best=26.1914 since_improve=50
+t=86009ms iter=588 WAIST cost=25.0000 best_alt=11.0000 gap=14.0000 tried=5 sep_labels=8 clique_frac=0.79
+t=86099ms iter=588 REBUILD reject new_tc=31.4682 (was 26.1914)
+t=86147ms iter=588 incumb=26.1914 ratchet=27.1059 best=26.1914 since_improve=51
+t=86154ms iter=589 WAIST cost=25.0000 best_alt=11.0000 gap=14.0000 tried=5 sep_labels=8 clique_frac=0.79
+t=86240ms iter=589 REBUILD reject new_tc=28.3608 (was 26.1914)
+t=86290ms iter=589 incumb=26.1914 ratchet=26.8499 best=26.1914 since_improve=52
+t=86302ms iter=590 WAIST cost=25.0000 best_alt=11.0000 gap=14.0000 tried=5 sep_labels=8 clique_frac=0.79
+t=86391ms iter=590 REBUILD reject new_tc=29.2354 (was 26.1914)
+t=86441ms iter=590 incumb=26.1914 ratchet=27.4217 best=26.1914 since_improve=53
+t=86452ms iter=591 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=11 clique_frac=0.51
+t=86542ms iter=591 REBUILD reject new_tc=28.4445 (was 26.1914)
+t=86592ms iter=591 incumb=26.1914 ratchet=26.7479 best=26.1914 since_improve=54
+t=86600ms iter=592 WAIST cost=25.0000 best_alt=11.0000 gap=14.0000 tried=5 sep_labels=7 clique_frac=0.95
+t=86688ms iter=592 REBUILD reject new_tc=28.7661 (was 26.1914)
+t=86738ms iter=592 incumb=26.1914 ratchet=26.7834 best=26.1914 since_improve=55
+t=86746ms iter=593 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=10 clique_frac=0.56
+t=86834ms iter=593 REBUILD reject new_tc=29.4099 (was 26.1914)
+t=86883ms iter=593 incumb=26.1914 ratchet=27.5630 best=26.1914 since_improve=56
+t=86891ms iter=594 WAIST cost=25.0000 best_alt=13.0000 gap=12.0000 tried=5 sep_labels=10 clique_frac=0.82
+t=86981ms iter=594 REBUILD reject new_tc=28.9239 (was 26.1914)
+t=87030ms iter=594 incumb=26.1914 ratchet=26.9176 best=26.1914 since_improve=57
+t=87040ms iter=595 WAIST cost=25.0000 best_alt=14.0000 gap=11.0000 tried=5 sep_labels=11 clique_frac=0.53
+t=87126ms iter=595 REBUILD reject new_tc=28.6094 (was 26.1914)
+t=87176ms iter=595 incumb=26.1914 ratchet=26.9872 best=26.1914 since_improve=58
+t=87183ms iter=596 WAIST cost=25.0000 best_alt=16.0000 gap=9.0000 tried=5 sep_labels=12 clique_frac=0.67
+t=87277ms iter=596 REBUILD reject new_tc=28.7519 (was 26.1914)
+t=87300ms iter=596 incumb=26.1914 ratchet=28.2720 best=26.1914 since_improve=59
+t_final=87310ms tc_reduced=26.1914 tc_full=26.1943 leaves=544
+surgery summary: calls=596 cheaper_cuts=596 rebuild_accepts=2 waist_min_hits=0
