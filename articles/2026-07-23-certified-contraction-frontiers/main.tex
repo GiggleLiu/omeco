@@ -24,6 +24,8 @@
 
 \usepackage{amsthm}
 \usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
 
@@ -405,7 +407,8 @@ annealer is most stuck.
 \label{sec:algorithm}
 
 Global cut surgery operationalizes the observation of
-Sec.~\ref{sec:frozenwaist}; Fig.~\ref{fig:k4} illustrates both of the
+Sec.~\ref{sec:frozenwaist}; Algorithm~\ref{alg:surgery} states the loop,
+and Fig.~\ref{fig:k4} illustrates both of the
 pipeline's mechanisms on a toy network. The optimizer maintains an incumbent
 contraction tree produced by a standard annealing engine, and
 interleaves, at every outer iteration, a surgery step that treats the
@@ -437,6 +440,41 @@ waist as a graph problem:
   typically moves, and surgery repeats at the new waist until no
   improving cut is found or the budget ends.
 \end{enumerate}
+
+\begin{algorithm}[t]
+\caption{Global cut surgery. $\mathcal{A}$ is a standard annealing
+engine (tuned per Sec.~\ref{sec:sctarget}); $w(A,B)$ is the summed
+$\log_2$ dimension of the labels straddling the bipartition $(A,B)$,
+excluding open output labels. All costs are recomputed exactly from the
+index dimensions; nothing is tuned per instance.}
+\label{alg:surgery}
+\begin{algorithmic}[1]
+\Require tensor network $G$ (after the exact simplification pass of
+  Sec.~\ref{sec:simplify}), time budget
+\State $T \gets \mathcal{A}(G)$ \Comment{incumbent contraction tree}
+\While{budget remains}
+  \State $v^{*} \gets \arg\max_{v} \mathrm{cost}_v(T)$
+    \Comment{the waist: argmax-cost contraction}
+  \State $(A,B) \gets$ leaf bipartition of $T$ induced by $v^{*}$
+  \State $(A',B') \gets \textsc{BoundedFM}\bigl(G,(A,B)\bigr)$
+    \Comment{gain $= w$ reduction; balance $|A|\pm18\%$;}
+  \Statex \hfill seeded from $(A,B)$ plus four boundary-BFS bipartitions
+\If{$w(A',B') < w(A,B)$}
+    \State $T_L \gets \mathcal{A}(G[A'])$,\; $T_R \gets \mathcal{A}(G[B'])$
+      \Comment{cold rebuilds, \emph{fixed work} (three V-cycles);}
+    \Statex \hfill open indices by outside-occurrence counting
+    \State $T' \gets \textsc{Splice}(T_L, T_R)$
+    \If{$\tc(T') < \tc(T)$ \textbf{ by independent rescoring}}
+      \State $T \gets T'$ \Comment{waist moves; next pass repairs the new waist}
+    \EndIf
+  \Else
+    \State run annealing sweeps of $\mathcal{A}$ on $T$
+      \Comment{interleaved local refinement}
+  \EndIf
+\EndWhile
+\State \Return $T$ \Comment{emitted eagerly throughout (anytime)}
+\end{algorithmic}
+\end{algorithm}
 
 \begin{figure}[t]
   \centering
