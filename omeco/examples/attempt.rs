@@ -1,34 +1,49 @@
-//! Attempt entry point for the autoresearch validator (attempt-038).
+//! Attempt entry point for the autoresearch validator (attempt-057).
 //!
 //! Contract: `attempt <graph.json> <budget_ms> <out.json>` — read an einsum
 //! graph, search for a contraction order within the wall-clock budget, and keep
 //! the best tree found (by pure time complexity, `tc`) written atomically to
 //! `out.json` in omeco `writejson` format.
 //!
-//! HYPEREDGE-AWARE pipeline (attempt-038). Targets graphs whose labels are
-//! shared by MANY tensors (e.g. graphical-model partition functions such as
-//! `dbn_13` and `nqueens_28`), where a shared label is summed out only when its
-//! LAST holder is contracted. Pairwise-greedy seeds and uniform SA moves are
-//! misaligned with that geometry. The pipeline:
+//! HYPEREDGE-AWARE pipeline (attempt-057, parent 038). Targets graphs whose
+//! labels are shared by MANY tensors (graphical-model partition functions such
+//! as `dbn_13`, and the large UAI relational instances), where a shared label is
+//! summed out only when its LAST holder is contracted. Pairwise-greedy seeds and
+//! uniform SA moves are misaligned with that geometry. The pipeline:
 //!
-//!   (a) Seed by VARIABLE ELIMINATION over the label hypergraph. A lazy priority
-//!       queue drives the elimination order under a min-cost (min weighted fill)
-//!       or fewest-holders (min-degree) heuristic; each eliminated label's holder
-//!       group is contracted by a local greedy min-union pairwise order. The
-//!       resulting topology is converted to a `NestedEinsum` by exact
+//!   (a) Seed by VARIABLE ELIMINATION over the label hypergraph. attempt-038's
+//!       dynamic VE (a lazy heap that recomputes each label's holder-union cost on
+//!       every push) WINS on the dense 44-label `dbn_13` but does NOT scale: its
+//!       min-cost rescore is O(degree * live-set) per push, so at ~4k+ labels the
+//!       heap "freezes" and on the UAI relational instances (10k-13k labels,
+//!       30k-70k tensors) it contributes nothing (every method stuck at tc~202
+//!       while the known treewidth is ~100).
+//!
+//!       attempt-057 replaces the *order computation* with a scalable AMD-style
+//!       elimination ordering in the manner of sparse-matrix ordering codes:
+//!       a QUOTIENT GRAPH with element absorption (original tensors ARE the
+//!       initial cliques/elements; eliminating a variable creates a new element;
+//!       fill edges are never materialized), WEIGHTED min-degree scoring (summed
+//!       log2 dims of the created clique — reduces to counts for binary labels),
+//!       a lazy priority heap that RESCORES a variable only when it is popped
+//!       (stale entries are recomputed and re-pushed), and deterministic
+//!       tie-break by interned label id. A budget guard bounds the ordering to a
+//!       small fraction of the run (<=10% of budget or <=10s); if it cannot
+//!       finish it aborts and the pipeline falls back to attempt-038's dynamic VE.
+//!       The order is then converted to a topology by attempt-038's UNCHANGED
+//!       holder-group merge machinery, and to a `NestedEinsum` by exact
 //!       outside-occurrence counting, so the measured tc equals the scored tc.
-//!       The VE orders race a plain greedy seed.
+//!       On small label graphs (<=3000 labels) the dynamic VE still races the AMD
+//!       seed (it is the dbn winner and does not freeze there); on large graphs
+//!       only the scalable AMD seed runs.
 //!
 //!   (b) Route by regime. VE FITS when its seed beats greedy — the hyperedge-
-//!       dominated case (e.g. dbn_13): the VE basin is excellent, so refine it
-//!       with a warm SA — LINEAR beta cool-down (0.12..14), systematic post-order
-//!       sweeps as the base layer, plus a light degree-bias (extra rule attempts
-//!       at nodes holding high-hyperedge-degree labels, on top of the systematic
-//!       pass; pure targeting is blacklisted), pure intensify from the incumbent.
-//!       When VE does NOT fit (e.g. nqueens_28, where the greedy seed is a bad
-//!       trap and VE is too slow to complete on ~4k labels), fall back to the
-//!       proven library TreeSA under an anytime doubling schedule, predictively
-//!       gated so no uninterruptible round overruns the budget.
+//!       dominated case (e.g. dbn_13, relational_*): the VE basin is excellent, so
+//!       refine it with a warm SA — LINEAR beta cool-down, systematic post-order
+//!       sweeps as the base layer, plus a light degree-bias, pure intensify from
+//!       the incumbent. When VE does NOT fit, fall back to the proven library
+//!       TreeSA under an anytime doubling schedule, predictively gated so no
+//!       uninterruptible round overruns the budget.
 //!
 //! Score is pure `tc` (sc ignored). Single-threaded compute: the work runs on one
 //! worker thread with a large stack (deep VE trees exceed the default stack); the
@@ -108,39 +123,89 @@ fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>
 
     // ---- Intern labels to a dense id space [0, m). --------------------------
     let hg = HyperGraph::build(&graph.ixs, &graph.iy, &sizes);
+    let n_tensors = code.num_tensors();
 
-    // ---- Deterministic greedy: written immediately (always-valid fallback). --
-    let mut best = optimize_code(&code, &sizes, &GreedyMethod::default())
-        .ok_or("greedy optimizer returned no tree")?;
-    let mut best_tc = tc_of(&best);
-    write_atomic(&out_path, &best)?;
-    let tc_greedy = best_tc;
-
-    // ---- (a) Variable-elimination seeds. ------------------------------------
-    // Time-boxed: VE never eats the SA budget. Each order is itself
-    // deadline-abortable, so a single large-graph order cannot overrun.
-    let mut rng = SmallRng::seed_from_u64(0x0000_0038_c0ff_ee00);
+    let mut rng = SmallRng::seed_from_u64(0x0000_0057_c0ff_ee00);
     let mut tc_ve = f64::INFINITY;
-    let ve_deadline = (budget_ms * 0.15).min(deadline_ms);
-    for &heur in &[Heur::MinDegree, Heur::MinCost] {
-        if elapsed_ms() >= ve_deadline {
-            break;
-        }
-        let topo = hg.ve_order(heur, 0.0, &mut rng, &start, ve_deadline);
+
+    // ---- (a) Scalable AMD-style VE seed, FIRST and eager. -------------------
+    // The library greedy (below) does NOT scale: `optimize_code(GreedyMethod)`
+    // costs ~80s at 30k tensors, so seeding with it first would block the whole
+    // budget on the large relational instances. The AMD order, by contrast, is a
+    // few milliseconds even at 70k tensors — so we compute and EMIT it first,
+    // guaranteeing a good valid answer within ~1s at any scale. Budget guard: the
+    // ordering must finish in a small fraction of the run (<=10% of budget or
+    // <=10s, whichever is smaller); if it aborts (should not, at these scales) we
+    // fall through to greedy for a valid seed.
+    let amd_ms = (budget_ms * 0.10).min(10_000.0);
+    let amd_deadline = (elapsed_ms() + amd_ms).min(deadline_ms);
+    let amd = hg.amd_order(&start, amd_deadline);
+    let mut best: Option<NestedEinsum<usize>> = None;
+    let mut best_tc = f64::INFINITY;
+    if let Some((order, width)) = &amd {
+        let t_ord = elapsed_ms();
+        let topo = hg.build_topo_from_order(order, &start, deadline_ms);
         let tree = hg.build_nested(&topo);
         let tc = tc_of(&tree);
-        if tc < tc_ve {
-            tc_ve = tc;
+        tc_ve = tc;
+        best_tc = tc;
+        write_atomic(&out_path, &tree)?;
+        best = Some(tree);
+        eprintln!("t_ve={t_ord:.0}ms ve_width={width:.2} ve_tc={tc:.4}");
+    } else {
+        eprintln!("amd_order aborted (budget guard) t={:.0}ms", elapsed_ms());
+    }
+
+    // ---- (b) Library greedy, GATED. ----------------------------------------
+    // Greedy is attempt-038's generic seed and the routing baseline, but it is
+    // too slow to run on the large instances (see above). Run it only when the
+    // graph is small enough that it completes cheaply, OR when the AMD seed
+    // failed and we still need a valid answer. When skipped, `tc_greedy` stays
+    // +inf so the router treats the hyperedge VE seed as fitting (correct for the
+    // large hyperedge instances, which are exactly where greedy is skipped).
+    const GREEDY_MAX_TENSORS: usize = 8000;
+    let run_greedy = n_tensors <= GREEDY_MAX_TENSORS || best.is_none();
+    let mut tc_greedy = f64::INFINITY;
+    if run_greedy {
+        if let Some(tree) = optimize_code(&code, &sizes, &GreedyMethod::default()) {
+            let tc = tc_of(&tree);
+            tc_greedy = tc;
+            if tc < best_tc - 1e-9 {
+                best_tc = tc;
+                write_atomic(&out_path, &tree)?;
+                best = Some(tree);
+            }
         }
-        if tc < best_tc - 1e-9 {
-            best = tree;
-            best_tc = tc;
-            write_atomic(&out_path, &best)?;
-        }
-        // If the first (cheap min-degree) VE order fails to beat greedy, VE does
-        // not fit this instance's geometry — don't spend more of the budget on it.
-        if tc_ve > tc_greedy + 1e-9 {
-            break;
+    }
+    let mut best = best.ok_or("no valid seed (AMD aborted and greedy returned none)")?;
+
+    // ---- (c) Dynamic VE race (attempt-038). --------------------------------
+    // The min-cost holder-union heuristic is the dbn winner but does not scale,
+    // so only race it when the label graph is small enough that it will not
+    // freeze (<=3000 labels). Deadline-abortable, so it cannot overrun.
+    let dynamic_fits = hg.id_label.len() <= 3000;
+    let ve_deadline = (budget_ms * 0.15).min(deadline_ms);
+    if dynamic_fits {
+        for &heur in &[Heur::MinDegree, Heur::MinCost] {
+            if elapsed_ms() >= ve_deadline {
+                break;
+            }
+            let topo = hg.ve_order(heur, 0.0, &mut rng, &start, ve_deadline);
+            let tree = hg.build_nested(&topo);
+            let tc = tc_of(&tree);
+            if tc < tc_ve {
+                tc_ve = tc;
+            }
+            if tc < best_tc - 1e-9 {
+                best = tree;
+                best_tc = tc;
+                write_atomic(&out_path, &best)?;
+            }
+            // If the first (cheap min-degree) VE order fails to beat greedy, VE
+            // does not fit this instance's geometry — stop spending budget on it.
+            if tc_ve > tc_greedy + 1e-9 {
+                break;
+            }
         }
     }
     eprintln!(
@@ -579,6 +644,231 @@ impl HyperGraph {
         members.pop().unwrap()
     }
 
+    /// Scalable AMD-style elimination order over the label primal graph, using a
+    /// QUOTIENT GRAPH with element absorption so fill edges are never
+    /// materialized. Original tensors are the initial elements (each tensor's
+    /// label set is a clique); a variable's neighborhood is the union of its
+    /// elements' boundaries. Eliminating a variable creates one new element whose
+    /// boundary is that neighborhood and absorbs the variable's old elements.
+    ///
+    /// Scoring is WEIGHTED min-degree: a label's score is the summed log2 dims of
+    /// the clique its elimination creates (= its current neighborhood), which
+    /// reduces to the neighbor count for binary labels. The heap is lazy — a
+    /// variable is rescored only when popped; a stale pop (its recomputed score no
+    /// longer matches its key) is recomputed and re-pushed. Ties break by interned
+    /// label id (smallest first), so the order is deterministic.
+    ///
+    /// Returns `(order, width)` where `order` is the elimination sequence of label
+    /// ids and `width` is the max weighted clique (log2 dims of the largest
+    /// created clique including the eliminated label ~ the seed's tc). Returns
+    /// `None` if the deadline trips before the order completes (caller falls back
+    /// to the dynamic VE).
+    fn amd_order(&self, start: &Instant, deadline_ms: f64) -> Option<(Vec<u32>, f64)> {
+        let m = self.id_label.len();
+        let w = &self.log2;
+
+        // Element store: original tensors first, then one element per elimination.
+        // `le[e]` is element e's boundary (its live variable members).
+        let mut le: Vec<Vec<u32>> = Vec::with_capacity(self.n + m);
+        let mut absorbed: Vec<bool> = Vec::with_capacity(self.n + m);
+        // Per-variable element list (its incident elements).
+        let mut aelem: Vec<Vec<u32>> = vec![Vec::new(); m];
+        for ids in &self.leaf_ids {
+            let e = le.len() as u32;
+            for &v in ids {
+                aelem[v as usize].push(e);
+            }
+            le.push(ids.clone());
+            absorbed.push(false);
+        }
+
+        let mut alive = vec![true; m];
+        for &id in &self.iy_ids {
+            alive[id as usize] = false; // never eliminate output labels
+        }
+
+        // Timestamp scratch for O(size) dedup during neighborhood scans.
+        let mut mark = vec![0u32; m];
+        let mut tick = 0u32;
+
+        // Lazy min-heap keyed on (weighted degree, id). BinaryHeap is a max-heap,
+        // so we Reverse the degree (min degree pops first) and Reverse the id
+        // (smallest id wins ties → deterministic).
+        let mut heap: std::collections::BinaryHeap<(
+            std::cmp::Reverse<OrdF64>,
+            std::cmp::Reverse<u32>,
+        )> = std::collections::BinaryHeap::new();
+        for v in 0..m {
+            if alive[v] {
+                let d = wdeg(
+                    v, &mut aelem, &le, &absorbed, &alive, w, &mut mark, &mut tick,
+                );
+                heap.push((std::cmp::Reverse(OrdF64(d)), std::cmp::Reverse(v as u32)));
+            }
+        }
+
+        let mut order: Vec<u32> = Vec::with_capacity(m);
+        let mut width = 0.0f64;
+        let mut pops: u64 = 0;
+        while let Some((std::cmp::Reverse(OrdF64(key)), std::cmp::Reverse(vid))) = heap.pop() {
+            pops += 1;
+            if pops % 1024 == 0 && start.elapsed().as_secs_f64() * 1e3 >= deadline_ms {
+                return None; // budget guard: order did not finish → caller falls back
+            }
+            let v = vid as usize;
+            if !alive[v] {
+                continue;
+            }
+            // Rescore on pop: if the recomputed degree no longer matches the key,
+            // this entry is stale — re-push with the fresh degree and move on.
+            let d = wdeg(
+                v, &mut aelem, &le, &absorbed, &alive, w, &mut mark, &mut tick,
+            );
+            if (d - key).abs() > 1e-9 {
+                heap.push((std::cmp::Reverse(OrdF64(d)), std::cmp::Reverse(vid)));
+                continue;
+            }
+
+            // Eliminate v: its neighborhood becomes a new clique/element.
+            let lp = boundary_of(v, &mut aelem, &le, &absorbed, &alive, &mut mark, &mut tick);
+            let wclique = lp.iter().map(|&u| w[u as usize]).sum::<f64>() + w[v];
+            if wclique > width {
+                width = wclique;
+            }
+            order.push(v as u32);
+            alive[v] = false;
+
+            let q = le.len() as u32;
+            // Absorb v's old elements (subsumed by the new clique q).
+            for &e in &aelem[v] {
+                absorbed[e as usize] = true;
+                le[e as usize] = Vec::new();
+            }
+            aelem[v] = Vec::new();
+            le.push(lp.clone());
+            absorbed.push(false);
+
+            // Each neighbor now sits on element q; drop its absorbed elements and
+            // rescore it lazily (push fresh; the old entry becomes stale).
+            for &u in &lp {
+                let uu = u as usize;
+                aelem[uu].retain(|&e| !absorbed[e as usize]);
+                aelem[uu].push(q);
+                let d2 = wdeg(
+                    uu, &mut aelem, &le, &absorbed, &alive, w, &mut mark, &mut tick,
+                );
+                heap.push((std::cmp::Reverse(OrdF64(d2)), std::cmp::Reverse(u)));
+            }
+        }
+
+        Some((order, width))
+    }
+
+    /// Build a variable-elimination contraction topology by REPLAYING a
+    /// precomputed elimination `order` through attempt-038's holder-group merge
+    /// machinery: for each label in order still carrying holders, contract its
+    /// holder group into one super-tensor (dropping labels that become fully
+    /// internal), exactly as the dynamic `ve_order` does — only the choice of
+    /// which label comes next is externalized. Deadline-abortable.
+    fn build_topo_from_order(&self, order: &[u32], start: &Instant, deadline_ms: f64) -> TopoTree {
+        let m = self.id_label.len();
+        let n = self.n;
+
+        let mut live: HashMap<usize, Vec<u32>> = HashMap::with_capacity(n * 2);
+        let mut topo: HashMap<usize, TopoTree> = HashMap::with_capacity(n * 2);
+        let mut holders: Vec<HashSet<usize>> = vec![HashSet::new(); m];
+        for (i, ids) in self.leaf_ids.iter().enumerate() {
+            live.insert(i, ids.clone());
+            topo.insert(i, TopoTree::Leaf(i));
+            for &id in ids {
+                holders[id as usize].insert(i);
+            }
+        }
+        let mut eliminated = vec![false; m];
+        for &id in &self.iy_ids {
+            eliminated[id as usize] = true; // never eliminate output labels
+        }
+        let mut next_tid = n;
+
+        let mut steps: u64 = 0;
+        for &id in order {
+            steps += 1;
+            if steps % 256 == 0 && start.elapsed().as_secs_f64() * 1e3 >= deadline_ms {
+                break;
+            }
+            let id = id as usize;
+            if eliminated[id] || holders[id].is_empty() {
+                continue;
+            }
+            // Merge the holder group of `id` into one super-tensor.
+            let group: Vec<usize> = holders[id].iter().copied().collect();
+            let group_set: HashSet<usize> = group.iter().copied().collect();
+
+            let mut members: Vec<(Vec<u32>, TopoTree)> = Vec::with_capacity(group.len());
+            for &t in &group {
+                let l = live.remove(&t).unwrap();
+                let tp = topo.remove(&t).unwrap();
+                members.push((l, tp));
+            }
+            let (live_union, merged_topo) = self.merge_group(members);
+
+            // Drop `id`; keep a label iff it is an output or still has a holder
+            // outside this group.
+            let mut new_live: Vec<u32> = Vec::with_capacity(live_union.len());
+            let mut dropped: Vec<u32> = Vec::new();
+            for &l in &live_union {
+                if l as usize == id {
+                    continue;
+                }
+                let outside = holders[l as usize].iter().any(|t| !group_set.contains(t));
+                if self.iy_ids.contains(&l) || outside {
+                    new_live.push(l);
+                } else {
+                    dropped.push(l);
+                }
+            }
+
+            let tnew = next_tid;
+            next_tid += 1;
+            for &l in &live_union {
+                let hs = &mut holders[l as usize];
+                for t in &group {
+                    hs.remove(t);
+                }
+            }
+            for &l in &new_live {
+                holders[l as usize].insert(tnew);
+            }
+            eliminated[id] = true;
+            holders[id].clear();
+            for &l in &dropped {
+                eliminated[l as usize] = true;
+                holders[l as usize].clear();
+            }
+
+            live.insert(tnew, new_live);
+            topo.insert(tnew, merged_topo);
+        }
+
+        // Merge any remaining active tensors (disconnected components / scalars,
+        // and anything left if the deadline aborted) into a single root,
+        // smallest-first.
+        let mut remaining: Vec<(Vec<u32>, TopoTree)> = topo
+            .into_iter()
+            .map(|(t, tp)| (live.remove(&t).unwrap(), tp))
+            .collect();
+        if remaining.is_empty() {
+            return TopoTree::Leaf(0);
+        }
+        remaining.sort_by(|a, b| {
+            self.set_cost(&a.0)
+                .partial_cmp(&self.set_cost(&b.0))
+                .unwrap()
+        });
+        let (_, root) = self.merge_group(remaining);
+        root
+    }
+
     /// Convert a topology into a `NestedEinsum`, deriving each node's output by
     /// exact outside-occurrence counting (matches the validator scorer): a label
     /// is in a node's output iff it appears in `iy` or in some leaf outside the
@@ -626,6 +916,66 @@ impl HyperGraph {
             }
         }
     }
+}
+
+/// Weighted degree of variable `v` in the quotient graph: the summed log2 dims
+/// of its distinct live neighbors (the boundary of the clique its elimination
+/// would create). Absorbed elements are pruned from `aelem[v]` in passing, and
+/// the timestamp `mark`/`tick` dedups neighbors in O(scanned size).
+#[allow(clippy::too_many_arguments)]
+fn wdeg(
+    v: usize,
+    aelem: &mut [Vec<u32>],
+    le: &[Vec<u32>],
+    absorbed: &[bool],
+    alive: &[bool],
+    w: &[f64],
+    mark: &mut [u32],
+    tick: &mut u32,
+) -> f64 {
+    *tick += 1;
+    let t = *tick;
+    aelem[v].retain(|&e| !absorbed[e as usize]);
+    let mut deg = 0.0f64;
+    for &e in &aelem[v] {
+        for &u in &le[e as usize] {
+            let u = u as usize;
+            if u != v && alive[u] && mark[u] != t {
+                mark[u] = t;
+                deg += w[u];
+            }
+        }
+    }
+    deg
+}
+
+/// The current neighborhood (boundary) of variable `v` in the quotient graph as
+/// a deduplicated list of live variable ids, using the same element scan as
+/// [`wdeg`]. This is the boundary of the element created by eliminating `v`.
+#[allow(clippy::too_many_arguments)]
+fn boundary_of(
+    v: usize,
+    aelem: &mut [Vec<u32>],
+    le: &[Vec<u32>],
+    absorbed: &[bool],
+    alive: &[bool],
+    mark: &mut [u32],
+    tick: &mut u32,
+) -> Vec<u32> {
+    *tick += 1;
+    let t = *tick;
+    aelem[v].retain(|&e| !absorbed[e as usize]);
+    let mut out: Vec<u32> = Vec::new();
+    for &e in &aelem[v] {
+        for &u in &le[e as usize] {
+            let uu = u as usize;
+            if uu != v && alive[uu] && mark[uu] != t {
+                mark[uu] = t;
+                out.push(u);
+            }
+        }
+    }
+    out
 }
 
 /// Sorted-set union of two sorted-unique id slices.
