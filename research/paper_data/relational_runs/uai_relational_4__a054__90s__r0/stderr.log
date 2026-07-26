@@ -1,0 +1,9 @@
+probe: instance=uai_relational_4 n_orig=30400 n=10000 fusible=0.6711 nlabels=200 t=1478ms
+seed_greedy tc=202.0984 t=51119ms
+t=54447ms iter=1 WAIST cost=200.0000 best_alt=168.0000 gap=32.0000 tried=5 sep_labels=168 clique_frac=0.48
+t=74178ms iter=1 REBUILD ACCEPT new_tc=201.0115 (was 202.0984)
+t=76089ms iter=1 incumb=201.0115 ratchet=201.8862 best=201.0115 since_improve=1
+t=78447ms iter=2 WAIST cost=200.0000 best_alt=165.0000 gap=35.0000 tried=5 sep_labels=165 clique_frac=0.48
+t=100724ms iter=2 REBUILD ACCEPT new_tc=184.8454 (was 201.0115)
+t_final=101311ms tc_reduced=184.8454 tc_full=184.8454 leaves=30400
+surgery summary: calls=2 cheaper_cuts=2 rebuild_accepts=2 waist_min_hits=0

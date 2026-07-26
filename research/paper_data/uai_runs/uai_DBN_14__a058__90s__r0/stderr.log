@@ -1,0 +1,16 @@
+t=26ms tc=26.6582 (rung cap=inf / full VE)
+t_peel=0ms cap=6 peeled=0/480 residual=480
+t_peel=0ms cap=10 peeled=0/480 residual=480
+t_peel=0ms cap=16 peeled=0/480 residual=480
+t_peel=4ms cap=26 peeled=479/480 residual=1
+t_peel=4ms cap=42 peeled=479/480 residual=1
+n=480 n_labels=40 floor=26.6582 ve=26.6582 best=26.6582 | probe w0=26.0 best_frac=0.002 useful=true caps_residual=[(6, 480), (10, 480), (16, 480), (26, 1), (42, 1)] | t=112ms
+residual_rounds=6
+t=12054ms rung 1/3 cap=20.8 residual=480 rtc=29.4826
+residual_rounds=5783
+t=24030ms rung 2/3 cap=26.0 residual=1 rtc=26.6582
+residual_rounds=5781
+t=36003ms rung 3/3 cap=32.5 residual=1 rtc=26.6582
+t=82391ms tc=26.5035 (full treesa niters=309)
+full_treesa_rounds=9
+t_final=85532ms tc_final=26.5035 source=ve(cap=inf) residual_won=false

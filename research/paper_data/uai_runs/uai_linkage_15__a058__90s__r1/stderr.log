@@ -1,0 +1,22 @@
+t=181ms tc=53.9352 (rung cap=inf / full VE)
+t_peel=5ms cap=6 peeled=1310/2304 residual=994
+t_peel=8ms cap=10 peeled=1829/2304 residual=475
+t_peel=12ms cap=16 peeled=2038/2304 residual=266
+t_peel=17ms cap=26 peeled=2134/2304 residual=170
+t_peel=27ms cap=42 peeled=2209/2304 residual=95
+n=2304 n_labels=1152 floor=53.9352 ve=53.9352 best=53.9352 | probe w0=6.0 best_frac=0.041 useful=true caps_residual=[(6, 994), (10, 475), (16, 266), (26, 170), (42, 95)] | t=425ms
+t=2195ms tc=42.2210 (residual niters=8 k=1387)
+residual_rounds=3
+t=12097ms rung 1/3 cap=4.8 residual=1387 rtc=42.2210
+t=15785ms tc=31.6556 (residual niters=16 k=994)
+t=20509ms tc=31.6514 (residual niters=32 k=994)
+residual_rounds=4
+t=23443ms rung 2/3 cap=6.0 residual=994 rtc=31.6514
+residual_rounds=5
+t=35822ms rung 3/3 cap=7.5 residual=787 rtc=32.0344
+t=44165ms tc=31.6255 (residual niters=32 k=994)
+residual_rounds=6
+t=73381ms tc=31.0679 (full treesa niters=8)
+t=84741ms tc=30.5803 (full treesa niters=13)
+full_treesa_rounds=3
+t_final=84741ms tc_final=30.5803 source=residual residual_won=true

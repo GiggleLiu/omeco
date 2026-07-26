@@ -421,7 +421,10 @@ rearrangements of the same one. The blind spot is structural and
 persistent: it does not shrink as the incumbent improves, and it recurs
 at the new waist after every accepted repair. An optimizer that can see
 cuts globally therefore always has a move available exactly where the
-annealer is most stuck.
+annealer is most stuck. The claim is scoped to the instance families
+measured here: Sec.~\ref{sec:inference} exhibits a hub-dominated family
+on which the balanced waist \emph{is} sometimes locally minimal, and
+maps why.
 
 \begin{figure}[t]
   \centering
@@ -597,8 +600,11 @@ components earn their place. \emph{Elimination seeds}: on hypergraph-like
 instances with few, high-degree labels, seeding the annealer with a
 min-fill variable-elimination order gives it a start ($\tc = 28.8$ at
 $0.2$\,s on the DBN instance) that greedy construction ($44.7$) cannot
-approach; the mechanism's boundary is equally sharp---at 4086 labels the
-VE peel freezes and the seed is useless. \emph{Racing}: arms with
+approach. During the campaign this mechanism appeared to have a sharp
+boundary---at 4086 labels the seed seemed to freeze---but the freeze
+later proved to be largely an implementation artifact of the greedy
+construction stage, and a quotient-graph reimplementation removes it
+entirely (Sec.~\ref{sec:inference}, ``a seed that scales''). \emph{Racing}: arms with
 budget-fraction linear schedules, composed by a router, produced three
 records in a single run during development; a probe-leader policy never
 won. Harness-clocked time-to-frontier records exist as well ($16.1$\,s to
@@ -812,6 +818,82 @@ captures the frontier everywhere we measured; the simplification pass
 (Sec.~\ref{sec:simplify}) additionally absorbs the per-variable unity
 tensors that inference-style einsums carry by construction.
 
+\paragraph{Beyond the benchmark: the excluded relational family.}
+The same issue tracker \cite{roa_2022_ti_issue15} excludes one family
+outright---the five \emph{relational} Markov-logic networks, ``the
+problem scale is too large''---and no shipped test ever touches them. We
+exported and measured all five (Table~\ref{tab:relational}); at
+$3\,000$--$70\,000$ tensors they are up to $13\times$ larger than
+anything in Sec.~\ref{sec:eval}, and they take the regime split of this
+section to its extreme. On the two dense instances the entire
+annealing family---our tuned reference, the Julia TreeSA ladder, and
+the shipped defaults alike---lands at \emph{exactly twice} the optimal
+width (largest intermediate $2^{200}$ versus reference treewidth $100$
+on relational\_4; $2^{500}$, the full joint, versus $250$ on
+relational\_1) at every budget up to $900$\,s, while elimination
+orderings sit exactly on the Tamaki reference width in seconds. On
+relational\_1 our own toolchain initially produced \emph{no order at
+all} within any budget: the greedy construction stage was quadratic in
+practice and never completed---a defect this campaign exposed and we
+have since fixed in the library. Surgery, instrumented on
+relational\_4, maps its own boundary honestly: on some seeds bounded FM
+finds enormously cheaper cuts ($36$--$43$ bits) and surgery is the only
+refiner to escape the plateau ($190.5$ at $90$\,s), but the improved
+separators are near-cliques (clique fraction $0.41$--$0.44$, against
+$0.01$--$0.05$ on the instances of Sec.~\ref{sec:frozenwaist}), and on
+other seeds the waist is locally minimal on every call---balanced
+bipartitions are structurally wrong for hub-dominated networks, whose
+optimal trees are deeply unbalanced elimination peelings outside the
+balance class surgery searches.
+
+\paragraph{Answering in kind: a seed that scales.}
+The portfolio rule above is only as good as its elimination probe, and
+ours froze beyond ${\sim}4\,000$ labels. Diagnosing the freeze showed it
+was largely an implementation artifact (the quadratic greedy blocked
+the pipeline before the seed ran), and the cure is the standard
+machinery of sparse-matrix ordering: a quotient-graph elimination
+engine with element absorption and lazy weighted-min-degree scoring
+\cite{amestoy_1996_approximate} orders
+relational\_4 in $72$\,ms at width $101$---the optimum---and
+relational\_1 in $1.9$\,s at width $251$. Seeded with it, our pipeline
+matches the elimination frontier on every relational instance
+(Table~\ref{tab:relational}), reaches relational\_5's width-10 floor at
+$90$\,s where the annealing ladder needs ${\sim}1\,000$\,s, and puts
+the first number of any method in this study on relational\_1. The
+engine is released as a first-class \texttt{Treewidth} optimizer in the
+omeco library, alongside the greedy scaling fix.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+ & & & ref. & \multicolumn{2}{c}{annealing family (best)} & elimination \\
+\cmidrule(lr){5-6}\cmidrule(lr){7-7}
+instance & tensors & labels & width & either toolchain & this work + VE seed & (Julia MF) \\
+\midrule
+relational\_1 & 63\,000 & 500    & 250 & 503.5 (sc 500) & \textbf{260.3} (sc 250) & \textbf{259.5} \\
+relational\_2 & 38\,750 & 13\,000 & 2  & 17.44 & 17.44 & 17.44 \\
+relational\_3 & 3\,000  & 1\,000 & 7   & \textbf{16.77} & 16.78 & 16.93 \\
+relational\_4 & 30\,400 & 10\,200 & 100 & 202.9 (sc 200) & \textbf{109.0} (sc 100) & \textbf{108.2} \\
+relational\_5 & 70\,000 & 10\,000 & 10  & 23.93 (${\sim}10^3$\,s) & \textbf{24.03} (90\,s) & \textbf{23.93} (29\,s) \\
+\bottomrule
+\end{tabular}
+\caption{The relational family, same server. ``Ref.\ width'' is the
+Tamaki reference treewidth from \cite{roa_2022_ti_issue15}.
+``Annealing family (best)'' is the best of our tuned reference, all
+attempts of Secs.~\ref{sec:algorithm}--\ref{sec:eval}, and the full
+Julia TreeSA ladder, at budgets up to $900$\,s (relational\_1: no
+method of our toolchain emitted any order before the seed of the final
+row existed; the value shown is Julia's default greedy after $433$\,s).
+``This work + VE seed'' is the pipeline seeded by the scalable
+quotient-graph elimination order (median over repetitions; identical
+across all budgets $90$--$900$\,s). Elimination reaches the reference
+width exactly on every instance; the dense pair is decided by
+${\sim}94$ and ${\sim}244$ bits.}
+\label{tab:relational}
+\end{table}
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/fig12_inference.pdf}
@@ -857,14 +939,21 @@ so a milliseconds-cheap elimination probe belongs in front of every
 annealer.
 
 Deliverables: the surgery pass, the simplification pass, tuned defaults,
-a warm-start annealing API, and two bug fixes are released in the omeco
-library (prepared for upstreaming to OMEinsumContractionOrders.jl),
-together with the validator, all certificates, and the 56-attempt audit
-trail. Open problems: carving-width-type lower bounds; the two
+a warm-start annealing API, a scalable \texttt{Treewidth}
+elimination-order optimizer, a fix for a quadratic scaling defect in
+greedy construction, and two further bug fixes are released in the
+omeco library (prepared for upstreaming to
+OMEinsumContractionOrders.jl), together with the validator, all
+certificates, and the 58-attempt audit trail. Open problems:
+carving-width-type lower bounds; the two
 instances that repelled every mechanism (the 97-qubit random circuit
 and 28-queens, the latter unstable at practical budgets); heterogeneous
-bond dimensions; and sliced contraction, where the interaction between
-slicing and surgery is unexplored.
+bond dimensions; sliced contraction, where the interaction between
+slicing and surgery is unexplored; and \emph{unbalanced} surgery---the
+relational family shows the balance prior excludes the elimination-like
+separations hub-dominated networks need, so a cut repair that searches
+across balance classes (or peels rather than bisects) is the natural
+next mechanism.
 
 \section*{Acknowledgements}
 The author thanks the OMEinsumContractionOrders.jl and TensorInference.jl
@@ -875,8 +964,9 @@ builds on.
 The optimizer library (omeco), the validation harness, all certificates
 (treewidth minors, cut sets, and their verification scripts), per-attempt
 logs, cycle reports, the same-machine campaign data (305 + 200 + 80 + 69
-+ 30 scored runs and the Julia ladder), and the UAI instance exporter are
-available in the project repository. Every figure regenerates from
++ 30 scored runs, the 108-run surgery budget grid, the 324-run
+relational campaign, and the Julia ladders), and the UAI instance
+exporter are available in the project repository. Every figure regenerates from
 JSON data files via Typst sources shipped with the manuscript.
 
 \paragraph{Use of AI systems}

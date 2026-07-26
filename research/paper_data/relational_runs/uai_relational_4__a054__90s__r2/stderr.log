@@ -1,0 +1,24 @@
+probe: instance=uai_relational_4 n_orig=30400 n=10000 fusible=0.6711 nlabels=200 t=1364ms
+seed_greedy tc=202.3599 t=47891ms
+t=57587ms iter=1 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=59542ms iter=1 incumb=202.1364 ratchet=204.0140 best=201.7993 since_improve=1
+t=60849ms iter=2 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=62817ms iter=2 incumb=202.1364 ratchet=203.8692 best=201.7993 since_improve=2
+t=64116ms iter=3 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=66066ms iter=3 incumb=202.1364 ratchet=203.6009 best=201.7993 since_improve=3
+t=67367ms iter=4 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=69311ms iter=4 incumb=202.1364 ratchet=203.8765 best=201.7993 since_improve=4
+t=70611ms iter=5 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=72559ms iter=5 incumb=202.1364 ratchet=203.9252 best=201.7993 since_improve=5
+t=73859ms iter=6 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=76018ms iter=6 incumb=202.1364 ratchet=204.0449 best=201.7993 since_improve=6
+t=77380ms iter=7 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=79583ms iter=7 incumb=202.1364 ratchet=203.9896 best=201.7993 since_improve=7
+t=80931ms iter=8 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=83118ms iter=8 incumb=202.1364 ratchet=203.9457 best=201.7993 since_improve=8
+t=84472ms iter=9 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=5 sep_labels=200 clique_frac=0.50
+t=86673ms iter=9 incumb=202.1364 ratchet=204.0399 best=201.7993 since_improve=9
+t=87536ms iter=10 WAIST cost=200.0000 best_alt=200.0000 gap=0.0000 tried=3 sep_labels=200 clique_frac=0.50
+t_final=88486ms tc_reduced=201.7993 tc_full=201.7993 leaves=30400
+surgery summary: calls=10 cheaper_cuts=0 rebuild_accepts=0 waist_min_hits=10
+WAIST-MIN: instance=uai_relational_4 waist_cost=200.0000 alternatives_tried=48 best_alt=200.0000

@@ -1,0 +1,11 @@
+t=10762ms tc=108.9687 (rung cap=inf / full VE)
+t_peel=425ms cap=6 peeled=20000/30400 residual=10400
+t_peel=452ms cap=10 peeled=20000/30400 residual=10400
+t_peel=425ms cap=16 peeled=20000/30400 residual=10400
+t_peel=432ms cap=26 peeled=20000/30400 residual=10400
+t_peel=424ms cap=42 peeled=20000/30400 residual=10400
+n=30400 n_labels=10200 floor=108.9687 ve=108.9687 best=108.9687 | probe w0=6.0 best_frac=0.342 useful=true caps_residual=[(6, 10400), (10, 10400), (16, 10400), (26, 10400), (42, 10400)] | t=12940ms
+t=13363ms rung 1/3 cap=4.8 residual=10400 (immobile, skip)
+t=13800ms rung 2/3 cap=6.0 residual=10400 (immobile, skip)
+t=14236ms rung 3/3 cap=7.5 residual=10400 (immobile, skip)
+t_final=14240ms tc_final=108.9687 source=ve(cap=inf) residual_won=false

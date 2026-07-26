@@ -1,0 +1,7 @@
+simplify: n_orig=38750 n_reduced=250 shrink=0.9935 t_simp=326ms
+t_seed=1344ms tc_seed=7.9600 seed_trials=0
+t_dp=1514ms tc_greedy=7.9600
+t_mcts=15015ms mcts: backup=min rollouts=618112 rate=41168/s depth=249 nodes=250 improves=0 tc_mcts=7.9600
+ATTRIBUTION tc_greedy=7.9600 tc_mcts_prepolish=7.9600 mcts_beats_greedy=false
+anneal_sweeps=2173616 cycles=184 fresh=181
+t_final=87359ms tc_greedy=7.9600 tc_mcts=7.9600 tc_final=7.9600 tc_full=17.6400 leaves=38750

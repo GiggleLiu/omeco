@@ -1,0 +1,64 @@
+simplify: n_orig=3000 n_reduced=1000 shrink=0.6667 t_simp=23ms
+t_seed=632ms tc_seed=16.7736 seed_trials=3
+t_dp=634ms tc_greedy=16.7736
+t_mcts=23701ms mcts: backup=min rollouts=64 rate=3/s depth=2 nodes=65 improves=0 tc_mcts=16.7736
+ATTRIBUTION tc_greedy=16.7736 tc_mcts_prepolish=16.7736 mcts_beats_greedy=false
+t=24131ms polish_tc=16.7692
+t=24201ms polish_tc=16.7673
+t=24269ms polish_tc=16.7663
+t=24335ms polish_tc=16.7440
+t=24397ms polish_tc=16.7431
+t=24461ms polish_tc=16.7412
+t=24561ms polish_tc=16.7362
+t=24626ms polish_tc=16.7355
+t=24689ms polish_tc=16.7275
+t=24758ms polish_tc=16.7175
+t=24815ms polish_tc=16.7106
+t=24860ms polish_tc=16.7087
+t=24910ms polish_tc=16.7046
+t=24960ms polish_tc=16.7022
+t=25065ms polish_tc=16.6963
+t=25132ms polish_tc=16.6953
+t=25193ms polish_tc=16.6922
+t=25266ms polish_tc=16.6892
+t=25321ms polish_tc=16.6802
+t=25410ms polish_tc=16.6784
+t=25487ms polish_tc=16.6760
+t=25538ms polish_tc=16.6749
+t=25616ms polish_tc=16.6718
+t=25671ms polish_tc=16.6711
+t=25725ms polish_tc=16.6691
+t=25781ms polish_tc=16.6667
+t=25857ms polish_tc=16.6665
+t=25918ms polish_tc=16.6649
+t=25974ms polish_tc=16.6627
+t=26036ms polish_tc=16.6623
+t=26097ms polish_tc=16.6618
+t=26160ms polish_tc=16.6609
+t=26228ms polish_tc=16.6591
+t=26289ms polish_tc=16.6587
+t=26377ms polish_tc=16.6580
+t=26450ms polish_tc=16.6578
+t=26529ms polish_tc=16.6574
+t=26590ms polish_tc=16.6536
+t=26661ms polish_tc=16.6511
+t=26759ms polish_tc=16.6497
+t=26826ms polish_tc=16.6491
+t=26892ms polish_tc=16.6488
+t=26964ms polish_tc=16.6482
+t=27024ms polish_tc=16.6453
+t=27078ms polish_tc=16.6450
+t=27147ms polish_tc=16.6448
+t=27197ms polish_tc=16.6439
+t=27274ms polish_tc=16.6425
+t=27334ms polish_tc=16.6378
+t=27422ms polish_tc=16.6373
+t=27473ms polish_tc=16.6342
+t=27573ms polish_tc=16.6339
+t=27629ms polish_tc=16.6328
+t=27696ms polish_tc=16.6303
+t=27755ms polish_tc=16.6285
+t=30420ms polish_tc=16.6276
+t=30481ms polish_tc=16.6271
+anneal_sweeps=125912 cycles=28 fresh=8
+t_final=87309ms tc_greedy=16.7736 tc_mcts=16.7736 tc_final=16.6271 tc_full=16.8633 leaves=3000

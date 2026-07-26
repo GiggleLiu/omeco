@@ -1,0 +1,61 @@
+simplify: n_orig=3000 n_reduced=1000 shrink=0.6667 t_simp=23ms
+t_seed=644ms tc_seed=16.7841 seed_trials=4
+t_dp=644ms tc_greedy=16.7841
+t_mcts=138548ms mcts: backup=min rollouts=384 rate=3/s depth=3 nodes=385 improves=0 tc_mcts=16.7841
+ATTRIBUTION tc_greedy=16.7841 tc_mcts_prepolish=16.7841 mcts_beats_greedy=false
+t=138948ms polish_tc=16.7766
+t=139011ms polish_tc=16.7696
+t=139070ms polish_tc=16.7584
+t=139169ms polish_tc=16.7513
+t=139230ms polish_tc=16.7482
+t=139294ms polish_tc=16.7444
+t=139357ms polish_tc=16.7266
+t=139423ms polish_tc=16.7205
+t=139489ms polish_tc=16.7196
+t=139547ms polish_tc=16.7125
+t=139610ms polish_tc=16.7113
+t=139672ms polish_tc=16.7085
+t=139772ms polish_tc=16.7067
+t=139846ms polish_tc=16.6979
+t=139927ms polish_tc=16.6861
+t=140016ms polish_tc=16.6830
+t=140073ms polish_tc=16.6828
+t=140125ms polish_tc=16.6786
+t=140181ms polish_tc=16.6764
+t=140237ms polish_tc=16.6731
+t=140302ms polish_tc=16.6711
+t=140358ms polish_tc=16.6709
+t=140428ms polish_tc=16.6660
+t=140480ms polish_tc=16.6614
+t=140536ms polish_tc=16.6591
+t=140592ms polish_tc=16.6576
+t=140689ms polish_tc=16.6567
+t=140738ms polish_tc=16.6542
+t=140794ms polish_tc=16.6538
+t=140848ms polish_tc=16.6522
+t=140948ms polish_tc=16.6515
+t=141010ms polish_tc=16.6504
+t=141070ms polish_tc=16.6484
+t=141148ms polish_tc=16.6473
+t=141211ms polish_tc=16.6459
+t=141281ms polish_tc=16.6457
+t=141342ms polish_tc=16.6437
+t=141398ms polish_tc=16.6428
+t=141459ms polish_tc=16.6419
+t=141511ms polish_tc=16.6396
+t=141559ms polish_tc=16.6380
+t=141621ms polish_tc=16.6369
+t=141691ms polish_tc=16.6364
+t=141791ms polish_tc=16.6362
+t=141862ms polish_tc=16.6358
+t=141913ms polish_tc=16.6353
+t=141988ms polish_tc=16.6344
+t=142047ms polish_tc=16.6296
+t=147075ms polish_tc=16.6294
+t=148777ms polish_tc=16.6280
+t=148841ms polish_tc=16.6271
+t=173176ms polish_tc=16.6262
+t=388005ms polish_tc=16.6258
+t=465859ms polish_tc=16.6253
+anneal_sweeps=1532448 cycles=190 fresh=117
+t_final=873014ms tc_greedy=16.7841 tc_mcts=16.7841 tc_final=16.6253 tc_full=16.8617 leaves=3000
