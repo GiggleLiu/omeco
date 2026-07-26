@@ -354,7 +354,8 @@ dominated by the argmax-cost contraction, whose leaf set $A$ (against
 complement $B$) is a bipartition of all tensors, and whose cost is
 essentially the weight of the cut $(A,B)$ in the tensor hypergraph.
 Local tree moves---the associativity rewrites of the annealer
-\cite{kalachev_2021_multi}---transfer one subtree across this
+\cite{kalachev_2021_multi} (Fig.~\ref{fig:rewrites})---transfer one
+subtree across this
 bipartition at a time; crossing to a \emph{different} good
 bipartition of comparable balance requires a long sequence of
 individually uphill steps, which a cooled annealer will never take;
@@ -402,6 +403,36 @@ freeze the annealer---and a bucket structure over gains makes a full
 pass linear in the network size. \emph{Bounded} FM caps the number of
 passes and move attempts (scaling with instance size, nothing tuned per
 instance), so a call costs a fixed, small slice of the budget.
+Figure~\ref{fig:fmpass} walks one pass on a six-tensor cut.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/typst/six_tensor_full_fm_pass.pdf}
+  \caption{One FM pass on a six-tensor cut. An internal index crosses
+  the cut (dashed) when it connects tensors on both sides; the cut cost
+  is $\sum_\ell \log_2 d_\ell$ over crossing indices $\ell$ (red). Each
+  tensor may move at most once per pass: each step moves the
+  not-yet-moved tensor whose transfer most reduces the
+  cut cost while keeping each side within an $18\%$ slack band of its
+  initial size (and nonempty), then locks it; moves may be uphill. The
+  pass ends when every tensor has moved or no legal move remains, and
+  returns the \emph{best cut encountered} along the way.}
+  \label{fig:fmpass}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/typst/six_tensor_treesa_rewrites.pdf}
+  \caption{The annealer's local moves on a six-tensor toy network.
+  Tensors sit at the leaves; the two red branches at the root define
+  the current waist bipartition. Each TreeSA rewrite
+  \cite{kalachev_2021_multi} changes only the association of
+  neighboring subtrees, so moving a tensor to the other side of the
+  waist first requires walking it through the tree---and a global
+  change of the waist requires traversing several intermediate
+  trees, each scored on its own (Fig.~\ref{fig:escape}).}
+  \label{fig:rewrites}
+\end{figure}
 
 We instrumented every surgery call of the algorithm of
 Sec.~\ref{sec:algorithm} on its two record runs: at each converged
@@ -449,8 +480,8 @@ maps why.
 
 Global cut surgery operationalizes the observation of
 Sec.~\ref{sec:frozenwaist}; Algorithm~\ref{alg:surgery} states the loop,
-and Fig.~\ref{fig:k4} illustrates both of the
-pipeline's mechanisms on a toy network. The optimizer maintains an incumbent
+and Fig.~\ref{fig:toysurgery} walks one iteration on a six-tensor toy
+network. The optimizer maintains an incumbent
 contraction tree produced by a standard annealing engine, and
 interleaves, at every outer iteration, a surgery step that treats the
 waist as a graph problem:
@@ -523,17 +554,18 @@ index dimensions; nothing is tuned per instance.}
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=0.92\linewidth]{figures/typst/k4_shared_demo.pdf}
-  \caption{The two mechanisms on a toy network: two dense clusters (each
-  a $K_4$) joined by two sparse bridges. (a,b)~Preprocessing: the chain
-  tensors on the bridges are rank-non-increasing, so the exact
-  simplification pass absorbs them ($L_2, L_4 \to L_2^*, L_4^*$) before
-  any search begins. (c,d)~Surgery: a converged annealed tree can freeze
-  with a poor waist---the horizontal bipartition (c), which cuts through
-  both clusters---while the cheap comparable-balance cut through the two
-  bridges (d) is invisible to local tree moves; bounded FM on the tensor
-  graph finds it, and both sides are rebuilt cold and spliced.}
-  \label{fig:k4}
+  \includegraphics[width=\linewidth]{figures/typst/six_tensor_global_cut_surgery.pdf}
+  \caption{One surgery iteration on a six-tensor toy network
+  (Algorithm~\ref{alg:surgery}, lines 3--10). (a)~The most expensive
+  tree node---the waist, red---divides the tensors into two subtrees.
+  (b)~\emph{Extract}: the two leaf sets become a cut of the original
+  network, with the straddling indices (red) carrying the cut weight.
+  (c)~\emph{FM pass}: refinement moves tensors across the cut to reduce
+  its cost (Fig.~\ref{fig:fmpass}). (d)~\emph{Rebuild}: each side of
+  the improved cut is ordered separately, the sides are joined, and the
+  candidate tree is accepted only if its independently measured total
+  cost decreases.}
+  \label{fig:toysurgery}
 \end{figure}
 
 Two design choices matter beyond the loop itself. \emph{Fixed work, not
@@ -574,7 +606,22 @@ rank-non-increasing closure with splice-back, so it composes with the
 record protocol. Before any search, the pass contracts this structure
 away greedily; the optimizer runs on the reduced network, and the
 contracted fragments are spliced back into the final tree as fixed
-subtrees. The pass is exact and costs milliseconds.
+subtrees (Fig.~\ref{fig:toysimplify}). The pass is exact and costs
+milliseconds.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/typst/six_tensor_structural_simplification.pdf}
+  \caption{The exact simplification pass on a six-tensor toy network.
+  (a)~The pass greedily contracts adjacent (super-)tensors $A, B$
+  whenever $\mathrm{rank}(A \cdot B) \le
+  \max(\mathrm{rank}(A), \mathrm{rank}(B))$: here the shaded fragments
+  absorb $x, y$ into $L_2$ and $z$ into $R_2$. (b)~The resulting
+  super-tensors $L_2^{*}, R_2^{*}$ form a smaller network for the
+  order search; their internal contractions are retained and restored
+  in the final tree as fixed subtrees.}
+  \label{fig:toysimplify}
+\end{figure}
 
 Its effect is largest exactly where synthetic benchmarks never look
 (Fig.~\ref{fig:simplify}a, Appendix~\ref{app:supp}): $88.7\%$ of the real Sycamore network's 3369
