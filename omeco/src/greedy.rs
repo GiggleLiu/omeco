@@ -9,7 +9,7 @@ use crate::Label;
 use priority_queue::PriorityQueue;
 use rand::prelude::*;
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// A binary contraction tree built during greedy optimization.
 #[derive(Debug, Clone)]
@@ -203,19 +203,39 @@ pub fn tree_greedy<E: Label>(
         .collect();
 
     // Initialize priority queue with ONLY neighbor pairs (Julia: evaluate_costs)
-    // This matches Julia's behavior: only consider connected tensors initially
-    let mut pq = PriorityQueue::new();
-    let mut cost_graph: HashSet<(usize, usize)> = HashSet::new();
-    let vertices: Vec<usize> = il.vertices().cloned().collect();
+    // This matches Julia's behavior: only consider connected tensors initially.
+    //
+    // `cost_adj` is an adjacency index of the *cost graph* (Julia's `cost_graph`
+    // `SimpleGraph`): `cost_adj[v]` holds every `u` such that the candidate pair
+    // `(min(u,v), max(u,v))` is currently enqueued. It lets us look up and drop
+    // the pairs incident to a contracted vertex in O(deg) time instead of
+    // scanning the entire candidate set on every contraction (the previous
+    // O(V) rescan made the whole algorithm O(V^2)).
+    //
+    // Vertices and neighbor lists are visited in sorted order so that the queue
+    // is built and mutated in a deterministic sequence. Julia's `IncidenceList`
+    // iterates its `Dict` in a stable order, whereas Rust's randomly-seeded
+    // `HashMap` did not, which made the previous port's greedy output vary
+    // run-to-run on ties. Sorting restores deterministic, Julia-aligned behavior.
+    let mut pq: PriorityQueue<(usize, usize), Cost> = PriorityQueue::new();
+    let mut cost_adj: HashMap<usize, HashSet<usize>> = HashMap::new();
+    let mut vertices: Vec<usize> = il.vertices().cloned().collect();
+    vertices.sort_unstable();
+
+    // Live vertices, kept ordered so the outer-product fallback and final
+    // extraction are deterministic and cheap.
+    let mut live: BTreeSet<usize> = vertices.iter().copied().collect();
 
     for &vi in &vertices {
-        for vj in il.neighbors(&vi) {
+        let mut nbrs = il.neighbors(&vi);
+        nbrs.sort_unstable();
+        for vj in nbrs {
             if vj > vi {
-                let pair = (vi, vj);
                 let dims = ContractionDims::compute(&il, log2_sizes, &vi, &vj);
                 let loss = greedy_loss(&dims, alpha);
-                pq.push(pair, Cost(loss));
-                cost_graph.insert(pair);
+                pq.push((vi, vj), Cost(loss));
+                cost_adj.entry(vi).or_default().insert(vj);
+                cost_adj.entry(vj).or_default().insert(vi);
             }
         }
     }
@@ -225,16 +245,17 @@ pub fn tree_greedy<E: Label>(
 
     // Main greedy loop
     while il.nv() > 1 {
-        // Julia: if cost_values is empty, fall back to arbitrary outer product
+        // Julia: if cost_values is empty, fall back to arbitrary outer product.
+        // We pick the two smallest live vertices for a deterministic choice.
         let (vi, vj) = if pq.is_empty() {
-            let vpool: Vec<usize> = il.vertices().cloned().collect();
-            if vpool.len() < 2 {
-                break;
+            let mut it = live.iter();
+            match (it.next(), it.next()) {
+                (Some(&a), Some(&b)) => (a, b),
+                _ => break,
             }
-            (vpool[0].min(vpool[1]), vpool[0].max(vpool[1]))
         } else {
             // Select pair to contract using temperature sampling
-            let (pair, _) = select_pair(&mut pq, temperature, &mut rng, &mut cost_graph)?;
+            let (pair, _) = select_pair(&mut pq, temperature, &mut rng, &mut cost_adj)?;
             pair
         };
 
@@ -270,34 +291,66 @@ pub fn tree_greedy<E: Label>(
         il.delete_vertex(&vi);
         il.delete_vertex(&vj);
 
+        // Update the live-vertex set.
+        live.remove(&vi);
+        live.remove(&vj);
+        live.insert(new_v);
+
         // Store the new tree
         trees.insert(new_v, new_tree);
 
-        // Julia: update_costs! - only update for neighbors of the new vertex
-        for other_v in il.neighbors(&new_v) {
+        // Julia: update_costs! - only update for neighbors of the new vertex.
+        // `new_v` is a fresh id, so every incident pair is new; the branch
+        // mirrors Julia's `has_edge` check and stays correct if that changes.
+        let mut nbrs = il.neighbors(&new_v);
+        nbrs.sort_unstable();
+        for other_v in nbrs {
             let pair_key = (new_v.min(other_v), new_v.max(other_v));
             let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &other_v);
             let loss = greedy_loss(&new_dims, alpha);
 
-            if cost_graph.contains(&pair_key) {
+            let already = cost_adj.get(&new_v).is_some_and(|s| s.contains(&other_v));
+            if already {
                 // Update existing entry
                 pq.change_priority(&pair_key, Cost(loss));
             } else {
                 // Add new entry
                 pq.push(pair_key, Cost(loss));
-                cost_graph.insert(pair_key);
+                cost_adj.entry(new_v).or_default().insert(other_v);
+                cost_adj.entry(other_v).or_default().insert(new_v);
             }
         }
 
-        // Julia: remove edges to deleted vertex vj from cost_graph
-        let pairs_to_remove: Vec<_> = cost_graph
-            .iter()
-            .filter(|(a, b)| *a == vj || *b == vj || *a == vi || *b == vi)
-            .cloned()
-            .collect();
-        for pair in pairs_to_remove {
-            pq.remove(&pair);
-            cost_graph.remove(&pair);
+        // Julia: drop every candidate pair incident to the two contracted
+        // vertices. Using the adjacency index we gather only the O(deg) pairs
+        // that actually reference `vi`/`vj` instead of scanning all candidates.
+        //
+        // The pairs are removed in ascending `(lo, hi)` order. `pq.remove`
+        // rearranges the heap, so the removal order affects how equal-cost
+        // pairs are later broken; iterating incident pairs in the same sorted
+        // order that a full candidate scan would yields identical selections.
+        let mut to_remove: Vec<(usize, usize)> = Vec::new();
+        for &dead in &[vi, vj] {
+            if let Some(partners) = cost_adj.get(&dead) {
+                for &p in partners {
+                    to_remove.push((dead.min(p), dead.max(p)));
+                }
+            }
+        }
+        to_remove.sort_unstable();
+        to_remove.dedup();
+        for pair_key in &to_remove {
+            pq.remove(pair_key);
+        }
+        // Detach `vi`/`vj` from the adjacency index.
+        for &dead in &[vi, vj] {
+            if let Some(partners) = cost_adj.remove(&dead) {
+                for p in partners {
+                    if let Some(s) = cost_adj.get_mut(&p) {
+                        s.remove(&dead);
+                    }
+                }
+            }
         }
     }
 
@@ -318,20 +371,36 @@ pub fn tree_greedy<E: Label>(
     })
 }
 
+/// Remove a candidate pair from the cost-graph adjacency index.
+fn cost_adj_remove(cost_adj: &mut HashMap<usize, HashSet<usize>>, pair: (usize, usize)) {
+    if let Some(s) = cost_adj.get_mut(&pair.0) {
+        s.remove(&pair.1);
+    }
+    if let Some(s) = cost_adj.get_mut(&pair.1) {
+        s.remove(&pair.0);
+    }
+}
+
+/// Insert a candidate pair into the cost-graph adjacency index.
+fn cost_adj_insert(cost_adj: &mut HashMap<usize, HashSet<usize>>, pair: (usize, usize)) {
+    cost_adj.entry(pair.0).or_default().insert(pair.1);
+    cost_adj.entry(pair.1).or_default().insert(pair.0);
+}
+
 /// Select the next pair to contract from the priority queue.
-/// Also updates the cost_graph to track which pairs are in the queue.
+/// Also updates the cost-graph adjacency index to track which pairs are queued.
 fn select_pair<R: Rng>(
     pq: &mut PriorityQueue<(usize, usize), Cost>,
     temperature: f64,
     rng: &mut R,
-    cost_graph: &mut HashSet<(usize, usize)>,
+    cost_adj: &mut HashMap<usize, HashSet<usize>>,
 ) -> Option<((usize, usize), Cost)> {
     if pq.is_empty() {
         return None;
     }
 
     let (pair1, cost1) = pq.pop()?;
-    cost_graph.remove(&pair1);
+    cost_adj_remove(cost_adj, pair1);
 
     if temperature <= 0.0 || pq.is_empty() {
         return Some((pair1, cost1));
@@ -339,7 +408,7 @@ fn select_pair<R: Rng>(
 
     // Boltzmann sampling: consider the second-best option
     let (pair2, cost2) = pq.pop()?;
-    cost_graph.remove(&pair2);
+    cost_adj_remove(cost_adj, pair2);
 
     // Probability of accepting the worse option
     let delta = cost2.0 - cost1.0;
@@ -348,12 +417,12 @@ fn select_pair<R: Rng>(
     if rng.random::<f64>() < prob {
         // Accept the second option, push first back
         pq.push(pair1, cost1);
-        cost_graph.insert(pair1);
+        cost_adj_insert(cost_adj, pair1);
         Some((pair2, cost2))
     } else {
         // Keep the first option, push second back
         pq.push(pair2, cost2);
-        cost_graph.insert(pair2);
+        cost_adj_insert(cost_adj, pair2);
         Some((pair1, cost1))
     }
 }
