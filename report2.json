@@ -1,0 +1,273 @@
+{
+  "status": "scored",
+  "score": -3.2484,
+  "per_instance": [
+    {
+      "instance": "nqueens_28",
+      "result": "pass",
+      "seconds": 177.011,
+      "detail": "early-abort worse-of-2 tc=128.170 (both runs > record+0.5; run 3 skipped) record=121.36787312533023 delta=-6.802 ttf=inf/none",
+      "all_runs": [
+        {
+          "result": "ok",
+          "tc": 128.16992702367,
+          "sc": 103.0,
+          "seconds": 88.517
+        },
+        {
+          "result": "ok",
+          "tc": 124.58496275824373,
+          "sc": 95.0,
+          "seconds": 88.495
+        }
+      ],
+      "anytime": {
+        "ttf": null,
+        "tc_at": {
+          "1.0": 369.0112,
+          "3.0": 369.0112,
+          "10.0": 254.0,
+          "30.0": 205.0975
+        },
+        "curve": [
+          {
+            "t": 0.42,
+            "tc": 369.0112,
+            "sc": 269.0
+          },
+          {
+            "t": 6.584,
+            "tc": 254.0,
+            "sc": 231.0
+          },
+          {
+            "t": 14.614,
+            "tc": 223.8827,
+            "sc": 218.0
+          },
+          {
+            "t": 23.147,
+            "tc": 205.0975,
+            "sc": 196.0
+          },
+          {
+            "t": 33.003,
+            "tc": 139.0112,
+            "sc": 114.0
+          },
+          {
+            "t": 38.255,
+            "tc": 136.0112,
+            "sc": 114.0
+          },
+          {
+            "t": 42.281,
+            "tc": 135.0056,
+            "sc": 114.0
+          },
+          {
+            "t": 50.388,
+            "tc": 134.0056,
+            "sc": 113.0
+          },
+          {
+            "t": 58.632,
+            "tc": 132.0112,
+            "sc": 111.0
+          },
+          {
+            "t": 76.032,
+            "tc": 128.3221,
+            "sc": 103.0
+          },
+          {
+            "t": 82.26,
+            "tc": 128.3221,
+            "sc": 103.0
+          },
+          {
+            "t": 87.689,
+            "tc": 128.1699,
+            "sc": 103.0
+          }
+        ]
+      }
+    },
+    {
+      "instance": "rqc_97_m24",
+      "result": "pass",
+      "seconds": 262.963,
+      "detail": "median-of-3 tc=106.163 sc=97.000 (runs: 106.132, 106.163, 106.585) record=106.46849426445668 delta=+0.305 ttf=78.8s/none record claim not confirmed (confirm tc=106.567)",
+      "all_runs": [
+        {
+          "result": "ok",
+          "tc": 106.1322151900725,
+          "sc": 97.0,
+          "seconds": 87.516
+        },
+        {
+          "result": "ok",
+          "tc": 106.16330415026924,
+          "sc": 97.0,
+          "seconds": 87.815
+        },
+        {
+          "result": "ok",
+          "tc": 106.5850841292196,
+          "sc": 97.0,
+          "seconds": 87.631
+        }
+      ],
+      "anytime": {
+        "ttf": 78.828,
+        "tc_at": {
+          "1.0": 173.585,
+          "3.0": 173.585,
+          "10.0": 109.6537,
+          "30.0": 107.3146
+        },
+        "curve": [
+          {
+            "t": 0.261,
+            "tc": 173.585,
+            "sc": 127.0
+          },
+          {
+            "t": 7.075,
+            "tc": 109.6537,
+            "sc": 97.0
+          },
+          {
+            "t": 13.357,
+            "tc": 107.6425,
+            "sc": 97.0
+          },
+          {
+            "t": 26.174,
+            "tc": 107.3146,
+            "sc": 97.0
+          },
+          {
+            "t": 37.67,
+            "tc": 107.282,
+            "sc": 97.0
+          },
+          {
+            "t": 44.847,
+            "tc": 107.184,
+            "sc": 97.0
+          },
+          {
+            "t": 50.834,
+            "tc": 107.1018,
+            "sc": 97.0
+          },
+          {
+            "t": 56.918,
+            "tc": 107.045,
+            "sc": 97.0
+          },
+          {
+            "t": 66.745,
+            "tc": 106.9994,
+            "sc": 97.0
+          },
+          {
+            "t": 78.828,
+            "tc": 106.2782,
+            "sc": 97.0
+          },
+          {
+            "t": 82.269,
+            "tc": 106.1982,
+            "sc": 97.0
+          },
+          {
+            "t": 86.433,
+            "tc": 106.1633,
+            "sc": 97.0
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "record_updates": [],
+  "environment": {
+    "kind": "fallback",
+    "image_or_lock": "sandbox-exec+cargo-lock:26ee90c534230760",
+    "reason": "no Docker on this macOS host; sandbox-exec denies network and research/ writes; harness enforces wall/CPU limits"
+  },
+  "leaderboard": {
+    "reg3_250": {
+      "tc": 39.883325463011175,
+      "sc": 34.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "sycamore_m20": {
+      "tc": 61.521961122584145,
+      "sc": 53.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "reg3_1000": {
+      "tc": 131.06780028804513,
+      "sc": 124.0,
+      "by": "attempt-054",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "rqc_97_m24": {
+      "tc": 106.46849426445668,
+      "sc": 97.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "ksg": {
+      "tc": 36.96324247893719,
+      "sc": 30.0,
+      "by": "attempt-054",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "surfacecode_d21": {
+      "tc": 47.40437945230608,
+      "sc": 40.0,
+      "by": "attempt-054",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "sycamore_53_20_0": {
+      "tc": 59.91142035166392,
+      "sc": 52.0,
+      "by": "attempt-050",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "dbn_13": {
+      "tc": 29.000000241850582,
+      "sc": 24.0,
+      "by": "attempt-038",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "nqueens_28": {
+      "tc": 121.36787312533023,
+      "sc": 115.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "qft_27": {
+      "tc": 29.609946796233952,
+      "sc": 27.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-24",
+      "confirmed": true
+    }
+  }
+}

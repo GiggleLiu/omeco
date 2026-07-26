@@ -855,6 +855,14 @@ impl Surgeon<'_> {
         self.alts_tried += tried;
         let gap = waist_cost - best_alt_cost;
 
+        // Revalidation instrumentation (paper-repo issue #1): the historical
+        // fields mix cost definitions (waist_cost is a contraction-NODE cost,
+        // best_alt a bipartition CUT cost). Log the incumbent partition's cut
+        // cost under the SAME functional as best_alt so the figure can compare
+        // like with like. Behavior is unchanged.
+        let cur_cut = self.hyper.cut_cost(&cur_part);
+        let gap_cut = cur_cut - best_alt_cost;
+
         // Near-clique ("safe") separator note (Tamaki-style).
         let mut safe_note = String::new();
         if let Some(part) = &best_alt_part {
@@ -863,7 +871,7 @@ impl Surgeon<'_> {
         }
 
         eprintln!(
-            "t={:.0}ms iter={iter} WAIST cost={waist_cost:.4} best_alt={best_alt_cost:.4} gap={gap:.4} tried={tried}{safe_note}",
+            "t={:.0}ms iter={iter} WAIST cost={waist_cost:.4} cur_cut={cur_cut:.4} best_alt={best_alt_cost:.4} gap={gap:.4} gap_cut={gap_cut:.4} tried={tried}{safe_note}",
             self.elapsed_ms(),
         );
 
