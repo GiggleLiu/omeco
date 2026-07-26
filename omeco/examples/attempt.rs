@@ -76,8 +76,70 @@ fn write_atomic(
     tree: &NestedEinsum<usize>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let tmp = format!("{out_path}.tmp");
-    writejson(&tmp, tree)?;
+    // Full writejson serializes per-node einsum metadata, which on dense
+    // large instances is quadratic in practice (relational_1: 63k leaves x
+    // ~250 live labels/node -> a 32 GB file). The validator's scorer reads
+    // topology only (isleaf/tensorindex/args; eins is explicitly untrusted),
+    // so above a size cutoff we emit the slim topology document instead.
+    if count_leaves(tree) > 20_000 {
+        write_topology_json(&tmp, tree)?;
+    } else {
+        writejson(&tmp, tree)?;
+    }
     std::fs::rename(&tmp, out_path)?;
+    Ok(())
+}
+
+fn count_leaves(tree: &NestedEinsum<usize>) -> usize {
+    let mut n = 0;
+    let mut stack = vec![tree];
+    while let Some(nd) = stack.pop() {
+        match nd {
+            NestedEinsum::Leaf { .. } => n += 1,
+            NestedEinsum::Node { args, .. } => stack.extend(args.iter()),
+        }
+    }
+    n
+}
+
+/// Iterative writer for `{"tree": ...}` with only the topology fields the
+/// independent scorer consumes: leaves as `{"isleaf":true,"tensorindex":i}`,
+/// internal nodes as `{"args":[left,right]}`.
+fn write_topology_json(
+    path: &str,
+    tree: &NestedEinsum<usize>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use std::io::Write;
+    let f = std::fs::File::create(path)?;
+    let mut w = std::io::BufWriter::with_capacity(1 << 20, f);
+    w.write_all(b"{\"tree\": ")?;
+    enum Item<'a> {
+        Node(&'a NestedEinsum<usize>),
+        Text(&'static str),
+    }
+    let mut stack = vec![Item::Node(tree)];
+    while let Some(item) = stack.pop() {
+        match item {
+            Item::Text(s) => w.write_all(s.as_bytes())?,
+            Item::Node(NestedEinsum::Leaf { tensor_index }) => {
+                write!(w, "{{\"isleaf\": true, \"tensorindex\": {tensor_index}}}")?;
+            }
+            Item::Node(NestedEinsum::Node { args, .. }) => {
+                w.write_all(b"{\"args\": [")?;
+                stack.push(Item::Text("]}"));
+                for (k, a) in args.iter().enumerate().rev() {
+                    if k > 0 {
+                        stack.push(Item::Node(a));
+                        stack.push(Item::Text(", "));
+                    } else {
+                        stack.push(Item::Node(a));
+                    }
+                }
+            }
+        }
+    }
+    w.write_all(b"}")?;
+    w.flush()?;
     Ok(())
 }
 
