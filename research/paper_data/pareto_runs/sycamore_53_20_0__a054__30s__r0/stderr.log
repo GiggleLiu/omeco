@@ -1,0 +1,25 @@
+probe: instance=sycamore_53_20_0 n_orig=3369 n=381 fusible=0.8869 nlabels=754 t=11ms
+seed_greedy tc=89.8106 t=504ms
+t=604ms iter=1 WAIST cost=57.0000 best_alt=47.0000 gap=10.0000 tried=5 sep_labels=47 clique_frac=0.01
+t=1322ms iter=1 REBUILD ACCEPT new_tc=61.5852 (was 62.1963)
+t=5571ms iter=1 incumb=61.5852 ratchet=61.4605 best=61.4605 since_improve=0
+t=5580ms iter=2 WAIST cost=56.0000 best_alt=50.0000 gap=6.0000 tried=5 sep_labels=50 clique_frac=0.01
+t=5719ms iter=2 REBUILD reject new_tc=80.0000 (was 61.4605)
+t=12543ms iter=2 incumb=61.4605 ratchet=61.1035 best=61.1035 since_improve=0
+t=12555ms iter=3 WAIST cost=56.0000 best_alt=51.0000 gap=5.0000 tried=5 sep_labels=51 clique_frac=0.01
+t=12682ms iter=3 REBUILD reject new_tc=61.8080 (was 61.1035)
+t=18792ms iter=3 incumb=61.1035 ratchet=60.8172 best=60.8135 since_improve=0
+t=18800ms iter=4 WAIST cost=56.0000 best_alt=49.0000 gap=7.0000 tried=5 sep_labels=49 clique_frac=0.01
+t=18953ms iter=4 REBUILD reject new_tc=61.5387 (was 60.8172)
+t=19344ms iter=4 incumb=60.8172 ratchet=60.7882 best=60.7882 since_improve=0
+t=19352ms iter=5 WAIST cost=56.0000 best_alt=50.0000 gap=6.0000 tried=5 sep_labels=50 clique_frac=0.01
+t=19505ms iter=5 REBUILD reject new_tc=62.6396 (was 60.7882)
+t=22028ms iter=5 incumb=60.7882 ratchet=60.6714 best=60.6697 since_improve=0
+t=22037ms iter=6 WAIST cost=56.0000 best_alt=52.0000 gap=4.0000 tried=5 sep_labels=52 clique_frac=0.01
+t=22374ms iter=6 REBUILD ACCEPT new_tc=60.6390 (was 60.6714)
+t=24697ms iter=6 incumb=60.6390 ratchet=60.4359 best=60.4359 since_improve=0
+t=24710ms iter=7 WAIST cost=57.0000 best_alt=52.0000 gap=5.0000 tried=5 sep_labels=52 clique_frac=0.01
+t=24880ms iter=7 REBUILD reject new_tc=60.5146 (was 60.4359)
+t=29331ms iter=7 incumb=60.4359 ratchet=60.1615 best=60.1615 since_improve=0
+t_final=29514ms tc_reduced=60.1615 tc_full=61.3784 leaves=3369
+surgery summary: calls=7 cheaper_cuts=7 rebuild_accepts=2 waist_min_hits=0

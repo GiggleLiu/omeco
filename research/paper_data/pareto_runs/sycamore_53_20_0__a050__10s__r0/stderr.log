@@ -1,0 +1,29 @@
+simplify: n_orig=3369 n_reduced=381 shrink=0.8869 t_simp=15ms
+t_seed=510ms tc_seed=82.0671 seed_trials=11
+t_dp=510ms tc_greedy=82.0671
+t_mcts=3684ms mcts: backup=min rollouts=64 rate=17/s depth=2 nodes=65 improves=0 tc_mcts=82.0671
+ATTRIBUTION tc_greedy=82.0671 tc_mcts_prepolish=82.0671 mcts_beats_greedy=false
+t=4061ms polish_tc=67.8722
+t=4276ms polish_tc=67.7910
+t=4497ms polish_tc=67.7137
+t=4729ms polish_tc=67.6905
+t=4949ms polish_tc=67.6561
+t=5415ms polish_tc=67.6223
+t=5641ms polish_tc=67.6122
+t=5861ms polish_tc=67.6069
+t=6088ms polish_tc=67.5980
+t=6423ms polish_tc=67.5374
+t=6634ms polish_tc=67.5299
+t=6861ms polish_tc=67.4881
+t=7078ms polish_tc=67.4316
+t=7428ms polish_tc=67.4312
+t=7636ms polish_tc=67.3760
+t=7827ms polish_tc=67.3523
+t=8416ms polish_tc=67.3490
+t=8642ms polish_tc=67.3486
+t=8853ms polish_tc=67.2289
+t=9411ms polish_tc=67.1891
+t=9613ms polish_tc=67.1789
+t=9818ms polish_tc=67.1789
+anneal_sweeps=608 cycles=1 fresh=0
+t_final=9831ms tc_greedy=82.0671 tc_mcts=82.0671 tc_final=67.1789 tc_full=67.1789 leaves=3369
