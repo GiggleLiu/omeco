@@ -15,6 +15,7 @@
   - [Greedy Method](./algorithms/greedy-method.md)
   - [Exhaustive Search](./algorithms/exhaustive-search.md)
   - [TreeSA](./algorithms/tree-sa.md)
+  - [Treewidth](./algorithms/treewidth.md)
   - [Algorithm Comparison](./algorithms/comparison.md)
 
 # Guides

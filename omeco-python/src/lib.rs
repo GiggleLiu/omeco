@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use omeco::{
     CodeOptimizer, ContractionComplexity, EinCode, ExhaustiveSearch, GreedyMethod, NestedEinsum,
-    ScoreFunction, SlicedEinsum, TreeSA, TreeSASlicer,
+    ScoreFunction, SlicedEinsum, TreeSA, TreeSASlicer, Treewidth,
 };
 
 /// A contraction order represented as a nested einsum tree.
@@ -467,6 +467,60 @@ impl PyExhaustiveSearch {
     }
 }
 
+/// Treewidth-heuristic optimizer for contraction order.
+///
+/// Computes a weighted minimum-degree elimination order over the index labels
+/// (an AMD-style quotient-graph ordering) and replays it into a binary
+/// contraction tree. Deterministic and highly scalable — well suited to large
+/// structured networks (graphical models, relational instances) where a
+/// low-treewidth elimination order beats pairwise-greedy and annealing search.
+///
+/// Mirrors the ``Treewidth`` optimizer of the Julia package
+/// OMEinsumContractionOrders (which backs its orderings with CliqueTrees.jl).
+#[pyclass(name = "Treewidth")]
+#[derive(Clone)]
+pub struct PyTreewidth {
+    inner: Treewidth,
+}
+
+#[pymethods]
+impl PyTreewidth {
+    /// Create a new Treewidth optimizer.
+    ///
+    /// Args:
+    ///     algorithm: Elimination-ordering algorithm. Currently only
+    ///                "min_degree" (weighted minimum degree) is supported,
+    ///                which is the default.
+    #[new]
+    #[pyo3(signature = (algorithm="min_degree"))]
+    fn new(algorithm: &str) -> PyResult<Self> {
+        let alg = match algorithm {
+            "min_degree" | "mindegree" | "MinDegree" => omeco::EliminationAlgorithm::MinDegree,
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "unknown elimination algorithm '{other}' (expected 'min_degree')"
+                )))
+            }
+        };
+        Ok(Self {
+            inner: Treewidth::new(alg),
+        })
+    }
+
+    /// Get the elimination algorithm name.
+    #[getter]
+    fn algorithm(&self) -> String {
+        match self.inner.alg {
+            omeco::EliminationAlgorithm::MinDegree => "min_degree".to_string(),
+            _ => "unknown".to_string(),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Treewidth(algorithm={})", self.algorithm())
+    }
+}
+
 /// Simulated annealing optimizer for contraction order.
 ///
 /// Args:
@@ -750,6 +804,34 @@ fn optimize_treesa(
         .ok_or_else(|| PyValueError::new_err("Optimization failed"))
 }
 
+/// Optimize the contraction order using the treewidth heuristic.
+///
+/// Args:
+///     ixs: List of index lists for each tensor.
+///     out: Output indices.
+///     sizes: Dictionary mapping indices to their dimensions.
+///     optimizer: Treewidth optimizer configuration.
+///
+/// Returns:
+///     Optimized contraction tree as NestedEinsum.
+#[pyfunction]
+#[pyo3(signature = (ixs, out, sizes, optimizer=None))]
+fn optimize_treewidth(
+    ixs: Vec<Vec<i64>>,
+    out: Vec<i64>,
+    sizes: HashMap<i64, usize>,
+    optimizer: Option<PyTreewidth>,
+) -> PyResult<PyNestedEinsum> {
+    let code = EinCode::new(ixs, out);
+    let opt = optimizer.unwrap_or_else(|| PyTreewidth {
+        inner: Treewidth::default(),
+    });
+
+    omeco::optimize_treewidth(&code, &sizes, &opt.inner)
+        .map(|inner| PyNestedEinsum { inner })
+        .map_err(|err| PyValueError::new_err(err.to_string()))
+}
+
 /// Optimize the contraction order using exact exhaustive search.
 ///
 /// Args:
@@ -929,6 +1011,7 @@ enum PyOptimizer {
     Greedy(PyGreedyMethod),
     Exhaustive(PyExhaustiveSearch),
     TreeSA(PyTreeSA),
+    Treewidth(PyTreewidth),
 }
 
 /// Optimize the contraction order using the specified optimizer.
@@ -974,6 +1057,8 @@ fn optimize_code(
             .inner
             .optimize(&code, &sizes)
             .ok_or_else(|| PyValueError::new_err("Optimization failed")),
+        Some(PyOptimizer::Treewidth(opt)) => omeco::optimize_treewidth(&code, &sizes, &opt.inner)
+            .map_err(|err| PyValueError::new_err(err.to_string())),
         None => GreedyMethod::default()
             .optimize(&code, &sizes)
             .ok_or_else(|| PyValueError::new_err("Optimization failed")),
@@ -992,11 +1077,13 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyGreedyMethod>()?;
     m.add_class::<PyExhaustiveSearch>()?;
     m.add_class::<PyTreeSA>()?;
+    m.add_class::<PyTreewidth>()?;
     m.add_class::<PyTreeSASlicer>()?;
     m.add_function(wrap_pyfunction!(optimize_code, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_greedy, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_exhaustive, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_treesa, m)?)?;
+    m.add_function(wrap_pyfunction!(optimize_treewidth, m)?)?;
     m.add_function(wrap_pyfunction!(contraction_complexity, m)?)?;
     m.add_function(wrap_pyfunction!(sliced_complexity, m)?)?;
     m.add_function(wrap_pyfunction!(uniform_size_dict, m)?)?;

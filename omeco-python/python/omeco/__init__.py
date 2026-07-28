@@ -18,6 +18,9 @@ Classes:
         TreeSA(ntrials=10, niters=50, betas=None, score=None)
         TreeSA.fast(score=None)
 
+    Treewidth: Scalable treewidth-heuristic elimination-order optimizer.
+        Treewidth(algorithm="min_degree")
+
     TreeSASlicer: Slicing optimizer for reducing space complexity.
         TreeSASlicer(ntrials=10, niters=10, betas=None, fixed_slices=None,
                      optimization_ratio=2.0, score=None)
@@ -67,10 +70,12 @@ from omeco._core import (
     GreedyMethod,
     ExhaustiveSearch,
     TreeSA,
+    Treewidth,
     TreeSASlicer,
     # Functions
     optimize_code,
     optimize_exhaustive,
+    optimize_treewidth,
     contraction_complexity,
     sliced_complexity,
     slice_code,
@@ -86,9 +91,11 @@ __all__ = [
     "GreedyMethod",
     "ExhaustiveSearch",
     "TreeSA",
+    "Treewidth",
     "TreeSASlicer",
     "optimize_code",
     "optimize_exhaustive",
+    "optimize_treewidth",
     "contraction_complexity",
     "sliced_complexity",
     "slice_code",

@@ -377,6 +377,12 @@ pub struct CachedComplexity {
 pub struct ExprInfo {
     /// Output dimension labels (as integer indices)
     pub out_dims: Vec<usize>,
+    /// Original stored dimensions for a leaf.
+    ///
+    /// This normally matches `out_dims`, but differs when a one-input einsum
+    /// (such as a local reduction) is fused into a leaf for binary-tree
+    /// optimization. Internal nodes use `None`.
+    pub leaf_input_dims: Option<Vec<usize>>,
     /// Tensor ID if this is a leaf node, None otherwise
     pub tensor_id: Option<usize>,
     /// Cached complexity values for this subtree (computed lazily)
@@ -388,6 +394,7 @@ impl ExprInfo {
     pub fn internal(out_dims: Vec<usize>) -> Self {
         Self {
             out_dims,
+            leaf_input_dims: None,
             tensor_id: None,
             cached: None,
         }
@@ -397,6 +404,7 @@ impl ExprInfo {
     pub fn leaf(out_dims: Vec<usize>, tensor_id: usize) -> Self {
         Self {
             out_dims,
+            leaf_input_dims: None,
             tensor_id: Some(tensor_id),
             cached: None,
         }
@@ -707,10 +715,7 @@ pub fn tree_complexity(tree: &ExprTree, log2_sizes: &[f64]) -> (f64, f64, f64) {
     }
 
     match tree {
-        ExprTree::Leaf(info) => {
-            let sc: f64 = info.out_dims.iter().map(|&l| log2_sizes[l]).sum();
-            (f64::NEG_INFINITY, sc, f64::NEG_INFINITY)
-        }
+        ExprTree::Leaf(info) => leaf_complexity(info, log2_sizes),
         ExprTree::Node { left, right, info } => {
             let (tcl, scl, rwl) = tree_complexity(left, log2_sizes);
             let (tcr, scr, rwr) = tree_complexity(right, log2_sizes);
@@ -739,10 +744,7 @@ pub fn tree_complexity_cached(tree: &mut ExprTree, log2_sizes: &[f64]) -> Cached
     }
 
     let (tc, sc, rw) = match tree {
-        ExprTree::Leaf(info) => {
-            let sc: f64 = info.out_dims.iter().map(|&l| log2_sizes[l]).sum();
-            (f64::NEG_INFINITY, sc, f64::NEG_INFINITY)
-        }
+        ExprTree::Leaf(info) => leaf_complexity(info, log2_sizes),
         ExprTree::Node { left, right, info } => {
             let left_cached = tree_complexity_cached(left, log2_sizes);
             let right_cached = tree_complexity_cached(right, log2_sizes);
@@ -772,7 +774,17 @@ pub fn tree_complexity_cached(tree: &mut ExprTree, log2_sizes: &[f64]) -> Cached
 #[inline]
 pub fn tree_sc_only(tree: &ExprTree, log2_sizes: &[f64]) -> f64 {
     match tree {
-        ExprTree::Leaf(info) => info.out_dims.iter().map(|&l| log2_sizes[l]).sum(),
+        ExprTree::Leaf(info) => {
+            let input_sc: f64 = info
+                .leaf_input_dims
+                .as_deref()
+                .unwrap_or(&info.out_dims)
+                .iter()
+                .map(|&l| log2_sizes[l])
+                .sum();
+            let output_sc: f64 = info.out_dims.iter().map(|&l| log2_sizes[l]).sum();
+            input_sc.max(output_sc)
+        }
         ExprTree::Node { left, right, info } => {
             let scl = tree_sc_only(left, log2_sizes);
             let scr = tree_sc_only(right, log2_sizes);
@@ -780,6 +792,30 @@ pub fn tree_sc_only(tree: &ExprTree, log2_sizes: &[f64]) -> f64 {
             sc.max(scl).max(scr)
         }
     }
+}
+
+/// Complexity of a leaf, including a fused one-input einsum when its stored
+/// input interface differs from its materialized output interface.
+fn leaf_complexity(info: &ExprInfo, log2_sizes: &[f64]) -> (f64, f64, f64) {
+    let input_dims = info.leaf_input_dims.as_deref().unwrap_or(&info.out_dims);
+    let input_sc: f64 = input_dims.iter().map(|&l| log2_sizes[l]).sum();
+    if input_dims == info.out_dims {
+        return (f64::NEG_INFINITY, input_sc, f64::NEG_INFINITY);
+    }
+
+    let output_sc: f64 = info.out_dims.iter().map(|&l| log2_sizes[l]).sum();
+    let mut unique_dims = Vec::with_capacity(input_dims.len() + info.out_dims.len());
+    for &label in input_dims.iter().chain(&info.out_dims) {
+        if !unique_dims.contains(&label) {
+            unique_dims.push(label);
+        }
+    }
+    let tc: f64 = unique_dims.iter().map(|&l| log2_sizes[l]).sum();
+    (
+        tc,
+        input_sc.max(output_sc),
+        fast_log2sumexp2(input_sc, output_sc),
+    )
 }
 
 /// Result of computing complexity difference for a rule application.
