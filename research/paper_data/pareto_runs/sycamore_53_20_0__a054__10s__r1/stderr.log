@@ -1,0 +1,28 @@
+probe: instance=sycamore_53_20_0 n_orig=3369 n=381 fusible=0.8869 nlabels=754 t=18ms
+seed_greedy tc=83.4677 t=423ms
+t=522ms iter=1 WAIST cost=57.0000 best_alt=45.0000 gap=12.0000 tried=5 sep_labels=45 clique_frac=0.01
+t=1014ms iter=1 REBUILD ACCEPT new_tc=61.5200 (was 62.1398)
+t=5019ms iter=1 incumb=61.5200 ratchet=61.4213 best=61.4213 since_improve=0
+t=5027ms iter=2 WAIST cost=56.0000 best_alt=51.0000 gap=5.0000 tried=5 sep_labels=51 clique_frac=0.01
+t=5162ms iter=2 REBUILD reject new_tc=84.0000 (was 61.4213)
+t=7267ms iter=2 incumb=61.4213 ratchet=61.3673 best=61.3286 since_improve=0
+t=7275ms iter=3 WAIST cost=57.0000 best_alt=53.0000 gap=4.0000 tried=5 sep_labels=53 clique_frac=0.02
+t=7446ms iter=3 REBUILD reject new_tc=61.8038 (was 61.3673)
+t=7549ms iter=3 incumb=61.3673 ratchet=61.4465 best=61.3286 since_improve=1
+t=7554ms iter=4 WAIST cost=57.0000 best_alt=51.0000 gap=6.0000 tried=5 sep_labels=51 clique_frac=0.01
+t=7655ms iter=4 REBUILD reject new_tc=67.2409 (was 61.3673)
+t=7761ms iter=4 incumb=61.3673 ratchet=61.5744 best=61.3286 since_improve=2
+t=7766ms iter=5 WAIST cost=57.0000 best_alt=53.0000 gap=4.0000 tried=5 sep_labels=53 clique_frac=0.02
+t=7879ms iter=5 REBUILD reject new_tc=61.7399 (was 61.3673)
+t=7981ms iter=5 incumb=61.3673 ratchet=61.3564 best=61.3286 since_improve=0
+t=7985ms iter=6 WAIST cost=57.0000 best_alt=50.0000 gap=7.0000 tried=5 sep_labels=50 clique_frac=0.01
+t=8134ms iter=6 REBUILD reject new_tc=71.5648 (was 61.3564)
+t=9004ms iter=6 incumb=61.3564 ratchet=61.3078 best=61.3078 since_improve=0
+t=9012ms iter=7 WAIST cost=56.0000 best_alt=53.0000 gap=3.0000 tried=5 sep_labels=53 clique_frac=0.02
+t=9164ms iter=7 REBUILD reject new_tc=71.0104 (was 61.3078)
+t=9309ms iter=7 incumb=61.3078 ratchet=61.3606 best=61.3078 since_improve=1
+t=9317ms iter=8 WAIST cost=56.0000 best_alt=50.0000 gap=6.0000 tried=5 sep_labels=50 clique_frac=0.01
+t=9465ms iter=8 REBUILD reject new_tc=63.3049 (was 61.3078)
+t=10016ms iter=8 incumb=61.3078 ratchet=61.2904 best=61.2904 since_improve=0
+t_final=10184ms tc_reduced=61.2904 tc_full=62.6976 leaves=3369
+surgery summary: calls=8 cheaper_cuts=8 rebuild_accepts=1 waist_min_hits=0

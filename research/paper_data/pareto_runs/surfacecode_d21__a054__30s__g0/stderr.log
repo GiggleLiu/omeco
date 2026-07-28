@@ -1,0 +1,87 @@
+probe: instance=surfacecode_d21 n_orig=2203 n=761 fusible=0.6546 nlabels=798 t=13ms
+seed_greedy tc=61.6000 t=545ms
+t=1116ms iter=1 WAIST cost=46.0000 best_alt=29.0000 gap=17.0000 tried=5 sep_labels=29 clique_frac=0.04
+t=1426ms iter=1 REBUILD reject new_tc=53.0439 (was 49.3182)
+t=5225ms iter=1 incumb=49.3182 ratchet=49.1263 best=49.1263 since_improve=0
+t=5251ms iter=2 WAIST cost=44.0000 best_alt=33.0000 gap=11.0000 tried=5 sep_labels=33 clique_frac=0.05
+t=5561ms iter=2 REBUILD reject new_tc=52.1554 (was 49.1263)
+t=7822ms iter=2 incumb=49.1263 ratchet=49.0662 best=49.0636 since_improve=0
+t=7846ms iter=3 WAIST cost=44.0000 best_alt=33.0000 gap=11.0000 tried=5 sep_labels=33 clique_frac=0.02
+t=8166ms iter=3 REBUILD reject new_tc=49.7759 (was 49.0662)
+t=9460ms iter=3 incumb=49.0662 ratchet=49.0086 best=49.0086 since_improve=0
+t=9484ms iter=4 WAIST cost=45.0000 best_alt=40.0000 gap=5.0000 tried=5 sep_labels=40 clique_frac=0.04
+t=9802ms iter=4 REBUILD reject new_tc=51.2273 (was 49.0086)
+t=11094ms iter=4 incumb=49.0086 ratchet=48.9911 best=48.9862 since_improve=0
+t=11115ms iter=5 WAIST cost=44.0000 best_alt=40.0000 gap=4.0000 tried=5 sep_labels=40 clique_frac=0.04
+t=11423ms iter=5 REBUILD reject new_tc=48.9913 (was 48.9911)
+t=13032ms iter=5 incumb=48.9911 ratchet=48.9451 best=48.9414 since_improve=0
+t=13061ms iter=6 WAIST cost=44.0000 best_alt=33.0000 gap=11.0000 tried=5 sep_labels=33 clique_frac=0.01
+t=13516ms iter=6 REBUILD ACCEPT new_tc=48.7761 (was 48.9451)
+t=13782ms iter=6 incumb=48.7761 ratchet=48.8500 best=48.7761 since_improve=1
+t=13804ms iter=7 WAIST cost=46.0000 best_alt=33.0000 gap=13.0000 tried=5 sep_labels=33 clique_frac=0.01
+t=14115ms iter=7 REBUILD reject new_tc=48.7985 (was 48.7761)
+t=15418ms iter=7 incumb=48.7761 ratchet=48.8119 best=48.7481 since_improve=2
+t=15441ms iter=8 WAIST cost=46.0000 best_alt=33.0000 gap=13.0000 tried=5 sep_labels=33 clique_frac=0.01
+t=15900ms iter=8 REBUILD ACCEPT new_tc=48.5802 (was 48.7761)
+t=16158ms iter=8 incumb=48.5802 ratchet=48.8638 best=48.5802 since_improve=1
+t=16191ms iter=9 WAIST cost=45.0000 best_alt=39.0000 gap=6.0000 tried=5 sep_labels=39 clique_frac=0.04
+t=16498ms iter=9 REBUILD reject new_tc=49.0643 (was 48.5802)
+t=17052ms iter=9 incumb=48.5802 ratchet=48.5941 best=48.5790 since_improve=2
+t=17082ms iter=10 WAIST cost=45.0000 best_alt=39.0000 gap=6.0000 tried=5 sep_labels=39 clique_frac=0.04
+t=17393ms iter=10 REBUILD reject new_tc=49.8014 (was 48.5802)
+t=18383ms iter=10 incumb=48.5802 ratchet=48.5977 best=48.5632 since_improve=3
+t=18413ms iter=11 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.03
+t=18727ms iter=11 REBUILD reject new_tc=48.7034 (was 48.5802)
+t=18986ms iter=11 incumb=48.5802 ratchet=48.6054 best=48.5632 since_improve=4
+t=19019ms iter=12 WAIST cost=45.0000 best_alt=40.0000 gap=5.0000 tried=5 sep_labels=40 clique_frac=0.03
+t=19322ms iter=12 REBUILD reject new_tc=51.8934 (was 48.5802)
+t=19576ms iter=12 incumb=48.5802 ratchet=48.7208 best=48.5632 since_improve=5
+t=19611ms iter=13 WAIST cost=45.0000 best_alt=37.0000 gap=8.0000 tried=5 sep_labels=37 clique_frac=0.03
+t=19914ms iter=13 REBUILD reject new_tc=54.0207 (was 48.5802)
+t=20177ms iter=13 incumb=48.5802 ratchet=48.6242 best=48.5632 since_improve=6
+t=20205ms iter=14 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.01
+t=20511ms iter=14 REBUILD reject new_tc=52.1092 (was 48.5802)
+t=20766ms iter=14 incumb=48.5802 ratchet=48.6277 best=48.5632 since_improve=7
+t=20795ms iter=15 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.03
+t=21111ms iter=15 REBUILD reject new_tc=53.7123 (was 48.5802)
+t=21366ms iter=15 incumb=48.5802 ratchet=48.5774 best=48.5632 since_improve=0
+t=21389ms iter=16 WAIST cost=44.0000 best_alt=39.0000 gap=5.0000 tried=5 sep_labels=39 clique_frac=0.04
+t=21704ms iter=16 REBUILD reject new_tc=48.9948 (was 48.5774)
+t=22306ms iter=16 incumb=48.5774 ratchet=48.5292 best=48.5131 since_improve=0
+t=22333ms iter=17 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.02
+t=22651ms iter=17 REBUILD reject new_tc=49.0373 (was 48.5292)
+t=22900ms iter=17 incumb=48.5292 ratchet=48.8554 best=48.5131 since_improve=1
+t=22925ms iter=18 WAIST cost=45.0000 best_alt=29.0000 gap=16.0000 tried=5 sep_labels=29 clique_frac=0.00
+t=23269ms iter=18 REBUILD reject new_tc=49.7123 (was 48.5292)
+t=23526ms iter=18 incumb=48.5292 ratchet=48.5345 best=48.5131 since_improve=2
+t=23546ms iter=19 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.02
+t=23917ms iter=19 REBUILD reject new_tc=51.2092 (was 48.5292)
+t=24170ms iter=19 incumb=48.5292 ratchet=48.5964 best=48.5131 since_improve=3
+t=24195ms iter=20 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.02
+t=24500ms iter=20 REBUILD reject new_tc=52.1349 (was 48.5292)
+t=24754ms iter=20 incumb=48.5292 ratchet=48.5806 best=48.5131 since_improve=4
+t=24778ms iter=21 WAIST cost=45.0000 best_alt=33.0000 gap=12.0000 tried=5 sep_labels=33 clique_frac=0.04
+t=25103ms iter=21 REBUILD reject new_tc=53.0791 (was 48.5292)
+t=25361ms iter=21 incumb=48.5292 ratchet=48.5578 best=48.5131 since_improve=5
+t=25383ms iter=22 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.02
+t=25700ms iter=22 REBUILD reject new_tc=49.6391 (was 48.5292)
+t=25962ms iter=22 incumb=48.5292 ratchet=48.6598 best=48.5131 since_improve=6
+t=25988ms iter=23 WAIST cost=45.0000 best_alt=27.0000 gap=18.0000 tried=5 sep_labels=27 clique_frac=0.01
+t=26304ms iter=23 REBUILD reject new_tc=49.8010 (was 48.5292)
+t=26568ms iter=23 incumb=48.5292 ratchet=48.5903 best=48.5131 since_improve=7
+t=26585ms iter=24 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.02
+t=26897ms iter=24 REBUILD reject new_tc=49.3520 (was 48.5292)
+t=27154ms iter=24 incumb=48.5292 ratchet=48.6228 best=48.5131 since_improve=8
+t=27176ms iter=25 WAIST cost=45.0000 best_alt=31.0000 gap=14.0000 tried=5 sep_labels=31 clique_frac=0.00
+t=27490ms iter=25 REBUILD reject new_tc=48.9913 (was 48.5292)
+t=27747ms iter=25 incumb=48.5292 ratchet=48.6818 best=48.5131 since_improve=9
+t=27766ms iter=26 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.02
+t=28077ms iter=26 REBUILD reject new_tc=49.8832 (was 48.5292)
+t=28334ms iter=26 incumb=48.5292 ratchet=48.6045 best=48.5131 since_improve=10
+t=28354ms iter=27 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.02
+t=28668ms iter=27 REBUILD reject new_tc=49.1131 (was 48.5292)
+t=28927ms iter=27 incumb=48.5292 ratchet=48.6482 best=48.5131 since_improve=11
+t=28951ms iter=28 WAIST cost=45.0000 best_alt=35.0000 gap=10.0000 tried=5 sep_labels=35 clique_frac=0.02
+t=29255ms iter=28 REBUILD reject new_tc=56.0256 (was 48.5292)
+t_final=29432ms tc_reduced=48.5131 tc_full=48.9021 leaves=2203
+surgery summary: calls=28 cheaper_cuts=28 rebuild_accepts=2 waist_min_hits=0

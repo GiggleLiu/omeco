@@ -1,0 +1,35 @@
+simplify: n_orig=3369 n_reduced=381 shrink=0.8869 t_simp=10ms
+t_seed=513ms tc_seed=89.3465 seed_trials=14
+t_dp=513ms tc_greedy=89.3465
+t=1190ms mcts_tc=86.1092
+t=1327ms mcts_tc=82.5930
+t_mcts=3730ms mcts: backup=min rollouts=64 rate=17/s depth=2 nodes=65 improves=2 tc_mcts=82.5930
+ATTRIBUTION tc_greedy=89.3465 tc_mcts_prepolish=82.5930 mcts_beats_greedy=true
+t=4318ms polish_tc=82.4974
+t=4529ms polish_tc=82.2207
+t=4686ms polish_tc=81.7827
+t=4845ms polish_tc=81.2312
+t=5011ms polish_tc=80.7964
+t=5180ms polish_tc=80.7597
+t=5362ms polish_tc=80.2198
+t=5551ms polish_tc=80.1083
+t=5728ms polish_tc=79.8456
+t=5921ms polish_tc=79.7959
+t=6218ms polish_tc=79.5195
+t=6441ms polish_tc=79.2171
+t=6618ms polish_tc=77.6353
+t=6808ms polish_tc=76.6318
+t=7201ms polish_tc=76.6068
+t=7384ms polish_tc=75.8216
+t=7586ms polish_tc=75.6567
+t=7774ms polish_tc=75.5222
+t=8206ms polish_tc=75.0049
+t=8417ms polish_tc=74.6276
+t=8637ms polish_tc=74.4345
+t=9201ms polish_tc=74.3337
+t=9407ms polish_tc=74.0944
+t=9600ms polish_tc=73.6788
+t=9789ms polish_tc=72.9706
+t=10202ms polish_tc=72.8860
+anneal_sweeps=2128 cycles=2 fresh=0
+t_final=10216ms tc_greedy=89.3465 tc_mcts=82.5930 tc_final=72.8860 tc_full=72.8860 leaves=3369
