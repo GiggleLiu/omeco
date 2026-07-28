@@ -1257,6 +1257,80 @@ mod tests {
     }
 
     #[test]
+    fn test_hyper_and_refiner_defensive_branches() {
+        // Exercise output labels, an unused interned label, and the giant-edge
+        // adjacency guard in one compact hypergraph.
+        let code = EinCode::new(vec![vec![0usize]; 65], vec![0]);
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 1)].into();
+        let label_map: HashMap<usize, usize> = [(0, 0), (1, 1)].into();
+        let hyper = Hyper::build(&code, &label_map, &[1.0, 0.0], 2);
+        let mut part = vec![false; 65];
+        part[0] = true;
+        assert_eq!(hyper.cut_cost(&part), 1.0);
+        assert!(hyper.adj.iter().all(Vec::is_empty));
+
+        let mut refiner = Refiner {
+            code: &code,
+            sizes: &sizes,
+            hyper: &hyper,
+            start: Instant::now(),
+            budget: Duration::from_secs(1),
+            rng: SmallRng::seed_from_u64(RNG_SEED),
+            report: WaistReport {
+                n_original: code.num_tensors(),
+                surgery_calls: 0,
+                cheaper_cuts: 0,
+                rebuild_accepts: 0,
+                waist_min_hits: 0,
+            },
+        };
+        assert!(refiner.rebuild(&[true; 65]).is_none());
+        assert!(refiner.solve_side(&[], &[]).is_none());
+        assert!(matches!(
+            refiner.solve_side(&[0], &[0]),
+            Some(NestedEinsum::Leaf { tensor_index: 0 })
+        ));
+        let (open_a, open_b) = refiner.side_open_labels(&part);
+        assert_eq!(open_a, vec![0]);
+        assert_eq!(open_b, vec![0]);
+    }
+
+    #[test]
+    fn test_public_refine_accepts_better_ring_partition() {
+        let code = EinCode::new(
+            vec![vec![0usize, 3], vec![0, 1], vec![1, 2], vec![2, 3]],
+            vec![],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let left = NestedEinsum::node(
+            vec![NestedEinsum::leaf(0), NestedEinsum::leaf(2)],
+            EinCode::new(
+                vec![code.ixs[0].clone(), code.ixs[2].clone()],
+                vec![0, 1, 2, 3],
+            ),
+        );
+        let right = NestedEinsum::node(
+            vec![NestedEinsum::leaf(1), NestedEinsum::leaf(3)],
+            EinCode::new(
+                vec![code.ixs[1].clone(), code.ixs[3].clone()],
+                vec![0, 1, 2, 3],
+            ),
+        );
+        let seed = NestedEinsum::node(
+            vec![left, right],
+            EinCode::new(vec![vec![0, 1, 2, 3], vec![0, 1, 2, 3]], vec![]),
+        );
+        let seed_tc = contraction_complexity(&seed, &sizes, &code.ixs).tc;
+
+        let (refined, report) = refine(&seed, &code, &sizes, Duration::from_secs(2));
+        let refined_tc = contraction_complexity(&refined, &sizes, &code.ixs).tc;
+
+        assert!(report.rebuild_accepts >= 1);
+        assert!(refined_tc < seed_tc - 1e-9);
+        assert_eq!(refined.leaf_count(), code.num_tensors());
+    }
+
+    #[test]
     fn test_refine_accepts_treewidth_unary_nodes() {
         let code = EinCode::new(
             vec![

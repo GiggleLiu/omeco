@@ -569,4 +569,26 @@ mod tests {
             assert_recursive_interfaces(subtree, &code.ixs);
         }
     }
+
+    #[test]
+    fn test_splice_replaces_leaves_in_a_nested_reduced_tree() {
+        let subtrees = vec![
+            NestedEinsum::node(
+                vec![NestedEinsum::leaf(0), NestedEinsum::leaf(1)],
+                EinCode::new(vec![vec!['a', 'x'], vec!['x', 'b']], vec!['a', 'b']),
+            ),
+            NestedEinsum::leaf(2),
+        ];
+        let reduced = NestedEinsum::node(
+            vec![NestedEinsum::leaf(0), NestedEinsum::leaf(1)],
+            EinCode::new(vec![vec!['a', 'b'], vec!['b', 'c']], vec!['a', 'c']),
+        );
+
+        let full = splice(&reduced, &subtrees);
+
+        let mut leaves = full.leaf_indices();
+        leaves.sort_unstable();
+        assert_eq!(leaves, vec![0, 1, 2]);
+        assert_eq!(full.output_labels(&[]), vec!['a', 'c']);
+    }
 }

@@ -1599,6 +1599,37 @@ mod tests {
     }
 
     #[test]
+    fn test_warm_conversion_handles_unary_internal_and_rejects_nary() {
+        let label_map: HashMap<char, usize> = [('a', 0), ('b', 1), ('c', 2)].into();
+        let binary = NestedEinsum::node(
+            vec![NestedEinsum::leaf(0), NestedEinsum::leaf(1)],
+            EinCode::new(vec![vec!['a', 'b'], vec!['b', 'c']], vec!['a', 'c']),
+        );
+        let unary = NestedEinsum::node(vec![binary], EinCode::new(vec![vec!['a', 'c']], vec!['a']));
+        let converted = nested_to_expr_tree_inner(&unary, &label_map)
+            .expect("unary node around a binary child should be fused");
+        assert_eq!(converted.labels(), &[0]);
+        assert_eq!(converted.leaf_count(), 2);
+
+        let nary = NestedEinsum::node(
+            vec![
+                NestedEinsum::leaf(0),
+                NestedEinsum::leaf(1),
+                NestedEinsum::leaf(2),
+            ],
+            EinCode::new(vec![vec!['a'], vec!['b'], vec!['c']], Vec::<char>::new()),
+        );
+        assert!(nested_to_expr_tree_inner(&nary, &label_map).is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot create tree with no tensors")]
+    fn test_init_random_rejects_empty_input() {
+        let mut rng = SmallRng::seed_from_u64(1);
+        let _ = init_random(&[], &[], 0, DecompositionType::Tree, &mut rng);
+    }
+
+    #[test]
     fn test_prepare_warm_anneal_leaf_seed_is_none() {
         // A bare leaf seed has nothing to anneal.
         let code = EinCode::new(vec![vec!['i', 'j']], vec!['i', 'j']);
