@@ -134,14 +134,14 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>, size_dict: &HashMap<L, usize>
 
     // Per-super-tensor state, indexed by a stable id 0..n (ids of merged tensors
     // are retired but never reused).
-    let mut labels: Vec<HashSet<L>> = code
-        .ixs
+    let inputs = &code.ixs;
+    let mut labels: Vec<HashSet<L>> = inputs
         .iter()
         .map(|ix| ix.iter().cloned().collect())
         .collect();
     let mut label_vec: Vec<Vec<L>> = code.ixs.clone(); // deterministic order for eins
-    let mut subtree: Vec<Option<NestedEinsum<L>>> =
-        (0..n).map(|i| Some(NestedEinsum::leaf(i))).collect();
+    let leaves = (0..n).map(|i| Some(NestedEinsum::leaf(i)));
+    let mut subtree: Vec<Option<NestedEinsum<L>>> = leaves.collect();
     let mut alive: Vec<bool> = vec![true; n];
 
     // label -> set of live super-tensor ids containing it.
@@ -173,8 +173,8 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>, size_dict: &HashMap<L, usize>
             // Preserve the caller's requested output-axis order, then append
             // non-output labels canonically. The same vector becomes both this
             // node's output and its parent's input interface.
-            let mut out: Vec<L> = code
-                .iy
+            let outputs = &code.iy;
+            let mut out: Vec<L> = outputs
                 .iter()
                 .filter(|l| kept.remove(*l))
                 .cloned()

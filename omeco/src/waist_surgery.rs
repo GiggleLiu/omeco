@@ -144,8 +144,8 @@ impl Hyper {
         nlab: usize,
     ) -> Self {
         let n = code.ixs.len();
-        let tlabels: Vec<Vec<usize>> = code
-            .ixs
+        let inputs = &code.ixs;
+        let tlabels: Vec<Vec<usize>> = inputs
             .iter()
             .map(|ix| {
                 let mut v: Vec<usize> = ix
@@ -172,13 +172,12 @@ impl Hyper {
         // Tensor adjacency via shared labels (skip giant hyperedges to bound cost).
         let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
         for lt in &label_tensors {
-            if lt.len() > 64 {
-                continue;
-            }
-            for i in 0..lt.len() {
-                for j in (i + 1)..lt.len() {
-                    adj[lt[i]].push(lt[j]);
-                    adj[lt[j]].push(lt[i]);
+            if lt.len() <= 64 {
+                for i in 0..lt.len() {
+                    for j in (i + 1)..lt.len() {
+                        adj[lt[i]].push(lt[j]);
+                        adj[lt[j]].push(lt[i]);
+                    }
                 }
             }
         }
@@ -922,8 +921,8 @@ pub fn refine<L: Label>(
     let hyper = Hyper::build(code, &label_map, &log2_sizes, labels.len());
 
     // Work entirely in usize label-id space internally.
-    let id_ixs: Vec<Vec<usize>> = code
-        .ixs
+    let inputs = &code.ixs;
+    let id_ixs: Vec<Vec<usize>> = inputs
         .iter()
         .map(|ix| {
             ix.iter()
@@ -931,8 +930,8 @@ pub fn refine<L: Label>(
                 .collect()
         })
         .collect();
-    let id_iy: Vec<usize> = code
-        .iy
+    let outputs = &code.iy;
+    let id_iy: Vec<usize> = outputs
         .iter()
         .filter_map(|l| label_map.get(l).copied())
         .collect();
@@ -1319,6 +1318,7 @@ mod tests {
     fn test_conversion_and_partition_edge_cases() {
         let label_map: HashMap<usize, usize> = (0..3).map(|label| (label, label)).collect();
         assert!(nested_to_expr_tree(&NestedEinsum::leaf(0), &label_map).is_none());
+        assert_eq!(extract_waist(&ExprTree::leaf(vec![0], 0), &[1.0]), None);
 
         let nary = NestedEinsum::node(
             vec![
@@ -1349,6 +1349,63 @@ mod tests {
             vec![],
         );
         assert_eq!(extract_waist(&root, &[1.0; 3]), Some((2.0, vec![0, 1])));
+    }
+
+    #[test]
+    fn test_root_argmax_is_non_actionable() {
+        let code = EinCode::new(vec![vec![0usize], vec![1], vec![2]], vec![0, 1, 2]);
+        let sizes = uniform_sizes(&code, 2);
+        let label_map: HashMap<usize, usize> = (0..3).map(|label| (label, label)).collect();
+        let log2 = vec![1.0; 3];
+        let hyper = Hyper::build(&code, &label_map, &log2, 3);
+        let right = ExprTree::node(
+            ExprTree::leaf(vec![1], 1),
+            ExprTree::leaf(vec![2], 2),
+            vec![1, 2],
+        );
+        let incumbent = ExprTree::node(ExprTree::leaf(vec![0], 0), right, vec![0, 1, 2]);
+        assert_eq!(extract_waist(&incumbent, &log2), Some((3.0, vec![0, 1, 2])));
+
+        let mut refiner = Refiner {
+            code: &code,
+            sizes: &sizes,
+            hyper: &hyper,
+            log2_sizes: &log2,
+            start: Instant::now(),
+            budget: Duration::from_secs(1),
+            rng: SmallRng::seed_from_u64(RNG_SEED),
+            report: WaistReport {
+                n_original: code.num_tensors(),
+                surgery_calls: 0,
+                cheaper_cuts: 0,
+                rebuild_attempts: 0,
+                rebuild_accepts: 0,
+                waist_min_hits: 0,
+            },
+        };
+
+        assert!(refiner.waist_surgery(&incumbent, 3.0).is_none());
+        assert_eq!(refiner.report.surgery_calls, 1);
+        assert_eq!(refiner.report.rebuild_attempts, 0);
+    }
+
+    #[test]
+    fn test_public_refine_rejects_non_binary_seed_without_mutation() {
+        let code = EinCode::new(vec![vec![0usize], vec![1], vec![2]], vec![0, 1, 2]);
+        let sizes = uniform_sizes(&code, 2);
+        let seed = NestedEinsum::node(
+            vec![
+                NestedEinsum::leaf(0),
+                NestedEinsum::leaf(1),
+                NestedEinsum::leaf(2),
+            ],
+            code.clone(),
+        );
+
+        let (refined, report) = refine(&seed, &code, &sizes, Duration::from_secs(1));
+
+        assert_eq!(refined, seed);
+        assert_eq!(report.surgery_calls, 0);
     }
 
     #[test]

@@ -188,8 +188,8 @@ fn nested_to_expr_tree_inner<L: Label>(
                 // ExprTree is binary-only. Fuse a unary trace/reduction into
                 // the child's materialized output interface, retaining the
                 // original leaf interface so complexity remains exact.
-                let input_dims: Vec<usize> =
-                    eins.ixs.first()?.iter().map(|l| label_map[l]).collect();
+                let input = eins.ixs.first()?;
+                let input_dims: Vec<usize> = input.iter().map(|l| label_map[l]).collect();
                 let out_dims: Vec<usize> = eins.iy.iter().map(|l| label_map[l]).collect();
                 let mut tree = match child {
                     NestedEinsum::Leaf { tensor_index } => {
@@ -210,8 +210,8 @@ fn nested_to_expr_tree_inner<L: Label>(
                 let child = |arg: &NestedEinsum<L>, side: usize| -> Option<ExprTree> {
                     match arg {
                         NestedEinsum::Leaf { tensor_index } => {
-                            let out_dims: Vec<usize> =
-                                eins.ixs[side].iter().map(|l| label_map[l]).collect();
+                            let input = &eins.ixs[side];
+                            let out_dims: Vec<usize> = input.iter().map(|l| label_map[l]).collect();
                             Some(ExprTree::leaf(out_dims, *tensor_index))
                         }
                         NestedEinsum::Node { .. } => nested_to_expr_tree_inner(arg, label_map),
@@ -550,16 +550,10 @@ fn expr_tree_to_nested<L: Label>(
         }
     }
     let open_set: HashSet<L> = openedges.iter().cloned().collect();
-    expr_tree_to_nested_counted(
-        tree,
-        original_ixs,
-        inverse_map,
-        &open_set,
-        &global_count,
-        openedges,
-        0,
-    )
-    .0
+    let ixs = original_ixs;
+    let inverse = inverse_map;
+    let globals = &global_count;
+    expr_tree_to_nested_counted(tree, ixs, inverse, &open_set, globals, openedges, 0).0
 }
 
 /// Recursive worker for [`expr_tree_to_nested`]. Returns the converted subtree,
@@ -578,11 +572,11 @@ fn expr_tree_to_nested_counted<L: Label>(
         ExprTree::Leaf(info) => {
             let tid = info.tensor_id.unwrap_or(0);
             let input_labels = original_ixs.get(tid).cloned().unwrap_or_default();
-            let output_labels: Vec<L> = info
-                .out_dims
+            let output_ids = &info.out_dims;
+            let output_labels = output_ids
                 .iter()
                 .map(|&id| inverse_map[id].clone())
-                .collect();
+                .collect::<Vec<L>>();
             let mut within: HashMap<L, usize> = HashMap::new();
             for l in &input_labels {
                 *within.entry(l.clone()).or_insert(0) += 1;
@@ -599,23 +593,15 @@ fn expr_tree_to_nested_counted<L: Label>(
             (nested, within, output_labels)
         }
         ExprTree::Node { left, right, .. } => {
-            let (left_nested, left_within, left_out) = expr_tree_to_nested_counted(
-                left,
-                original_ixs,
-                inverse_map,
-                open_set,
-                global_count,
-                openedges,
-                level + 1,
-            );
-            let (right_nested, right_within, right_out) = expr_tree_to_nested_counted(
-                right,
-                original_ixs,
-                inverse_map,
-                open_set,
-                global_count,
-                openedges,
-                level + 1,
+            let ixs = original_ixs;
+            let inverse = inverse_map;
+            let globals = global_count;
+            let next_level = level + 1;
+            let convert = expr_tree_to_nested_counted::<L>;
+            let (left_nested, left_within, left_out) =
+                convert(left, ixs, inverse, open_set, globals, openedges, next_level);
+            let (right_nested, right_within, right_out) = convert(
+                right, ixs, inverse, open_set, globals, openedges, next_level,
             );
 
             // Merge the two subtrees' occurrence counts.
@@ -633,13 +619,12 @@ fn expr_tree_to_nested_counted<L: Label>(
             } else {
                 let mut out: Vec<L> = Vec::new();
                 for l in left_out.iter().chain(right_out.iter()) {
-                    if out.contains(l) {
-                        continue;
-                    }
-                    let w = within.get(l).copied().unwrap_or(0);
-                    let g = global_count.get(l).copied().unwrap_or(0);
-                    if open_set.contains(l) || w < g {
-                        out.push(l.clone());
+                    if !out.contains(l) {
+                        let w = within.get(l).copied().unwrap_or(0);
+                        let g = global_count.get(l).copied().unwrap_or(0);
+                        if open_set.contains(l) || w < g {
+                            out.push(l.clone());
+                        }
                     }
                 }
                 out

@@ -314,8 +314,7 @@ pub fn tree_greedy<E: Label>(
         trees.insert(new_v, new_tree);
 
         // Julia: update_costs! - only update for neighbors of the new vertex.
-        // `new_v` is a fresh id, so every incident pair is new; the branch
-        // mirrors Julia's `has_edge` check and stays correct if that changes.
+        // `new_v` is a fresh id, so every incident pair is new.
         let mut nbrs = il.neighbors(&new_v);
         nbrs.sort_unstable();
         for other_v in nbrs {
@@ -323,16 +322,9 @@ pub fn tree_greedy<E: Label>(
             let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &other_v);
             let loss = greedy_loss(&new_dims, alpha);
 
-            let already = cost_adj.get(&new_v).is_some_and(|s| s.contains(&other_v));
-            if already {
-                // Update existing entry
-                pq.change_priority(&pair_key, (Cost(loss), Reverse(pair_key)));
-            } else {
-                // Add new entry
-                pq.push(pair_key, (Cost(loss), Reverse(pair_key)));
-                cost_adj.entry(new_v).or_default().insert(other_v);
-                cost_adj.entry(other_v).or_default().insert(new_v);
-            }
+            pq.push(pair_key, (Cost(loss), Reverse(pair_key)));
+            cost_adj.entry(new_v).or_default().insert(other_v);
+            cost_adj.entry(other_v).or_default().insert(new_v);
         }
 
         // Julia: drop every candidate pair incident to the two contracted
