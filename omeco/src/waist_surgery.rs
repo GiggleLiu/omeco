@@ -1169,6 +1169,94 @@ mod tests {
     }
 
     #[test]
+    fn test_surgery_rebuilds_a_strictly_cheaper_root_cut() {
+        // Four tensors on a ring. The incumbent root separates alternating
+        // vertices {0,2}|{1,3}, cutting every bond; a contiguous cut is cheaper.
+        let code = EinCode::new(
+            vec![vec![0usize, 3], vec![0, 1], vec![1, 2], vec![2, 3]],
+            vec![],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let log2 = vec![1.0; 4];
+        let hyper = Hyper::build(&code, &label_map, &log2, 4);
+        let left = ExprTree::node(
+            ExprTree::leaf(code.ixs[0].clone(), 0),
+            ExprTree::leaf(code.ixs[2].clone(), 2),
+            vec![0, 1, 2, 3],
+        );
+        let right = ExprTree::node(
+            ExprTree::leaf(code.ixs[1].clone(), 1),
+            ExprTree::leaf(code.ixs[3].clone(), 3),
+            vec![0, 1, 2, 3],
+        );
+        let incumbent = ExprTree::node(left, right, vec![]);
+        let mut refiner = Refiner {
+            code: &code,
+            sizes: &sizes,
+            hyper: &hyper,
+            start: Instant::now(),
+            budget: Duration::from_secs(2),
+            rng: SmallRng::seed_from_u64(RNG_SEED),
+            report: WaistReport {
+                n_original: code.num_tensors(),
+                surgery_calls: 0,
+                cheaper_cuts: 0,
+                rebuild_accepts: 0,
+                waist_min_hits: 0,
+            },
+        };
+
+        let (rebuilt, rebuilt_tc) = refiner
+            .waist_surgery(&incumbent, f64::INFINITY)
+            .expect("alternating ring cut should be replaced");
+
+        assert!(rebuilt_tc.is_finite());
+        assert_eq!(rebuilt.leaf_count(), code.num_tensors());
+        assert_eq!(refiner.report.cheaper_cuts, 1);
+        assert_eq!(refiner.report.rebuild_accepts, 1);
+        let mut leaves = rebuilt.leaf_indices();
+        leaves.sort_unstable();
+        assert_eq!(leaves, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_conversion_and_partition_edge_cases() {
+        let label_map: HashMap<usize, usize> = (0..3).map(|label| (label, label)).collect();
+        assert!(nested_to_expr_tree(&NestedEinsum::leaf(0), &label_map).is_none());
+
+        let nary = NestedEinsum::node(
+            vec![
+                NestedEinsum::leaf(0),
+                NestedEinsum::leaf(1),
+                NestedEinsum::leaf(2),
+            ],
+            EinCode::new(vec![vec![0], vec![1], vec![2]], vec![]),
+        );
+        assert!(nested_to_expr_tree(&nary, &label_map).is_none());
+
+        let binary = NestedEinsum::node(
+            vec![NestedEinsum::leaf(0), NestedEinsum::leaf(1)],
+            EinCode::new(vec![vec![0, 1], vec![1, 2]], vec![0, 2]),
+        );
+        let unary = NestedEinsum::node(vec![binary], EinCode::new(vec![vec![0, 2]], vec![0]));
+        let converted = nested_to_expr_tree(&unary, &label_map)
+            .expect("unary node around a binary child should be fused");
+        assert_eq!(converted.labels(), &[0]);
+
+        let root = ExprTree::node(
+            ExprTree::node(
+                ExprTree::leaf(vec![0], 0),
+                ExprTree::leaf(vec![1], 1),
+                vec![0, 1],
+            ),
+            ExprTree::leaf(vec![2], 2),
+            vec![],
+        );
+        assert_eq!(extract_root_partition(&root), Some(vec![2]));
+    }
+
+    #[test]
     fn test_refine_accepts_treewidth_unary_nodes() {
         let code = EinCode::new(
             vec![
