@@ -5,9 +5,7 @@
 //! the Metropolis criterion.
 
 use crate::eincode::{EinCode, NestedEinsum};
-use crate::expr_tree::{
-    apply_rule_mut, tree_complexity, DecompositionType, ExprTree, Rule, ScratchSpace,
-};
+use crate::expr_tree::{apply_rule_mut, DecompositionType, ExprTree, Rule, ScratchSpace};
 use crate::greedy::{optimize_greedy, GreedyMethod};
 use crate::score::ScoreFunction;
 use crate::utils::fast_log2sumexp2;
@@ -719,23 +717,25 @@ pub fn optimize_treesa<L: Label>(
                 nedge,
             );
 
-            // Compute final complexity
-            let (tc, sc, rw) = tree_complexity(&optimized, &log2_sizes);
-            let score = config.score.evaluate(tc, sc, rw);
+            // Convert with openedges for correct root output (issue #13) and
+            // score the trial by the tree as it will be emitted: the
+            // SA-internal `tree_complexity` does not count dangling-label
+            // reductions (matching Julia's `tcscrw`), so ranking trials by it
+            // can select a tree that is worse than another trial's.
+            let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy, 0);
+            let cc = crate::contraction_complexity(&nested, size_dict, &code.ixs);
+            let score = config.score.evaluate(cc.tc, cc.sc, cc.rwc);
 
-            (optimized, score, tc, sc, rw)
+            (nested, score)
         })
         .collect();
 
     // Find best result
-    let (best_tree, _, _, _, _) = results
+    let (best_tree, _) = results
         .into_iter()
-        .min_by(|(_, s1, _, _, _), (_, s2, _, _, _)| s1.partial_cmp(s2).unwrap())?;
+        .min_by(|(_, s1), (_, s2)| s1.partial_cmp(s2).unwrap())?;
 
-    // Convert back to NestedEinsum with openedges for correct root output (issue #13)
-    Some(expr_tree_to_nested(
-        &best_tree, &code.ixs, &labels, &code.iy, 0,
-    ))
+    Some(best_tree)
 }
 
 /// Warm-start context for driving a simulated-annealing loop from a seed tree.
@@ -834,6 +834,103 @@ pub fn warm_exprtree_to_nested<L: Label>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Trial selection must rank trials by the cost of the tree the optimizer
+    /// actually emits. The SA-internal `tree_complexity` shares Julia's
+    /// `tcscrw` blind spot: a dangling label (single occurrence, not in the
+    /// output) is summed away at a node where it appears in only one input,
+    /// and that summation cost is invisible to the internal metric while
+    /// `contraction_complexity` on the emitted tree counts it. Ranking by the
+    /// internal metric can therefore return a worse tree than another trial's.
+    #[test]
+    fn test_trial_selection_ranks_by_emitted_tree_cost() {
+        use crate::contraction_complexity;
+        use rand::SeedableRng;
+
+        for net_seed in 0..60u64 {
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(net_seed);
+            let n_tensors = rng.random_range(4..=8);
+            let n_labels = rng.random_range(3..=6);
+            // Small label pool relative to tensor count yields hyperedges and
+            // occasional dangling (single-occurrence) labels.
+            let ixs: Vec<Vec<usize>> = (0..n_tensors)
+                .map(|_| {
+                    let k = rng.random_range(1..=3.min(n_labels));
+                    let mut pool: Vec<usize> = (0..n_labels).collect();
+                    let mut chosen = Vec::with_capacity(k);
+                    for _ in 0..k {
+                        let idx = rng.random_range(0..pool.len());
+                        chosen.push(pool.swap_remove(idx));
+                    }
+                    chosen.sort_unstable();
+                    chosen
+                })
+                .collect();
+            let iy: Vec<usize> = (0..n_labels)
+                .filter(|_| rng.random_range(0..3) == 0)
+                .collect();
+            let code = EinCode::new(ixs, iy);
+            let size_dict: HashMap<usize, usize> = (0..n_labels)
+                .map(|l| (l, rng.random_range(2..=4)))
+                .collect();
+
+            let config = TreeSA {
+                betas: (1..=10).map(|i| i as f64).collect(),
+                ntrials: 4,
+                niters: 20,
+                score: ScoreFunction::default(),
+                decomposition_type: DecompositionType::Tree,
+                initializer: Initializer::Random,
+            };
+            let returned = optimize_treesa(&code, &size_dict, &config).unwrap();
+            let cc = contraction_complexity(&returned, &size_dict, &code.ixs);
+            let returned_score = config.score.evaluate(cc.tc, cc.sc, cc.rwc);
+
+            // Mirror the trial loop and score every trial's *emitted* tree.
+            let (label_map, labels) = build_label_map(&code);
+            let nedge = labels.len();
+            let log2_sizes: Vec<f64> = labels
+                .iter()
+                .map(|l| (size_dict[l] as f64).log2())
+                .collect();
+            let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+            let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+            let best_emitted_score = (0..config.ntrials)
+                .map(|trial_idx| {
+                    let mut trng = rand::rngs::SmallRng::seed_from_u64(trial_idx as u64 + 42);
+                    let tree = init_random(
+                        &int_ixs,
+                        &int_iy,
+                        nedge,
+                        config.decomposition_type,
+                        &mut trng,
+                    );
+                    let optimized = optimize_tree_sa(
+                        tree,
+                        &log2_sizes,
+                        &config.betas,
+                        config.niters,
+                        &config.score,
+                        config.decomposition_type,
+                        &mut trng,
+                        nedge,
+                    );
+                    let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy, 0);
+                    let tcc = contraction_complexity(&nested, &size_dict, &code.ixs);
+                    config.score.evaluate(tcc.tc, tcc.sc, tcc.rwc)
+                })
+                .fold(f64::INFINITY, f64::min);
+
+            assert!(
+                returned_score <= best_emitted_score + 1e-9,
+                "net_seed {net_seed}: returned tree scores {returned_score} but a \
+                 trial emitted a tree scoring {best_emitted_score} \
+                 (ixs {:?} iy {:?})",
+                code.ixs,
+                code.iy,
+            );
+        }
+    }
 
     #[test]
     fn test_treesa_default() {
