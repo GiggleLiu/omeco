@@ -45,12 +45,16 @@ example.
 
 ## Waist surgery (`omeco::waist_surgery`)
 
-The root contraction induces a whole-network *waist*, a bipartition of the
-tensors. Local SA rewrites can struggle to jump between distinct good
-bipartitions of the same size. [`refine`] extracts that root cut, improves it on
-the tensor hypergraph with balance-constrained Fiduccia–Mattheyses passes,
-rebuilds both sides, and accepts only when the global `tc` strictly drops. Its
-budget is checked cooperatively within search loops and between rebuild stages.
+The tree's highest-cost contraction is its *waist*. The tensors below that
+argmax node, against their complement, induce a whole-network bipartition. Local
+SA rewrites can struggle to jump between distinct good bipartitions of comparable
+size. [`refine`] extracts that cut, improves it on the tensor hypergraph with
+balance-constrained Fiduccia–Mattheyses passes, and promotes a candidate cut to
+the root whenever doing so introduces no new bottleneck. It then rebuilds both
+sides and accepts only when the independently rescored global `tc` strictly
+drops. The report distinguishes like-for-like cut improvements from rebuild
+attempts. Its budget is checked cooperatively within search loops and between
+rebuild stages.
 
 ```rust
 use omeco::waist_surgery::refine;
@@ -65,11 +69,14 @@ let code = EinCode::new(
 let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2), ('l', 2)].into();
 let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
 let (refined, report) = refine(&seed, &code, &sizes, Duration::from_millis(200));
-println!("rebuild accepts = {}", report.rebuild_accepts);
+println!(
+    "cut improvements = {}, rebuild attempts = {}, accepts = {}",
+    report.cheaper_cuts, report.rebuild_attempts, report.rebuild_accepts,
+);
 ```
 
 The refined tree is always over the original tensor indices and never worse than
-the seed. On `surfacecode_d21` (2203 tensors) it takes a greedy seed from `tc=67.1`
+the seed. On `surfacecode_d21` (2203 tensors) it takes a greedy seed from `tc=64.0`
 to `tc=49.1` in 20 seconds. See the `waist_refine` example.
 
 [`simplify`]: https://docs.rs/omeco/latest/omeco/preprocess/fn.simplify.html

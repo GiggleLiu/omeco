@@ -1,24 +1,27 @@
 //! Waist surgery: global cut improvement of a contraction tree's dominant node.
 //!
-//! The root contraction induces a whole-network **waist**, a bipartition `(A, B)`
-//! of the input tensors. TreeSA's local rewrites move one leaf at a time and can
-//! struggle to jump between distinct good root bipartitions of the same size, so
-//! a search can get stuck with a sub-optimal cut. This pass injects global
-//! information exactly there.
+//! Pure time complexity is pinned by the tree's highest-cost contraction — its
+//! **waist**. The tensors below that argmax node form one side `A` of a
+//! whole-network bipartition `(A, B)`, with the complement on side `B`. TreeSA's
+//! local rewrites move one subtree at a time and can struggle to jump between
+//! distinct good bipartitions of comparable size, so a search can get stuck with
+//! an improvable waist. This pass injects global information exactly there.
 //!
 //! [`refine`] takes an existing contraction tree and repeatedly:
 //!
-//! 1. **Extracts the waist.** Read the root's left/right tensor bipartition
-//!    `(A, B)`, which covers every input exactly once.
+//! 1. **Extracts the waist.** Walk the tree, find the argmax-cost contraction,
+//!    and use its descendant tensors against their complement as `(A, B)`.
 //! 2. **Improves the cut globally.** On the tensor hypergraph (ignoring the tree)
 //!    run bounded [Fiduccia–Mattheyses][fm] passes — gain is the reduction in
 //!    summed `log2` dimensions of straddling labels, with a balance constraint
 //!    `|A|` within a slack band — seeded from the current cut and from
 //!    boundary-BFS alternatives.
-//! 3. **Rebuilds two-sided.** If a strictly cheaper comparable-balance cut is
-//!    found, cold-anneal a subtree for each side separately (each side's open
-//!    labels derived by outside-occurrence counting so the scorer agrees), join
-//!    them at the root, and accept iff the global `tc` strictly drops.
+//! 3. **Rebuilds two-sided.** If the candidate cut, promoted to the root, is
+//!    cheaper than the incumbent waist node, cold-anneal a subtree for each side
+//!    separately (each side's open labels derived by outside-occurrence counting
+//!    so the scorer agrees), join them at the root, and accept iff the global
+//!    `tc` strictly drops. A candidate tied with the incumbent partition cut can
+//!    still pass this no-new-bottleneck gate.
 //!
 //! If the bounded search finds no cheaper balanced cut, the [`WaistReport`]
 //! records a `waist_min` event. This is a search diagnostic, not a proof of
@@ -104,8 +107,11 @@ pub struct WaistReport {
     pub n_original: usize,
     /// Number of waist-surgery iterations attempted.
     pub surgery_calls: u64,
-    /// Iterations that found a strictly cheaper comparable-balance cut.
+    /// Iterations where bounded FM strictly improved the incumbent partition
+    /// under the same cut-weight functional.
     pub cheaper_cuts: u64,
+    /// Candidates that passed the no-new-bottleneck gate and entered rebuilding.
+    pub rebuild_attempts: u64,
     /// Rebuilds that strictly lowered the global time complexity and were kept.
     pub rebuild_accepts: u64,
     /// Iterations where the bounded FM search found no cheaper comparable cut.
@@ -388,34 +394,52 @@ fn bfs_seed(hyper: &Hyper, seed: usize, target: usize) -> Vec<bool> {
 // Waist extraction and node cost.
 // =============================================================================
 
-/// Return one side of the root bipartition, choosing the smaller child.
+/// Return the argmax contraction's node cost and descendant tensor ids.
 ///
-/// The complement is the other root child, so the partition covers the entire
-/// network and its [`Hyper::cut_cost`] is directly comparable with alternatives
-/// used by the whole-tree rebuild.
-fn extract_root_partition(tree: &ExprTree) -> Option<Vec<usize>> {
-    fn leaves(tree: &ExprTree) -> Vec<usize> {
+/// Those descendants form side A of the whole-network waist bipartition; every
+/// other input tensor forms side B. A root argmax has an empty complement, so the
+/// caller treats it as a non-actionable waist.
+fn extract_waist(tree: &ExprTree, log2_sizes: &[f64]) -> Option<(f64, Vec<usize>)> {
+    fn walk(
+        tree: &ExprTree,
+        log2_sizes: &[f64],
+        best: &mut f64,
+        best_leaves: &mut Vec<usize>,
+    ) -> Vec<usize> {
         match tree {
             ExprTree::Leaf(info) => vec![info.tensor_id.unwrap_or(0)],
-            ExprTree::Node { left, right, .. } => {
-                let lleaves = leaves(left);
-                let rleaves = leaves(right);
+            ExprTree::Node { left, right, info } => {
+                let lleaves = walk(left, log2_sizes, best, best_leaves);
+                let rleaves = walk(right, log2_sizes, best, best_leaves);
+                let cost = node_tc(left.labels(), right.labels(), &info.out_dims, log2_sizes);
                 let mut leaves = lleaves;
                 leaves.extend_from_slice(&rleaves);
+                if cost > *best {
+                    *best = cost;
+                    *best_leaves = leaves.clone();
+                }
                 leaves
             }
         }
     }
-    let ExprTree::Node { left, right, .. } = tree else {
+    if matches!(tree, ExprTree::Leaf(_)) {
         return None;
-    };
-    let left = leaves(left);
-    let right = leaves(right);
-    if left.len() <= right.len() {
-        Some(left)
-    } else {
-        Some(right)
     }
+    let mut best = f64::NEG_INFINITY;
+    let mut best_leaves = Vec::new();
+    walk(tree, log2_sizes, &mut best, &mut best_leaves);
+    Some((best, best_leaves))
+}
+
+/// Exact contraction-node cost used by the TreeSA objective.
+fn node_tc(ix1: &[usize], ix2: &[usize], iy: &[usize], log2_sizes: &[f64]) -> f64 {
+    let mut tc: f64 = iy.iter().map(|&l| log2_sizes[l]).sum();
+    for &l in ix1 {
+        if ix2.contains(&l) && !iy.contains(&l) {
+            tc += log2_sizes[l];
+        }
+    }
+    tc
 }
 
 // =============================================================================
@@ -598,6 +622,7 @@ struct Refiner<'a> {
     code: &'a EinCode<usize>,
     sizes: &'a HashMap<usize, usize>,
     hyper: &'a Hyper,
+    log2_sizes: &'a [f64],
     start: Instant,
     budget: Duration,
     rng: SmallRng,
@@ -617,7 +642,7 @@ impl Refiner<'_> {
         work_tc: f64,
     ) -> Option<(NestedEinsum<usize>, f64)> {
         self.report.surgery_calls += 1;
-        let a_leaves = extract_root_partition(incumbent)?;
+        let (waist_node_cost, a_leaves) = extract_waist(incumbent, self.log2_sizes)?;
         let n = self.hyper.n;
         if a_leaves.is_empty() || a_leaves.len() >= n {
             return None;
@@ -628,7 +653,7 @@ impl Refiner<'_> {
                 cur_part[t] = true;
             }
         }
-        let waist_cost = self.hyper.cut_cost(&cur_part);
+        let incumbent_cut_cost = self.hyper.cut_cost(&cur_part);
         let target_a = a_leaves.len();
         let lo = ((target_a as f64 * (1.0 - FM_SLACK)).floor() as usize).max(1);
         let hi = ((target_a as f64 * (1.0 + FM_SLACK)).ceil() as usize).min(n - 1);
@@ -666,11 +691,18 @@ impl Refiner<'_> {
             }
             return None;
         }
-        if best_alt_cost >= waist_cost - 1e-9 {
+        if best_alt_cost < incumbent_cut_cost - 1e-9 {
+            self.report.cheaper_cuts += 1;
+        } else {
             self.report.waist_min_hits += 1;
+        }
+        // The candidate becomes the rebuilt tree's top contraction. Compare that
+        // exact top-node cost with the incumbent global bottleneck; it need not
+        // strictly improve the incumbent partition cut to justify rebuilding.
+        if best_alt_cost >= waist_node_cost - 1e-9 {
             return None;
         }
-        self.report.cheaper_cuts += 1;
+        self.report.rebuild_attempts += 1;
         let part = best_alt_part.unwrap();
 
         // Rebuild both sides from the improved cut.
@@ -867,6 +899,7 @@ pub fn refine<L: Label>(
         n_original: n,
         surgery_calls: 0,
         cheaper_cuts: 0,
+        rebuild_attempts: 0,
         rebuild_accepts: 0,
         waist_min_hits: 0,
     };
@@ -920,6 +953,7 @@ pub fn refine<L: Label>(
         code: &id_code,
         sizes: &id_sizes,
         hyper: &hyper,
+        log2_sizes: &log2_sizes,
         start: Instant::now(),
         budget,
         rng: SmallRng::seed_from_u64(RNG_SEED),
@@ -1061,7 +1095,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_root_partition_uses_child_not_all_descendants() {
+    fn test_extract_waist_finds_non_root_argmax() {
         let right = ExprTree::node(
             ExprTree::leaf(vec![0], 1),
             ExprTree::leaf(vec![1], 2),
@@ -1069,7 +1103,7 @@ mod tests {
         );
         let root = ExprTree::node(ExprTree::leaf(vec![0], 0), right, vec![]);
 
-        assert_eq!(extract_root_partition(&root), Some(vec![0]));
+        assert_eq!(extract_waist(&root, &[1.0, 1.0]), Some((2.0, vec![1, 2])));
     }
 
     #[test]
@@ -1114,6 +1148,7 @@ mod tests {
             code: &code,
             sizes: &sizes,
             hyper: &hyper,
+            log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::ZERO,
             rng: SmallRng::seed_from_u64(RNG_SEED),
@@ -1121,6 +1156,7 @@ mod tests {
                 n_original: code.num_tensors(),
                 surgery_calls: 0,
                 cheaper_cuts: 0,
+                rebuild_attempts: 0,
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
@@ -1141,6 +1177,7 @@ mod tests {
             code: &code,
             sizes: &sizes,
             hyper: &hyper,
+            log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::from_secs(1),
             rng: SmallRng::seed_from_u64(RNG_SEED),
@@ -1148,6 +1185,7 @@ mod tests {
                 n_original: code.num_tensors(),
                 surgery_calls: 0,
                 cheaper_cuts: 0,
+                rebuild_attempts: 0,
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
@@ -1169,9 +1207,10 @@ mod tests {
     }
 
     #[test]
-    fn test_surgery_rebuilds_a_strictly_cheaper_root_cut() {
-        // Four tensors on a ring. The incumbent root separates alternating
-        // vertices {0,2}|{1,3}, cutting every bond; a contiguous cut is cheaper.
+    fn test_surgery_rebuilds_a_strictly_cheaper_argmax_cut() {
+        // Four tensors on a ring. The first argmax node contains alternating
+        // vertices {0,2}; its complement is {1,3}, cutting every bond. A
+        // contiguous whole-network cut is cheaper.
         let code = EinCode::new(
             vec![vec![0usize, 3], vec![0, 1], vec![1, 2], vec![2, 3]],
             vec![],
@@ -1195,6 +1234,7 @@ mod tests {
             code: &code,
             sizes: &sizes,
             hyper: &hyper,
+            log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::from_secs(2),
             rng: SmallRng::seed_from_u64(RNG_SEED),
@@ -1202,6 +1242,7 @@ mod tests {
                 n_original: code.num_tensors(),
                 surgery_calls: 0,
                 cheaper_cuts: 0,
+                rebuild_attempts: 0,
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
@@ -1214,10 +1255,64 @@ mod tests {
         assert!(rebuilt_tc.is_finite());
         assert_eq!(rebuilt.leaf_count(), code.num_tensors());
         assert_eq!(refiner.report.cheaper_cuts, 1);
+        assert_eq!(refiner.report.rebuild_attempts, 1);
         assert_eq!(refiner.report.rebuild_accepts, 1);
         let mut leaves = rebuilt.leaf_indices();
         leaves.sort_unstable();
         assert_eq!(leaves, vec![0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_tied_cut_can_pass_no_new_bottleneck_gate() {
+        // A four-cycle has minimum bisection cost two. The incumbent waist
+        // subtree {0,1} has that minimum cut, but its contraction node costs
+        // three because it also contracts the internal 0 bond. The paper
+        // algorithm may therefore rebuild a tied alternative: promoted to the
+        // root it cannot reproduce the old bottleneck.
+        let code = EinCode::new(
+            vec![vec![0usize, 1], vec![0, 2], vec![1, 3], vec![2, 3]],
+            vec![],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let log2 = vec![1.0; 4];
+        let hyper = Hyper::build(&code, &label_map, &log2, 4);
+        let left = ExprTree::node(
+            ExprTree::leaf(code.ixs[0].clone(), 0),
+            ExprTree::leaf(code.ixs[1].clone(), 1),
+            vec![1, 2],
+        );
+        let right = ExprTree::node(
+            ExprTree::leaf(code.ixs[2].clone(), 2),
+            ExprTree::leaf(code.ixs[3].clone(), 3),
+            vec![1, 2],
+        );
+        let incumbent = ExprTree::node(left, right, vec![]);
+        assert_eq!(extract_waist(&incumbent, &log2), Some((3.0, vec![0, 1])));
+
+        let mut refiner = Refiner {
+            code: &code,
+            sizes: &sizes,
+            hyper: &hyper,
+            log2_sizes: &log2,
+            start: Instant::now(),
+            budget: Duration::from_secs(2),
+            rng: SmallRng::seed_from_u64(RNG_SEED),
+            report: WaistReport {
+                n_original: code.num_tensors(),
+                surgery_calls: 0,
+                cheaper_cuts: 0,
+                rebuild_attempts: 0,
+                rebuild_accepts: 0,
+                waist_min_hits: 0,
+            },
+        };
+
+        assert!(refiner.waist_surgery(&incumbent, f64::INFINITY).is_some());
+        assert_eq!(refiner.report.cheaper_cuts, 0);
+        assert_eq!(refiner.report.waist_min_hits, 1);
+        assert_eq!(refiner.report.rebuild_attempts, 1);
+        assert_eq!(refiner.report.rebuild_accepts, 1);
     }
 
     #[test]
@@ -1253,7 +1348,7 @@ mod tests {
             ExprTree::leaf(vec![2], 2),
             vec![],
         );
-        assert_eq!(extract_root_partition(&root), Some(vec![2]));
+        assert_eq!(extract_waist(&root, &[1.0; 3]), Some((2.0, vec![0, 1])));
     }
 
     #[test]
@@ -1263,7 +1358,8 @@ mod tests {
         let code = EinCode::new(vec![vec![0usize]; 65], vec![0]);
         let sizes: HashMap<usize, usize> = [(0, 2), (1, 1)].into();
         let label_map: HashMap<usize, usize> = [(0, 0), (1, 1)].into();
-        let hyper = Hyper::build(&code, &label_map, &[1.0, 0.0], 2);
+        let log2 = vec![1.0, 0.0];
+        let hyper = Hyper::build(&code, &label_map, &log2, 2);
         let mut part = vec![false; 65];
         part[0] = true;
         assert_eq!(hyper.cut_cost(&part), 1.0);
@@ -1273,6 +1369,7 @@ mod tests {
             code: &code,
             sizes: &sizes,
             hyper: &hyper,
+            log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::from_secs(1),
             rng: SmallRng::seed_from_u64(RNG_SEED),
@@ -1280,6 +1377,7 @@ mod tests {
                 n_original: code.num_tensors(),
                 surgery_calls: 0,
                 cheaper_cuts: 0,
+                rebuild_attempts: 0,
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },

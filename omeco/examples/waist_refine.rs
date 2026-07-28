@@ -51,8 +51,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         report.n_original, seed_tc, cc.tc, cc.sc,
     );
     println!(
-        "surgery: calls={} cheaper_cuts={} rebuild_accepts={} waist_min_hits={}",
-        report.surgery_calls, report.cheaper_cuts, report.rebuild_accepts, report.waist_min_hits,
+        "surgery: calls={} cheaper_cuts={} rebuild_attempts={} rebuild_accepts={} waist_min_hits={}",
+        report.surgery_calls,
+        report.cheaper_cuts,
+        report.rebuild_attempts,
+        report.rebuild_accepts,
+        report.waist_min_hits,
     );
 
     if let Some(out) = args.get(3) {
