@@ -538,7 +538,6 @@ fn expr_tree_to_nested<L: Label>(
     original_ixs: &[Vec<L>],
     inverse_map: &[L],
     openedges: &[L],
-    _level: usize,
 ) -> NestedEinsum<L> {
     // Global occurrence count of every label across all original tensors.
     let mut global_count: HashMap<L, usize> = HashMap::new();
@@ -595,10 +594,10 @@ fn expr_tree_to_nested_counted<L: Label>(
             let inverse = inverse_map;
             let globals = global_count;
             let next_level = level + 1;
-            let convert = expr_tree_to_nested_counted::<L>;
-            let (left_nested, left_within, left_out) =
-                convert(left, ixs, inverse, open_set, globals, openedges, next_level);
-            let (right_nested, right_within, right_out) = convert(
+            let (left_nested, left_within, left_out) = expr_tree_to_nested_counted(
+                left, ixs, inverse, open_set, globals, openedges, next_level,
+            );
+            let (right_nested, right_within, right_out) = expr_tree_to_nested_counted(
                 right, ixs, inverse, open_set, globals, openedges, next_level,
             );
 
@@ -722,7 +721,7 @@ pub fn optimize_treesa<L: Label>(
             // SA-internal `tree_complexity` does not count dangling-label
             // reductions (matching Julia's `tcscrw`), so ranking trials by it
             // can select a tree that is worse than another trial's.
-            let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy, 0);
+            let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy);
             let cc = crate::contraction_complexity(&nested, size_dict, &code.ixs);
             let score = config.score.evaluate(cc.tc, cc.sc, cc.rwc);
 
@@ -828,7 +827,7 @@ pub fn warm_exprtree_to_nested<L: Label>(
     code: &EinCode<L>,
     labels: &[L],
 ) -> NestedEinsum<L> {
-    expr_tree_to_nested(tree, &code.ixs, labels, &code.iy, 0)
+    expr_tree_to_nested(tree, &code.ixs, labels, &code.iy)
 }
 
 #[cfg(test)]
@@ -915,7 +914,7 @@ mod tests {
                         &mut trng,
                         nedge,
                     );
-                    let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy, 0);
+                    let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy);
                     let tcc = contraction_complexity(&nested, &size_dict, &code.ixs);
                     config.score.evaluate(tcc.tc, tcc.sc, tcc.rwc)
                 })
@@ -1382,7 +1381,7 @@ mod tests {
         let inverse_map = vec!['i', 'j', 'k'];
         let openedges = vec!['i', 'k'];
 
-        let nested = expr_tree_to_nested(&tree, &original_ixs, &inverse_map, &openedges, 0);
+        let nested = expr_tree_to_nested(&tree, &original_ixs, &inverse_map, &openedges);
 
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 2);
@@ -1403,7 +1402,7 @@ mod tests {
         let inverse_map = vec!['i', 'j', 'k', 'l'];
         let openedges = vec!['i', 'l'];
 
-        let nested = expr_tree_to_nested(&tree, &original_ixs, &inverse_map, &openedges, 0);
+        let nested = expr_tree_to_nested(&tree, &original_ixs, &inverse_map, &openedges);
 
         assert!(nested.is_binary());
         assert_eq!(nested.leaf_count(), 3);
@@ -1476,7 +1475,7 @@ mod tests {
         );
         let root = ExprTree::node(a, b, vec![1, 2, 3, 4]);
 
-        let nested = expr_tree_to_nested(&root, &original_ixs, &inverse_map, &openedges, 0);
+        let nested = expr_tree_to_nested(&root, &original_ixs, &inverse_map, &openedges);
 
         // Each intermediate node must keep label 0 (it occurs outside its subtree).
         if let NestedEinsum::Node { args, .. } = &nested {

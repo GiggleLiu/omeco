@@ -233,6 +233,12 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>, size_dict: &HashMap<L, usize>
                 }
             }
         }
+        // A scalar shares no labels, so the scan above never finds it a
+        // partner; merging it into any live tensor is always rank- and
+        // size-non-increasing. Pick the smallest live id for determinism.
+        if chosen.is_none() && lab_list.is_empty() {
+            chosen = (0..n).find(|&u| u != t && alive[u]);
+        }
         let Some(u) = chosen else { continue };
 
         // Merge u into t. Build the internal binary subtree node.
@@ -412,6 +418,39 @@ mod tests {
                 assert_recursive_interfaces(child, original_ixs);
             }
         }
+    }
+
+    #[test]
+    fn test_simplify_merges_scalars_into_neighbours() {
+        // t1 is a scalar (rank 0). Merging it into any tensor is always
+        // rank- and size-non-increasing, so the whole network (matrix chain
+        // plus scalar) must collapse to a single super-tensor whose subtree
+        // still contains every original leaf.
+        let code = EinCode::new(vec![vec!['i', 'j'], vec![], vec!['j', 'k']], vec!['i', 'k']);
+        let sizes = uniform_sizes(&code, 2);
+        let simp = simplify(&code, &sizes);
+        assert_eq!(simp.report.n_reduced, 1, "scalar must not block collapse");
+        let inner = optimize_code(&simp.code, &sizes, &GreedyMethod::default()).unwrap();
+        let tree = splice(&inner, &simp.subtrees);
+        assert_eq!(
+            tree.leaf_count(),
+            3,
+            "the scalar leaf must survive splicing"
+        );
+        assert_recursive_interfaces(&tree, &code.ixs);
+    }
+
+    #[test]
+    fn test_simplify_all_scalar_network_collapses() {
+        // Nothing but scalars: they must all fold into one super-tensor.
+        let code = EinCode::new(vec![vec![], vec![], vec![]], Vec::<char>::new());
+        let sizes: HashMap<char, usize> = HashMap::new();
+        let simp = simplify(&code, &sizes);
+        assert_eq!(simp.report.n_reduced, 1);
+        let inner = optimize_code(&simp.code, &sizes, &GreedyMethod::default()).unwrap();
+        let tree = splice(&inner, &simp.subtrees);
+        assert_eq!(tree.leaf_count(), 3);
+        assert_recursive_interfaces(&tree, &code.ixs);
     }
 
     #[test]

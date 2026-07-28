@@ -101,6 +101,15 @@
 //! println!("sliced space: 2^{:.2}", metrics.sc);
 //! ```
 //!
+//! ## Limitations
+//!
+//! Contraction trees are processed recursively throughout the crate (tree
+//! construction, conversion, complexity evaluation, and `Drop`). Tree depth is
+//! bounded by the number of tensors, so pathologically deep trees — e.g. a
+//! matrix chain of hundreds of thousands of tensors, whose optimal tree is a
+//! caterpillar — can exhaust the thread stack. Networks in the tested range
+//! (up to tens of thousands of tensors) are fine.
+//!
 //! ## Algorithm Details
 //!
 //! ### GreedyMethod
