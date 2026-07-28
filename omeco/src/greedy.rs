@@ -8,8 +8,21 @@ use crate::incidence_list::{ContractionDims, IncidenceList};
 use crate::Label;
 use priority_queue::PriorityQueue;
 use rand::prelude::*;
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeSet, HashMap, HashSet};
+
+/// Priority stored in the greedy queue: the contraction [`Cost`] plus a
+/// deterministic tie-break on the tensor pair.
+///
+/// The `priority_queue` heap pops the greatest priority. [`Cost`] is a min-heap
+/// on the loss (smaller loss = greater priority), and `Reverse(pair)` breaks
+/// exact-loss ties in favour of the lexicographically smallest pair. Because the
+/// pair keys are unique, the combined priority is a *total* order, so the pop
+/// sequence is fully determined by the losses alone — independent of hash-map
+/// iteration order or heap insertion order. This removes the run-to-run variance
+/// that could send the greedy contraction down a pathological, dense-intermediate
+/// path on tie-heavy uniform-dimension networks. See `test_greedy_tie_break_is_deterministic`.
+type Priority = (Cost, Reverse<(usize, usize)>);
 
 /// A binary contraction tree built during greedy optimization.
 #[derive(Debug, Clone)]
@@ -217,7 +230,7 @@ pub fn tree_greedy<E: Label>(
     // iterates its `Dict` in a stable order, whereas Rust's randomly-seeded
     // `HashMap` did not, which made the previous port's greedy output vary
     // run-to-run on ties. Sorting restores deterministic, Julia-aligned behavior.
-    let mut pq: PriorityQueue<(usize, usize), Cost> = PriorityQueue::new();
+    let mut pq: PriorityQueue<(usize, usize), Priority> = PriorityQueue::new();
     let mut cost_adj: HashMap<usize, HashSet<usize>> = HashMap::new();
     let mut vertices: Vec<usize> = il.vertices().cloned().collect();
     vertices.sort_unstable();
@@ -231,9 +244,10 @@ pub fn tree_greedy<E: Label>(
         nbrs.sort_unstable();
         for vj in nbrs {
             if vj > vi {
+                let pair = (vi, vj);
                 let dims = ContractionDims::compute(&il, log2_sizes, &vi, &vj);
                 let loss = greedy_loss(&dims, alpha);
-                pq.push((vi, vj), Cost(loss));
+                pq.push(pair, (Cost(loss), Reverse(pair)));
                 cost_adj.entry(vi).or_default().insert(vj);
                 cost_adj.entry(vj).or_default().insert(vi);
             }
@@ -300,8 +314,7 @@ pub fn tree_greedy<E: Label>(
         trees.insert(new_v, new_tree);
 
         // Julia: update_costs! - only update for neighbors of the new vertex.
-        // `new_v` is a fresh id, so every incident pair is new; the branch
-        // mirrors Julia's `has_edge` check and stays correct if that changes.
+        // `new_v` is a fresh id, so every incident pair is new.
         let mut nbrs = il.neighbors(&new_v);
         nbrs.sort_unstable();
         for other_v in nbrs {
@@ -309,16 +322,9 @@ pub fn tree_greedy<E: Label>(
             let new_dims = ContractionDims::compute(&il, log2_sizes, &new_v, &other_v);
             let loss = greedy_loss(&new_dims, alpha);
 
-            let already = cost_adj.get(&new_v).is_some_and(|s| s.contains(&other_v));
-            if already {
-                // Update existing entry
-                pq.change_priority(&pair_key, Cost(loss));
-            } else {
-                // Add new entry
-                pq.push(pair_key, Cost(loss));
-                cost_adj.entry(new_v).or_default().insert(other_v);
-                cost_adj.entry(other_v).or_default().insert(new_v);
-            }
+            pq.push(pair_key, (Cost(loss), Reverse(pair_key)));
+            cost_adj.entry(new_v).or_default().insert(other_v);
+            cost_adj.entry(other_v).or_default().insert(new_v);
         }
 
         // Julia: drop every candidate pair incident to the two contracted
@@ -390,40 +396,40 @@ fn cost_adj_insert(cost_adj: &mut HashMap<usize, HashSet<usize>>, pair: (usize, 
 /// Select the next pair to contract from the priority queue.
 /// Also updates the cost-graph adjacency index to track which pairs are queued.
 fn select_pair<R: Rng>(
-    pq: &mut PriorityQueue<(usize, usize), Cost>,
+    pq: &mut PriorityQueue<(usize, usize), Priority>,
     temperature: f64,
     rng: &mut R,
     cost_adj: &mut HashMap<usize, HashSet<usize>>,
-) -> Option<((usize, usize), Cost)> {
+) -> Option<((usize, usize), Priority)> {
     if pq.is_empty() {
         return None;
     }
 
-    let (pair1, cost1) = pq.pop()?;
+    let (pair1, prio1) = pq.pop()?;
     cost_adj_remove(cost_adj, pair1);
 
     if temperature <= 0.0 || pq.is_empty() {
-        return Some((pair1, cost1));
+        return Some((pair1, prio1));
     }
 
     // Boltzmann sampling: consider the second-best option
-    let (pair2, cost2) = pq.pop()?;
+    let (pair2, prio2) = pq.pop()?;
     cost_adj_remove(cost_adj, pair2);
 
     // Probability of accepting the worse option
-    let delta = cost2.0 - cost1.0;
+    let delta = prio2.0 .0 - prio1.0 .0;
     let prob = (-delta / temperature).exp();
 
     if rng.random::<f64>() < prob {
         // Accept the second option, push first back
-        pq.push(pair1, cost1);
+        pq.push(pair1, prio1);
         cost_adj_insert(cost_adj, pair1);
-        Some((pair2, cost2))
+        Some((pair2, prio2))
     } else {
         // Keep the first option, push second back
-        pq.push(pair2, cost2);
+        pq.push(pair2, prio2);
         cost_adj_insert(cost_adj, pair2);
-        Some((pair1, cost1))
+        Some((pair1, prio1))
     }
 }
 
@@ -900,6 +906,62 @@ mod tests {
         assert!(cost1 > cost2);
         assert!(cost2 < cost1);
         assert!(cost1 == Cost(1.0));
+    }
+
+    /// Regression test for the greedy tie-break cascade bug.
+    ///
+    /// On large uniform-dimension networks a great many contraction pairs share
+    /// the exact same loss. Before the fix, the pop order among those ties was
+    /// determined by hash-map iteration order (a random SipHash seed per run), so
+    /// different runs of the *deterministic* (temperature = 0) greedy method could
+    /// take different contraction paths — and roughly one run in five would fall
+    /// into a pathological dense-intermediate sequence orders of magnitude slower
+    /// than the rest. Making the priority a total order over `(loss, pair)` pins
+    /// the pop sequence to the losses alone, so the deterministic greedy method is
+    /// now genuinely deterministic: identical output on every run.
+    #[test]
+    fn test_greedy_tie_break_is_deterministic() {
+        // A 12x12 periodic grid of dimension-2 bonds: highly tie-heavy, exactly
+        // the regime that used to trigger the cascade.
+        let rows = 12;
+        let cols = 12;
+        let mut next = 0usize;
+        let mut hbond = vec![vec![0usize; cols]; rows];
+        let mut vbond = vec![vec![0usize; cols]; rows];
+        for r in 0..rows {
+            for c in 0..cols {
+                hbond[r][c] = next;
+                next += 1;
+                vbond[r][c] = next;
+                next += 1;
+            }
+        }
+        let mut ixs = Vec::new();
+        for r in 0..rows {
+            for c in 0..cols {
+                let left = hbond[r][(c + cols - 1) % cols];
+                let right = hbond[r][c];
+                let up = vbond[(r + rows - 1) % rows][c];
+                let down = vbond[r][c];
+                ixs.push(vec![left, right, up, down]);
+            }
+        }
+        let code = EinCode::new(ixs, vec![]);
+        let size_dict: HashMap<usize, usize> = (0..next).map(|i| (i, 2)).collect();
+        let config = GreedyMethod::default();
+
+        // The deterministic greedy method must return byte-identical trees across
+        // independent runs (each with a fresh hash seed for its internal maps).
+        let first = optimize_greedy(&code, &size_dict, &config).unwrap();
+        let baseline = format!("{first:?}");
+        for _ in 0..12 {
+            let again = optimize_greedy(&code, &size_dict, &config).unwrap();
+            assert_eq!(
+                format!("{again:?}"),
+                baseline,
+                "deterministic greedy produced different trees across runs (tie-break not deterministic)"
+            );
+        }
     }
 
     #[test]
