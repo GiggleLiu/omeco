@@ -29,6 +29,15 @@ pub struct TreeSA {
     pub score: ScoreFunction,
     /// Decomposition type (Tree or Path)
     pub decomposition_type: DecompositionType,
+    /// Run the structural simplification front-end before annealing
+    /// (simplify → optimize the reduced network → splice back). Deterministic
+    /// and exactness-preserving; see [`crate::preprocess`].
+    pub preprocess: bool,
+    /// Wall-clock budget in seconds for the waist-surgery post-pass on the
+    /// selected tree; `0.0` disables it. With a positive budget the result is
+    /// never worse than without, but is not reproducible across machines.
+    /// See [`crate::waist_surgery`].
+    pub surgery_budget: f64,
 }
 
 /// Method for initializing the contraction tree.
@@ -52,6 +61,8 @@ impl Default for TreeSA {
             initializer: Initializer::Greedy,
             score: ScoreFunction::default(),
             decomposition_type: DecompositionType::Tree,
+            preprocess: true,
+            surgery_budget: 0.0,
         }
     }
 }
@@ -72,6 +83,8 @@ impl TreeSA {
             initializer,
             score,
             decomposition_type: DecompositionType::Tree,
+            preprocess: true,
+            surgery_budget: 0.0,
         }
     }
 
@@ -116,6 +129,18 @@ impl TreeSA {
     /// Set the inverse temperature schedule.
     pub fn with_betas(mut self, betas: Vec<f64>) -> Self {
         self.betas = betas;
+        self
+    }
+
+    /// Enable or disable the structural simplification front-end.
+    pub fn with_preprocess(mut self, preprocess: bool) -> Self {
+        self.preprocess = preprocess;
+        self
+    }
+
+    /// Set the waist-surgery wall-clock budget in seconds (0.0 disables).
+    pub fn with_surgery_budget(mut self, seconds: f64) -> Self {
+        self.surgery_budget = seconds;
         self
     }
 }
@@ -880,6 +905,8 @@ mod tests {
                 score: ScoreFunction::default(),
                 decomposition_type: DecompositionType::Tree,
                 initializer: Initializer::Random,
+                preprocess: false,
+                surgery_budget: 0.0,
             };
             let returned = optimize_treesa(&code, &size_dict, &config).unwrap();
             let cc = contraction_complexity(&returned, &size_dict, &code.ixs);
@@ -1723,5 +1750,20 @@ mod tests {
         let sizes: HashMap<char, usize> = [('i', 4), ('j', 4)].into();
         let seed: NestedEinsum<char> = NestedEinsum::leaf(0);
         assert!(prepare_warm_anneal(&code, &sizes, &seed).is_none());
+    }
+
+    #[test]
+    fn test_treesa_pipeline_defaults() {
+        let config = TreeSA::default();
+        assert!(config.preprocess);
+        assert_eq!(config.surgery_budget, 0.0);
+        let fast = TreeSA::fast();
+        assert!(fast.preprocess);
+        assert_eq!(fast.surgery_budget, 0.0);
+        let tuned = TreeSA::default()
+            .with_preprocess(false)
+            .with_surgery_budget(30.0);
+        assert!(!tuned.preprocess);
+        assert_eq!(tuned.surgery_budget, 30.0);
     }
 }
