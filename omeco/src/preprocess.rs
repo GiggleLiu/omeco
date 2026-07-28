@@ -4,20 +4,19 @@
 //! reducible* structure: chains of single-qubit gates, rank-1 boundary tensors,
 //! and other neighbours whose merge cannot grow an intermediate. Optimizing the
 //! full network directly wastes the search budget on this structure. This module
-//! collapses it up-front with a deterministic, provably-cheap pass, optimizes the
+//! collapses it up-front with a deterministic, size-safe pass, optimizes the
 //! much smaller *reduced* network, then splices the collapsed structure back so
 //! the returned tree's leaves are exactly the original tensor indices.
 //!
 //! # The pass
 //!
-//! [`simplify`] repeatedly contracts a neighbouring pair of (super-)tensors whose
-//! merge is **rank-non-increasing**: the surviving intermediate has rank
-//! `≤ max(rank(a), rank(b))`. A label survives a merge iff it is an output label
-//! or still occurs in some *other* live tensor. Because the surviving rank never
-//! increases, no intermediate ever exceeds the original largest tensor and every
-//! merge's FLOP cost is `≤` that tensor's already-paid size — so the pass is cheap
-//! relative to any real contraction. It is purely structural, hence robust to
-//! relabeling and free of per-instance tuning.
+//! [`simplify`] repeatedly contracts a neighbouring pair of (super-)tensors when
+//! the surviving intermediate is both **rank-non-increasing** and
+//! **size-non-increasing** relative to the larger input. A label survives a merge
+//! iff it is an output label or still occurs in some *other* live tensor. The
+//! dimension-aware size check matters for heterogeneous networks: equal rank does
+//! not imply equal storage. The pass deliberately makes no claim that the local
+//! contraction FLOP count is bounded by an input's storage size.
 //!
 //! On raw Sycamore circuits this shrinks the network by ~89% (e.g. 3369 → ~381
 //! tensors); on graphs with no reducible local structure (e.g. 3-regular graphs)
@@ -29,9 +28,8 @@
 //! over the *original* tensor indices. [`splice`] replaces each reduced-network
 //! leaf by its super-tensor's subtree, yielding a tree whose leaves are a
 //! permutation of `0..n_original`. The reduced-network time complexity excludes
-//! the simplification's own internal cost, but that cost is negligible under
-//! log-sum-exp against the dominant contraction, so the spliced tree's true `tc`
-//! equals the reduced `tc` to within floating-point noise.
+//! the simplification's own internal cost. Use [`crate::contraction_complexity`]
+//! on the spliced tree when the exact end-to-end cost is required.
 //!
 //! # Example
 //!
@@ -106,28 +104,31 @@ pub struct Simplified<L: Label> {
     pub report: SimplifyReport,
 }
 
-/// Deterministic rank-non-increasing structural simplification.
+/// Deterministic rank- and size-non-increasing structural simplification.
 ///
 /// Repeatedly contracts a neighbouring pair of (super-)tensors whose merge leaves
-/// a surviving tensor of rank `≤ max(input ranks)`. See the [module
-/// documentation](self) for the correctness argument. The pass is deterministic
-/// (labels and neighbours are scanned in sorted order) and requires `L: Ord` for
-/// that determinism.
+/// a surviving tensor whose rank and dimension-aware storage are no larger than
+/// the respective maximum of the inputs. Missing dimensions are treated as one,
+/// consistently with the other optimizers. The pass is deterministic (labels,
+/// neighbours, and requeued tensors are processed in sorted order) and requires
+/// `L: Ord` for that determinism.
 ///
 /// # Example
 ///
 /// ```
 /// use omeco::preprocess::simplify;
 /// use omeco::EinCode;
+/// use std::collections::HashMap;
 ///
 /// // 'j' is internal to tensors 0 and 1 and appears nowhere else, so the two are
 /// // fused into a single super-tensor.
 /// let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
-/// let simplified = simplify(&code);
+/// let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2)].into();
+/// let simplified = simplify(&code, &sizes);
 /// assert_eq!(simplified.report.n_original, 2);
 /// assert_eq!(simplified.report.n_reduced, 1);
 /// ```
-pub fn simplify<L: Label + Ord>(code: &EinCode<L>) -> Simplified<L> {
+pub fn simplify<L: Label + Ord>(code: &EinCode<L>, size_dict: &HashMap<L, usize>) -> Simplified<L> {
     let n = code.ixs.len();
     let out_set: HashSet<L> = code.iy.iter().cloned().collect();
 
@@ -154,11 +155,8 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>) -> Simplified<L> {
     // Survivors of merging tensors a and b (labels kept in the intermediate).
     let survivors =
         |labels: &[HashSet<L>], lab2t: &HashMap<L, HashSet<usize>>, a: usize, b: usize| -> Vec<L> {
-            let mut out: Vec<L> = Vec::new();
+            let mut kept: HashSet<L> = HashSet::new();
             for l in labels[a].iter().chain(labels[b].iter()) {
-                if out.contains(l) {
-                    continue;
-                }
                 let occ = lab2t.get(l).map(|s| s.len()).unwrap_or(0);
                 // occurrences outside {a,b}: subtract self-memberships.
                 let mut outside = occ;
@@ -169,9 +167,21 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>) -> Simplified<L> {
                     outside -= 1;
                 }
                 if outside > 0 || out_set.contains(l) {
-                    out.push(l.clone());
+                    kept.insert(l.clone());
                 }
             }
+            // Preserve the caller's requested output-axis order, then append
+            // non-output labels canonically. The same vector becomes both this
+            // node's output and its parent's input interface.
+            let mut out: Vec<L> = code
+                .iy
+                .iter()
+                .filter(|l| kept.remove(*l))
+                .cloned()
+                .collect();
+            let mut internal: Vec<L> = kept.into_iter().collect();
+            internal.sort_unstable();
+            out.extend(internal);
             out
         };
 
@@ -201,7 +211,18 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>) -> Simplified<L> {
                     continue;
                 }
                 let surv = survivors(&labels, &lab2t, t, u);
-                if surv.len() <= labels[t].len().max(labels[u].len()) {
+                let log2_size = |ls: &[L]| -> f64 {
+                    ls.iter()
+                        .map(|label| {
+                            (size_dict.get(label).copied().unwrap_or(1).max(1) as f64).log2()
+                        })
+                        .sum()
+                };
+                let input_max = log2_size(&label_vec[t]).max(log2_size(&label_vec[u]));
+                let output_size = log2_size(&surv);
+                if surv.len() <= labels[t].len().max(labels[u].len())
+                    && output_size <= input_max + f64::EPSILON
+                {
                     chosen = Some(u);
                     break 'find;
                 }
@@ -247,9 +268,7 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>) -> Simplified<L> {
             lab2t.entry(l.clone()).or_default().insert(t);
         }
         labels[t] = new_labels;
-        let mut nv: Vec<L> = surv;
-        nv.sort_unstable();
-        label_vec[t] = nv;
+        label_vec[t] = surv;
         alive[u] = false;
 
         // Re-enqueue t and its neighbours so cascades run to a fixpoint.
@@ -257,6 +276,8 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>) -> Simplified<L> {
             in_queue[t] = true;
             queue.push_back(t);
         }
+        let mut to_requeue: Vec<usize> = to_requeue.into_iter().collect();
+        to_requeue.sort_unstable();
         for x in to_requeue {
             if !in_queue[x] {
                 in_queue[x] = true;
@@ -300,7 +321,7 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>) -> Simplified<L> {
 ///     vec!['i', 'l'],
 /// );
 /// let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2), ('l', 2)].into();
-/// let simplified = simplify(&code);
+/// let simplified = simplify(&code, &sizes);
 /// let reduced = optimize_code(&simplified.code, &sizes, &GreedyMethod::default()).unwrap();
 /// let full = splice(&reduced, &simplified.subtrees);
 /// assert_eq!(full.leaf_count(), 3);
@@ -347,7 +368,7 @@ pub fn simplify_then_optimize<L: Label + Ord, O: CodeOptimizer>(
     size_dict: &HashMap<L, usize>,
     optimizer: &O,
 ) -> Option<(NestedEinsum<L>, SimplifyReport)> {
-    let simplified = simplify(code);
+    let simplified = simplify(code, size_dict);
     let reduced = optimizer.optimize(&simplified.code, size_dict)?;
     let full = splice(&reduced, &simplified.subtrees);
     Some((full, simplified.report))
@@ -362,6 +383,23 @@ mod tests {
         code.unique_labels().into_iter().map(|l| (l, d)).collect()
     }
 
+    fn assert_recursive_interfaces<L: Label + std::fmt::Debug>(
+        tree: &NestedEinsum<L>,
+        original_ixs: &[Vec<L>],
+    ) {
+        if let NestedEinsum::Node { args, eins } = tree {
+            assert_eq!(args.len(), eins.ixs.len());
+            for (child, expected) in args.iter().zip(&eins.ixs) {
+                assert_eq!(
+                    child.output_labels(original_ixs),
+                    *expected,
+                    "child output must equal its parent input interface"
+                );
+                assert_recursive_interfaces(child, original_ixs);
+            }
+        }
+    }
+
     #[test]
     fn test_simplify_chain_collapses_to_one() {
         // A pure chain with unique internal bonds fuses to a single super-tensor.
@@ -374,7 +412,8 @@ mod tests {
             ],
             vec!['a', 'e'],
         );
-        let simplified = simplify(&code);
+        let sizes = uniform_sizes(&code, 2);
+        let simplified = simplify(&code, &sizes);
         assert_eq!(simplified.report.n_original, 4);
         assert_eq!(simplified.report.n_reduced, 1);
         assert!((simplified.report.shrink - 0.75).abs() < 1e-12);
@@ -397,7 +436,8 @@ mod tests {
             ],
             vec!['a', 'b', 'c', 'd'],
         );
-        let simplified = simplify(&code);
+        let sizes = uniform_sizes(&code, 2);
+        let simplified = simplify(&code, &sizes);
         assert_eq!(simplified.report.n_reduced, 4);
         assert!((simplified.report.shrink).abs() < 1e-12);
         // Every subtree is a bare leaf (nothing fused).
@@ -418,7 +458,8 @@ mod tests {
             ],
             vec!['a', 'g'],
         );
-        let simplified = simplify(&code);
+        let sizes = uniform_sizes(&code, 2);
+        let simplified = simplify(&code, &sizes);
         let mut leaves: Vec<usize> = simplified
             .subtrees
             .iter()
@@ -445,7 +486,7 @@ mod tests {
             vec!['a', 'f'],
         );
         let sizes = uniform_sizes(&code, 2);
-        let simplified = simplify(&code);
+        let simplified = simplify(&code, &sizes);
         let reduced = optimize_code(&simplified.code, &sizes, &GreedyMethod::default()).unwrap();
         let reduced_tc = contraction_complexity(&reduced, &sizes, &simplified.code.ixs).tc;
         let full = splice(&reduced, &simplified.subtrees);
@@ -459,6 +500,7 @@ mod tests {
         let mut leaves = full.leaf_indices();
         leaves.sort_unstable();
         assert_eq!(leaves, (0..5).collect::<Vec<_>>());
+        assert_recursive_interfaces(&full, &code.ixs);
 
         // The wrapper reproduces the same spliced tree structure.
         let (tree, report) =
@@ -470,9 +512,61 @@ mod tests {
     #[test]
     fn test_simplify_empty() {
         let code: EinCode<char> = EinCode::new(vec![], vec![]);
-        let simplified = simplify(&code);
+        let simplified = simplify(&code, &HashMap::new());
         assert_eq!(simplified.report.n_original, 0);
         assert_eq!(simplified.report.n_reduced, 0);
         assert_eq!(simplified.report.shrink, 0.0);
+    }
+
+    #[test]
+    fn test_simplify_rejects_rank_equal_size_growth() {
+        // Both inputs have rank two and size 2_000, while their rank-two output
+        // would have size 1_000_000. A rank-only pass incorrectly fused these.
+        let code = EinCode::new(vec![vec!['a', 'x'], vec!['b', 'x']], vec!['a', 'b']);
+        let sizes: HashMap<char, usize> = [('a', 1_000), ('b', 1_000), ('x', 2)].into();
+
+        let simplified = simplify(&code, &sizes);
+
+        assert_eq!(simplified.report.n_reduced, 2);
+        assert!(simplified
+            .subtrees
+            .iter()
+            .all(|tree| tree.leaf_count() == 1));
+    }
+
+    #[test]
+    fn test_simplify_is_deterministic_across_hash_seeds() {
+        let code = EinCode::new(
+            vec![
+                vec!['a', 'b'],
+                vec!['b', 'c'],
+                vec!['c', 'd'],
+                vec!['c', 'e'],
+                vec!['e', 'f'],
+            ],
+            vec!['a', 'd', 'f'],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let baseline = format!("{:?}", simplify(&code, &sizes).subtrees);
+        for _ in 0..16 {
+            assert_eq!(format!("{:?}", simplify(&code, &sizes).subtrees), baseline);
+        }
+    }
+
+    #[test]
+    fn test_simplify_preserves_output_axis_order_and_interfaces() {
+        let code = EinCode::new(
+            vec![vec!['b', 'x', 'c'], vec!['a', 'x']],
+            vec!['b', 'a', 'c'],
+        );
+        let sizes = uniform_sizes(&code, 2);
+
+        for _ in 0..16 {
+            let simplified = simplify(&code, &sizes);
+            assert_eq!(simplified.report.n_reduced, 1);
+            let subtree = &simplified.subtrees[0];
+            assert_eq!(subtree.output_labels(&code.ixs), code.iy);
+            assert_recursive_interfaces(subtree, &code.ixs);
+        }
     }
 }

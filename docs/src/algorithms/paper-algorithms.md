@@ -8,10 +8,10 @@ error-correcting codes) where a raw greedy or TreeSA pass leaves value on the ta
 
 Raw circuits carry large amounts of locally reducible structure: chains of
 single-qubit gates, absorbed boundary tensors, and other neighbours whose merge
-cannot grow an intermediate. [`simplify`] deterministically fuses every such
-*rank-non-increasing* pair, [`splice`] expands the collapsed super-tensors back to
-the original tensor indices, and [`simplify_then_optimize`] chains the two around
-any optimizer.
+cannot grow an intermediate. [`simplify`] deterministically fuses pairs that are
+both rank- and dimension-aware size-non-increasing, [`splice`] expands the
+collapsed super-tensors back to the original tensor indices, and
+[`simplify_then_optimize`] chains the two around any optimizer.
 
 ```rust
 use omeco::preprocess::simplify_then_optimize;
@@ -45,12 +45,12 @@ example.
 
 ## Waist surgery (`omeco::waist_surgery`)
 
-Pure time complexity is pinned by the single most expensive contraction — the
-tree's *waist*, a bipartition of the tensors. Local SA rewrites cannot jump between
-distinct good bipartitions of the same size. [`refine`] extracts the waist, improves
-that cut globally on the tensor hypergraph with bounded, balance-constrained
-Fiduccia–Mattheyses passes, rebuilds both sides, and accepts only when the global
-`tc` strictly drops.
+The root contraction induces a whole-network *waist*, a bipartition of the
+tensors. Local SA rewrites can struggle to jump between distinct good
+bipartitions of the same size. [`refine`] extracts that root cut, improves it on
+the tensor hypergraph with balance-constrained Fiduccia–Mattheyses passes,
+rebuilds both sides, and accepts only when the global `tc` strictly drops. Its
+budget is checked cooperatively within search loops and between rebuild stages.
 
 ```rust
 use omeco::waist_surgery::refine;

@@ -183,43 +183,47 @@ fn nested_to_expr_tree_inner<L: Label>(
             // Julia asserts length(code.args) == 2 at entry
             None
         }
-        NestedEinsum::Node { args, eins } => {
-            if args.len() != 2 {
-                return None;
+        NestedEinsum::Node { args, eins } => match args.as_slice() {
+            [child] => {
+                // ExprTree is binary-only. Fuse a unary trace/reduction into
+                // the child's materialized output interface, retaining the
+                // original leaf interface so complexity remains exact.
+                let input_dims: Vec<usize> =
+                    eins.ixs.first()?.iter().map(|l| label_map[l]).collect();
+                let out_dims: Vec<usize> = eins.iy.iter().map(|l| label_map[l]).collect();
+                let mut tree = match child {
+                    NestedEinsum::Leaf { tensor_index } => {
+                        ExprTree::leaf(input_dims.clone(), *tensor_index)
+                    }
+                    NestedEinsum::Node { .. } => nested_to_expr_tree_inner(child, label_map)?,
+                };
+                if let ExprTree::Leaf(info) = &mut tree {
+                    if info.leaf_input_dims.is_none() && info.out_dims != out_dims {
+                        info.leaf_input_dims = Some(info.out_dims.clone());
+                    }
+                }
+                tree.info_mut().out_dims = out_dims;
+                tree.info_mut().cached = None;
+                Some(tree)
             }
-
-            // Julia: map(enumerate(code.args)) do (i,arg)
-            //   if isleaf(arg)
-            //     ExprTree(ExprInfo(getindex.(Ref(labels), getixsv(code.eins)[i]), arg.tensorindex))
-            //   else
-            //     _exprtree(arg, labels)
-            //   end
-            // end
-
-            // Process left child (index 0)
-            let left = match &args[0] {
-                NestedEinsum::Leaf { tensor_index } => {
-                    // Julia: getixsv(code.eins)[1] = eins.ixs[0]
-                    let out_dims: Vec<usize> = eins.ixs[0].iter().map(|l| label_map[l]).collect();
-                    ExprTree::leaf(out_dims, *tensor_index)
-                }
-                NestedEinsum::Node { .. } => nested_to_expr_tree_inner(&args[0], label_map)?,
-            };
-
-            // Process right child (index 1)
-            let right = match &args[1] {
-                NestedEinsum::Leaf { tensor_index } => {
-                    // Julia: getixsv(code.eins)[2] = eins.ixs[1]
-                    let out_dims: Vec<usize> = eins.ixs[1].iter().map(|l| label_map[l]).collect();
-                    ExprTree::leaf(out_dims, *tensor_index)
-                }
-                NestedEinsum::Node { .. } => nested_to_expr_tree_inner(&args[1], label_map)?,
-            };
-
-            // Julia: ExprInfo(Int[labels[i] for i=getiyv(code.eins)])
-            let out_dims: Vec<usize> = eins.iy.iter().map(|l| label_map[l]).collect();
-            Some(ExprTree::node(left, right, out_dims))
-        }
+            [left_arg, right_arg] => {
+                let child = |arg: &NestedEinsum<L>, side: usize| -> Option<ExprTree> {
+                    match arg {
+                        NestedEinsum::Leaf { tensor_index } => {
+                            let out_dims: Vec<usize> =
+                                eins.ixs[side].iter().map(|l| label_map[l]).collect();
+                            Some(ExprTree::leaf(out_dims, *tensor_index))
+                        }
+                        NestedEinsum::Node { .. } => nested_to_expr_tree_inner(arg, label_map),
+                    }
+                };
+                let left = child(left_arg, 0)?;
+                let right = child(right_arg, 1)?;
+                let out_dims: Vec<usize> = eins.iy.iter().map(|l| label_map[l]).collect();
+                Some(ExprTree::node(left, right, out_dims))
+            }
+            _ => None,
+        },
     }
 }
 
@@ -528,13 +532,13 @@ fn node_sc(out_dims: &[usize], log2_sizes: &[f64]) -> f64 {
 /// (hypergraph edges), which would make [`crate::contraction_complexity`] and any
 /// topology-derived scorer report different costs for the same tree. Deriving the
 /// outputs from occurrence counts keeps the emitted `eins` bodies consistent with
-/// the topology in all cases. `inverse_map` is retained for signature stability
-/// but no longer consulted. The `openedges` parameter fixes the root output
+/// the topology in all cases. `inverse_map` restores fused unary leaf interfaces
+/// to their original label type. The `openedges` parameter fixes the root output
 /// (issue #13).
 fn expr_tree_to_nested<L: Label>(
     tree: &ExprTree,
     original_ixs: &[Vec<L>],
-    _inverse_map: &[L],
+    inverse_map: &[L],
     openedges: &[L],
     _level: usize,
 ) -> NestedEinsum<L> {
@@ -546,7 +550,16 @@ fn expr_tree_to_nested<L: Label>(
         }
     }
     let open_set: HashSet<L> = openedges.iter().cloned().collect();
-    expr_tree_to_nested_counted(tree, original_ixs, &open_set, &global_count, openedges, 0).0
+    expr_tree_to_nested_counted(
+        tree,
+        original_ixs,
+        inverse_map,
+        &open_set,
+        &global_count,
+        openedges,
+        0,
+    )
+    .0
 }
 
 /// Recursive worker for [`expr_tree_to_nested`]. Returns the converted subtree,
@@ -555,6 +568,7 @@ fn expr_tree_to_nested<L: Label>(
 fn expr_tree_to_nested_counted<L: Label>(
     tree: &ExprTree,
     original_ixs: &[Vec<L>],
+    inverse_map: &[L],
     open_set: &HashSet<L>,
     global_count: &HashMap<L, usize>,
     openedges: &[L],
@@ -563,17 +577,32 @@ fn expr_tree_to_nested_counted<L: Label>(
     match tree {
         ExprTree::Leaf(info) => {
             let tid = info.tensor_id.unwrap_or(0);
-            let labels = original_ixs.get(tid).cloned().unwrap_or_default();
+            let input_labels = original_ixs.get(tid).cloned().unwrap_or_default();
+            let output_labels: Vec<L> = info
+                .out_dims
+                .iter()
+                .map(|&id| inverse_map[id].clone())
+                .collect();
             let mut within: HashMap<L, usize> = HashMap::new();
-            for l in &labels {
+            for l in &input_labels {
                 *within.entry(l.clone()).or_insert(0) += 1;
             }
-            (NestedEinsum::leaf(tid), within, labels)
+            let leaf = NestedEinsum::leaf(tid);
+            let nested = if input_labels == output_labels {
+                leaf
+            } else {
+                NestedEinsum::node(
+                    vec![leaf],
+                    EinCode::new(vec![input_labels], output_labels.clone()),
+                )
+            };
+            (nested, within, output_labels)
         }
         ExprTree::Node { left, right, .. } => {
             let (left_nested, left_within, left_out) = expr_tree_to_nested_counted(
                 left,
                 original_ixs,
+                inverse_map,
                 open_set,
                 global_count,
                 openedges,
@@ -582,6 +611,7 @@ fn expr_tree_to_nested_counted<L: Label>(
             let (right_nested, right_within, right_out) = expr_tree_to_nested_counted(
                 right,
                 original_ixs,
+                inverse_map,
                 open_set,
                 global_count,
                 openedges,
@@ -1535,6 +1565,37 @@ mod tests {
         let cc_seed = contraction_complexity(&seed, &sizes, &code.ixs);
         let cc_back = contraction_complexity(&back, &sizes, &code.ixs);
         assert!((cc_seed.tc - cc_back.tc).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_prepare_warm_anneal_accepts_treewidth_unary_nodes() {
+        use crate::{contraction_complexity, optimize_code, Treewidth};
+
+        // Treewidth reduces each private leg locally, producing unary nodes
+        // beneath a binary contraction tree.
+        let code = EinCode::new(
+            vec![
+                vec!['x', 'a'],
+                vec!['x', 'b'],
+                vec!['x', 'c'],
+                vec!['x', 'd'],
+            ],
+            vec![],
+        );
+        let sizes: HashMap<char, usize> = [('x', 2), ('a', 8), ('b', 8), ('c', 8), ('d', 8)]
+            .into_iter()
+            .collect();
+        let seed = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        let ctx = prepare_warm_anneal(&code, &sizes, &seed)
+            .expect("warm-start should accept at-most-binary Treewidth trees");
+        let back = warm_exprtree_to_nested(&ctx.tree, &code, &ctx.labels);
+
+        assert_eq!(back.leaf_count(), code.num_tensors());
+        assert_eq!(back.output_labels(&code.ixs), code.iy);
+        let seed_cc = contraction_complexity(&seed, &sizes, &code.ixs);
+        let back_cc = contraction_complexity(&back, &sizes, &code.ixs);
+        assert!((seed_cc.tc - back_cc.tc).abs() < 1e-9);
+        assert!((seed_cc.sc - back_cc.sc).abs() < 1e-9);
     }
 
     #[test]

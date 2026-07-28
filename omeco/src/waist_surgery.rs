@@ -1,15 +1,15 @@
 //! Waist surgery: global cut improvement of a contraction tree's dominant node.
 //!
-//! Pure time complexity is pinned by the single most expensive contraction — the
-//! tree's **waist**, a bipartition `(A, B)` of the tensors. TreeSA's local
-//! rewrites move one leaf at a time and cannot jump between distinct good
-//! bipartitions of the same size, so a search can get stuck with a globally
-//! sub-optimal waist. This pass injects global information exactly there.
+//! The root contraction induces a whole-network **waist**, a bipartition `(A, B)`
+//! of the input tensors. TreeSA's local rewrites move one leaf at a time and can
+//! struggle to jump between distinct good root bipartitions of the same size, so
+//! a search can get stuck with a sub-optimal cut. This pass injects global
+//! information exactly there.
 //!
 //! [`refine`] takes an existing contraction tree and repeatedly:
 //!
-//! 1. **Extracts the waist.** Walk the tree, find the argmax-cost node, and read
-//!    off the tensor bipartition `(A, B)` it induces.
+//! 1. **Extracts the waist.** Read the root's left/right tensor bipartition
+//!    `(A, B)`, which covers every input exactly once.
 //! 2. **Improves the cut globally.** On the tensor hypergraph (ignoring the tree)
 //!    run bounded [Fiduccia–Mattheyses][fm] passes — gain is the reduction in
 //!    summed `log2` dimensions of straddling labels, with a balance constraint
@@ -20,9 +20,9 @@
 //!    labels derived by outside-occurrence counting so the scorer agrees), join
 //!    them at the root, and accept iff the global `tc` strictly drops.
 //!
-//! If no cheaper balanced cut is found at a record-quality incumbent's waist,
-//! that is itself informative: the waist is a locally-certified globally-minimal
-//! balanced cut. The [`WaistReport`] counts these `waist_min` events.
+//! If the bounded search finds no cheaper balanced cut, the [`WaistReport`]
+//! records a `waist_min` event. This is a search diagnostic, not a proof of
+//! global cut optimality.
 //!
 //! [fm]: https://en.wikipedia.org/wiki/Fiduccia%E2%80%93Mattheyses_algorithm
 //!
@@ -85,7 +85,7 @@ const FM_MAX_PASSES: usize = 6;
 /// Number of coarse super-nodes the top span selects (`S_top = ceil(m/30)`).
 const TARGET_TOP: usize = 30;
 
-/// Fixed V-cycles annealing each rebuilt side (reproducible, wall-clock free).
+/// Maximum V-cycles annealing each rebuilt side before the deadline cuts it off.
 const REBUILD_VCYCLES: u64 = 3;
 
 /// Cold sweeps per span level while rebuilding a side.
@@ -108,8 +108,7 @@ pub struct WaistReport {
     pub cheaper_cuts: u64,
     /// Rebuilds that strictly lowered the global time complexity and were kept.
     pub rebuild_accepts: u64,
-    /// Iterations whose waist was already a minimal balanced cut (no cheaper
-    /// alternative found) — a locally-certified globally-minimal waist.
+    /// Iterations where the bounded FM search found no cheaper comparable cut.
     pub waist_min_hits: u64,
 }
 
@@ -226,7 +225,14 @@ impl Hyper {
 /// Improve a bipartition by bounded FM passes. `part[t] == true` means side A.
 /// Balance is constrained so `|A|` stays within `[lo, hi]`. Returns the improved
 /// partition and its straddle-cut cost.
-fn fm_refine(hyper: &Hyper, mut part: Vec<bool>, lo: usize, hi: usize) -> (Vec<bool>, f64) {
+fn fm_refine(
+    hyper: &Hyper,
+    mut part: Vec<bool>,
+    lo: usize,
+    hi: usize,
+    start: Instant,
+    budget: Duration,
+) -> (Vec<bool>, f64) {
     let n = hyper.n;
     let nlab = hyper.log2.len();
     let mut cnt_a = vec![0u32; nlab];
@@ -262,6 +268,9 @@ fn fm_refine(hyper: &Hyper, mut part: Vec<bool>, lo: usize, hi: usize) -> (Vec<b
     let mut best_cost = hyper.cut_cost(&part);
 
     for _pass in 0..FM_MAX_PASSES {
+        if start.elapsed() >= budget {
+            break;
+        }
         let mut gain: Vec<f64> = (0..n).map(|t| gain_of(t, &part, &cnt_a)).collect();
         let mut locked = vec![false; n];
         let mut cur_cost = hyper.cut_cost(&part);
@@ -270,6 +279,9 @@ fn fm_refine(hyper: &Hyper, mut part: Vec<bool>, lo: usize, hi: usize) -> (Vec<b
         let mut improved_this_pass = false;
 
         for _step in 0..n {
+            if start.elapsed() >= budget {
+                break;
+            }
             // Pick max-gain unlocked feasible move.
             let mut bv: Option<usize> = None;
             let mut bg = f64::NEG_INFINITY;
@@ -376,45 +388,34 @@ fn bfs_seed(hyper: &Hyper, seed: usize, target: usize) -> Vec<bool> {
 // Waist extraction and node cost.
 // =============================================================================
 
-/// Walk the tree, return (max node cost, leaf-tensor-ids under the argmax node).
-fn extract_waist(tree: &ExprTree, log2_sizes: &[f64]) -> (f64, Vec<usize>) {
-    fn walk(
-        tree: &ExprTree,
-        log2_sizes: &[f64],
-        best: &mut f64,
-        best_leaves: &mut Vec<usize>,
-    ) -> Vec<usize> {
+/// Return one side of the root bipartition, choosing the smaller child.
+///
+/// The complement is the other root child, so the partition covers the entire
+/// network and its [`Hyper::cut_cost`] is directly comparable with alternatives
+/// used by the whole-tree rebuild.
+fn extract_root_partition(tree: &ExprTree) -> Option<Vec<usize>> {
+    fn leaves(tree: &ExprTree) -> Vec<usize> {
         match tree {
             ExprTree::Leaf(info) => vec![info.tensor_id.unwrap_or(0)],
-            ExprTree::Node { left, right, info } => {
-                let lleaves = walk(left, log2_sizes, best, best_leaves);
-                let rleaves = walk(right, log2_sizes, best, best_leaves);
-                let cost = node_tc(left.labels(), right.labels(), &info.out_dims, log2_sizes);
+            ExprTree::Node { left, right, .. } => {
+                let lleaves = leaves(left);
+                let rleaves = leaves(right);
                 let mut leaves = lleaves;
                 leaves.extend_from_slice(&rleaves);
-                if cost > *best {
-                    *best = cost;
-                    *best_leaves = leaves.clone();
-                }
                 leaves
             }
         }
     }
-    let mut best = f64::NEG_INFINITY;
-    let mut best_leaves = Vec::new();
-    walk(tree, log2_sizes, &mut best, &mut best_leaves);
-    (best, best_leaves)
-}
-
-/// Node tc = output_size + contracted labels.
-fn node_tc(ix1: &[usize], ix2: &[usize], iy: &[usize], log2_sizes: &[f64]) -> f64 {
-    let mut tc: f64 = iy.iter().map(|&l| log2_sizes[l]).sum();
-    for &l in ix1 {
-        if ix2.contains(&l) && !iy.contains(&l) {
-            tc += log2_sizes[l];
-        }
+    let ExprTree::Node { left, right, .. } = tree else {
+        return None;
+    };
+    let left = leaves(left);
+    let right = leaves(right);
+    if left.len() <= right.len() {
+        Some(left)
+    } else {
+        Some(right)
     }
-    tc
 }
 
 // =============================================================================
@@ -455,39 +456,67 @@ fn gated_sweep(
     }
 }
 
-/// Convert a binary `NestedEinsum` into an `ExprTree` in label-id space.
-/// `label_map` maps label values to their bit index. Returns `None` for a leaf.
+/// Convert an at-most-binary `NestedEinsum` into an `ExprTree` in label-id space.
+/// Unary reductions are fused into their child interface because `ExprTree` is
+/// binary-only. `label_map` maps label values to their bit index.
 fn nested_to_expr_tree(
     nested: &NestedEinsum<usize>,
     label_map: &HashMap<usize, usize>,
 ) -> Option<ExprTree> {
     match nested {
         NestedEinsum::Leaf { .. } => None,
-        NestedEinsum::Node { args, eins } => {
-            if args.len() != 2 {
-                return None;
-            }
-            let child = |arg: &NestedEinsum<usize>, side: usize| -> Option<ExprTree> {
-                match arg {
+        NestedEinsum::Node { args, eins } => match args.as_slice() {
+            [child] => {
+                let input_dims: Vec<usize> = eins
+                    .ixs
+                    .first()?
+                    .iter()
+                    .filter_map(|l| label_map.get(l).copied())
+                    .collect();
+                let out_dims: Vec<usize> = eins
+                    .iy
+                    .iter()
+                    .filter_map(|l| label_map.get(l).copied())
+                    .collect();
+                let mut tree = match child {
                     NestedEinsum::Leaf { tensor_index } => {
-                        let out_dims: Vec<usize> = eins.ixs[side]
-                            .iter()
-                            .filter_map(|l| label_map.get(l).copied())
-                            .collect();
-                        Some(ExprTree::leaf(out_dims, *tensor_index))
+                        ExprTree::leaf(input_dims.clone(), *tensor_index)
                     }
-                    NestedEinsum::Node { .. } => nested_to_expr_tree(arg, label_map),
+                    NestedEinsum::Node { .. } => nested_to_expr_tree(child, label_map)?,
+                };
+                if let ExprTree::Leaf(info) = &mut tree {
+                    if info.leaf_input_dims.is_none() && info.out_dims != out_dims {
+                        info.leaf_input_dims = Some(info.out_dims.clone());
+                    }
                 }
-            };
-            let left = child(&args[0], 0)?;
-            let right = child(&args[1], 1)?;
-            let out_dims: Vec<usize> = eins
-                .iy
-                .iter()
-                .filter_map(|l| label_map.get(l).copied())
-                .collect();
-            Some(ExprTree::node(left, right, out_dims))
-        }
+                tree.info_mut().out_dims = out_dims;
+                tree.info_mut().cached = None;
+                Some(tree)
+            }
+            [left_arg, right_arg] => {
+                let child = |arg: &NestedEinsum<usize>, side: usize| -> Option<ExprTree> {
+                    match arg {
+                        NestedEinsum::Leaf { tensor_index } => {
+                            let out_dims: Vec<usize> = eins.ixs[side]
+                                .iter()
+                                .filter_map(|l| label_map.get(l).copied())
+                                .collect();
+                            Some(ExprTree::leaf(out_dims, *tensor_index))
+                        }
+                        NestedEinsum::Node { .. } => nested_to_expr_tree(arg, label_map),
+                    }
+                };
+                let left = child(left_arg, 0)?;
+                let right = child(right_arg, 1)?;
+                let out_dims: Vec<usize> = eins
+                    .iy
+                    .iter()
+                    .filter_map(|l| label_map.get(l).copied())
+                    .collect();
+                Some(ExprTree::node(left, right, out_dims))
+            }
+            _ => None,
+        },
     }
 }
 
@@ -569,7 +598,6 @@ struct Refiner<'a> {
     code: &'a EinCode<usize>,
     sizes: &'a HashMap<usize, usize>,
     hyper: &'a Hyper,
-    log2_sizes: &'a [f64],
     start: Instant,
     budget: Duration,
     rng: SmallRng,
@@ -589,7 +617,7 @@ impl Refiner<'_> {
         work_tc: f64,
     ) -> Option<(NestedEinsum<usize>, f64)> {
         self.report.surgery_calls += 1;
-        let (waist_cost, a_leaves) = extract_waist(incumbent, self.log2_sizes);
+        let a_leaves = extract_root_partition(incumbent)?;
         let n = self.hyper.n;
         if a_leaves.is_empty() || a_leaves.len() >= n {
             return None;
@@ -600,6 +628,7 @@ impl Refiner<'_> {
                 cur_part[t] = true;
             }
         }
+        let waist_cost = self.hyper.cut_cost(&cur_part);
         let target_a = a_leaves.len();
         let lo = ((target_a as f64 * (1.0 - FM_SLACK)).floor() as usize).max(1);
         let hi = ((target_a as f64 * (1.0 + FM_SLACK)).ceil() as usize).min(n - 1);
@@ -620,7 +649,7 @@ impl Refiner<'_> {
             if self.out_of_time() {
                 break;
             }
-            let (part, cost) = fm_refine(self.hyper, seed, lo, hi);
+            let (part, cost) = fm_refine(self.hyper, seed, lo, hi, self.start, self.budget);
             let sa = part.iter().filter(|&&p| p).count();
             if sa < lo || sa > hi {
                 continue;
@@ -631,7 +660,13 @@ impl Refiner<'_> {
             }
         }
 
-        if best_alt_cost >= waist_cost - 1e-9 || best_alt_part.is_none() {
+        if best_alt_part.is_none() {
+            if !self.out_of_time() {
+                self.report.waist_min_hits += 1;
+            }
+            return None;
+        }
+        if best_alt_cost >= waist_cost - 1e-9 {
             self.report.waist_min_hits += 1;
             return None;
         }
@@ -639,7 +674,13 @@ impl Refiner<'_> {
         let part = best_alt_part.unwrap();
 
         // Rebuild both sides from the improved cut.
+        if self.out_of_time() {
+            return None;
+        }
         let rebuilt = self.rebuild(&part)?;
+        if self.out_of_time() {
+            return None;
+        }
         let new_tc = contraction_complexity(&rebuilt, self.sizes, &self.code.ixs).tc;
         if new_tc < work_tc - 1e-9 {
             self.report.rebuild_accepts += 1;
@@ -659,6 +700,9 @@ impl Refiner<'_> {
         }
         let (open_a, open_b) = self.side_open_labels(part);
         let sub_a = self.solve_side(&a_tensors, &open_a)?;
+        if self.out_of_time() {
+            return None;
+        }
         let sub_b = self.solve_side(&b_tensors, &open_b)?;
         let eins = EinCode::new(vec![open_a, open_b], self.code.iy.clone());
         Some(NestedEinsum::node(vec![sub_a, sub_b], eins))
@@ -698,15 +742,28 @@ impl Refiner<'_> {
     /// Solve a side sub-einsum: greedy + a fixed number of cold span-gated anneal
     /// V-cycles. Returns a `NestedEinsum` over original (reduced) tensor indices.
     fn solve_side(&mut self, tensors: &[usize], open: &[usize]) -> Option<NestedEinsum<usize>> {
-        if tensors.is_empty() {
+        if tensors.is_empty() || self.out_of_time() {
             return None;
         }
         if tensors.len() == 1 {
-            return Some(NestedEinsum::leaf(tensors[0]));
+            let tensor_index = tensors[0];
+            let input = self.code.ixs.get(tensor_index)?.clone();
+            let leaf = NestedEinsum::leaf(tensor_index);
+            return if input == open {
+                Some(leaf)
+            } else {
+                Some(NestedEinsum::node(
+                    vec![leaf],
+                    EinCode::new(vec![input], open.to_vec()),
+                ))
+            };
         }
         let sub_ixs: Vec<Vec<usize>> = tensors.iter().map(|&t| self.code.ixs[t].clone()).collect();
         let sub_code = EinCode::new(sub_ixs.clone(), open.to_vec());
         let greedy = optimize_code(&sub_code, self.sizes, &GreedyMethod::default())?;
+        if self.out_of_time() {
+            return None;
+        }
         let sub_labels: Vec<usize> = sub_code.unique_labels();
         let sub_label_map: HashMap<usize, usize> = sub_labels
             .iter()
@@ -734,10 +791,13 @@ impl Refiner<'_> {
             let mut best_lin = s_lin;
             let mut best_tree = tree.clone();
             let mut sweeps: u64 = 0;
-            for _vc in 0..REBUILD_VCYCLES.max(1) {
+            'anneal: for _vc in 0..REBUILD_VCYCLES.max(1) {
                 for &span in &spans {
                     let denom = (REBUILD_COLD_SWEEPS.saturating_sub(1)).max(1) as f64;
                     for k in 0..REBUILD_COLD_SWEEPS {
+                        if self.out_of_time() {
+                            break 'anneal;
+                        }
                         let beta = B_LO_COLD + (B_HI - B_LO_COLD) * (k as f64 / denom);
                         gated_sweep(
                             &mut tree,
@@ -773,8 +833,10 @@ impl Refiner<'_> {
 /// `tree` is any valid contraction tree over `code`'s tensors (e.g. a greedy or
 /// TreeSA result). The returned tree is over the same original tensor indices and
 /// is **never worse** than the input by time complexity. See the [module
-/// documentation](self) for the algorithm. `budget` bounds the total wall-clock
-/// time; the pass also returns early once it can no longer improve.
+/// documentation](self) for the algorithm. `budget` is checked within FM and
+/// annealing loops and between rebuild stages; an individual synchronous greedy
+/// initialization already in progress cannot be interrupted. The pass also
+/// returns early once it can no longer improve.
 ///
 /// # Example
 ///
@@ -858,7 +920,6 @@ pub fn refine<L: Label>(
         code: &id_code,
         sizes: &id_sizes,
         hyper: &hyper,
-        log2_sizes: &log2_sizes,
         start: Instant::now(),
         budget,
         rng: SmallRng::seed_from_u64(RNG_SEED),
@@ -926,7 +987,7 @@ fn restore_nested<L: Label>(tree: &NestedEinsum<usize>, labels: &[L]) -> NestedE
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::optimize_code;
+    use crate::{optimize_code, Treewidth};
 
     fn uniform_sizes(code: &EinCode<usize>, d: usize) -> HashMap<usize, usize> {
         code.unique_labels().into_iter().map(|l| (l, d)).collect()
@@ -997,6 +1058,137 @@ mod tests {
         let (refined, report) = refine(&seed, &code, &sizes, Duration::from_millis(50));
         assert_eq!(refined.leaf_count(), 2);
         assert_eq!(report.surgery_calls, 0);
+    }
+
+    #[test]
+    fn test_extract_root_partition_uses_child_not_all_descendants() {
+        let right = ExprTree::node(
+            ExprTree::leaf(vec![0], 1),
+            ExprTree::leaf(vec![1], 2),
+            vec![0, 1],
+        );
+        let root = ExprTree::node(ExprTree::leaf(vec![0], 0), right, vec![]);
+
+        assert_eq!(extract_root_partition(&root), Some(vec![0]));
+    }
+
+    #[test]
+    fn test_fm_refine_observes_expired_budget() {
+        let code = grid(2, 2);
+        let labels = code.unique_labels();
+        let label_map: HashMap<usize, usize> =
+            labels.iter().enumerate().map(|(i, &l)| (l, i)).collect();
+        let log2 = vec![1.0; labels.len()];
+        let hyper = Hyper::build(&code, &label_map, &log2, labels.len());
+        let initial = vec![true, true, false, false];
+        let initial_cost = hyper.cut_cost(&initial);
+
+        let (part, cost) = fm_refine(
+            &hyper,
+            initial.clone(),
+            1,
+            3,
+            Instant::now(),
+            Duration::ZERO,
+        );
+
+        assert_eq!(part, initial);
+        assert_eq!(cost, initial_cost);
+    }
+
+    #[test]
+    fn test_expired_search_is_not_reported_as_waist_minimum() {
+        let code = grid(2, 2);
+        let sizes = uniform_sizes(&code, 2);
+        let labels = code.unique_labels();
+        let label_map: HashMap<usize, usize> =
+            labels.iter().enumerate().map(|(i, &l)| (l, i)).collect();
+        let log2: Vec<f64> = labels
+            .iter()
+            .map(|label| (sizes[label] as f64).log2())
+            .collect();
+        let hyper = Hyper::build(&code, &label_map, &log2, labels.len());
+        let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let incumbent = nested_to_expr_tree(&seed, &label_map).unwrap();
+        let mut refiner = Refiner {
+            code: &code,
+            sizes: &sizes,
+            hyper: &hyper,
+            start: Instant::now(),
+            budget: Duration::ZERO,
+            rng: SmallRng::seed_from_u64(RNG_SEED),
+            report: WaistReport {
+                n_original: code.num_tensors(),
+                surgery_calls: 0,
+                cheaper_cuts: 0,
+                rebuild_accepts: 0,
+                waist_min_hits: 0,
+            },
+        };
+
+        assert!(refiner.waist_surgery(&incumbent, f64::INFINITY).is_none());
+        assert_eq!(refiner.report.waist_min_hits, 0);
+    }
+
+    #[test]
+    fn test_singleton_side_materializes_private_leg_reduction() {
+        let code = EinCode::new(vec![vec![0usize, 1], vec![0, 2], vec![0, 3]], vec![]);
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 8), (2, 2), (3, 2)].into();
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let log2: Vec<f64> = (0..4).map(|label| (sizes[&label] as f64).log2()).collect();
+        let hyper = Hyper::build(&code, &label_map, &log2, 4);
+        let mut refiner = Refiner {
+            code: &code,
+            sizes: &sizes,
+            hyper: &hyper,
+            start: Instant::now(),
+            budget: Duration::from_secs(1),
+            rng: SmallRng::seed_from_u64(RNG_SEED),
+            report: WaistReport {
+                n_original: code.num_tensors(),
+                surgery_calls: 0,
+                cheaper_cuts: 0,
+                rebuild_accepts: 0,
+                waist_min_hits: 0,
+            },
+        };
+
+        let side = refiner.solve_side(&[0], &[0]).unwrap();
+
+        match &side {
+            NestedEinsum::Node { args, eins } => {
+                assert_eq!(args.len(), 1);
+                assert_eq!(eins.ixs, vec![vec![0, 1]]);
+                assert_eq!(eins.iy, vec![0]);
+                assert_eq!(args[0].output_labels(&code.ixs), eins.ixs[0]);
+            }
+            NestedEinsum::Leaf { .. } => panic!("private leg requires a unary reduction"),
+        }
+        let cc = contraction_complexity(&side, &sizes, &code.ixs);
+        assert!((cc.tc - 4.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_refine_accepts_treewidth_unary_nodes() {
+        let code = EinCode::new(
+            vec![
+                vec!['x', 'a'],
+                vec!['x', 'b'],
+                vec!['x', 'c'],
+                vec!['x', 'd'],
+            ],
+            vec![],
+        );
+        let sizes: HashMap<char, usize> = [('x', 2), ('a', 8), ('b', 8), ('c', 8), ('d', 8)]
+            .into_iter()
+            .collect();
+        let seed = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+
+        let (refined, report) = refine(&seed, &code, &sizes, Duration::from_millis(50));
+
+        assert!(report.surgery_calls >= 1);
+        assert_eq!(refined.leaf_count(), code.num_tensors());
+        assert_eq!(refined.output_labels(&code.ixs), code.iy);
     }
 
     #[test]
