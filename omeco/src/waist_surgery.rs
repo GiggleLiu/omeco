@@ -57,7 +57,8 @@
 //! assert_eq!(report.n_original, 4);
 //! ```
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::cmp::Reverse;
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use rand::rngs::SmallRng;
@@ -84,6 +85,11 @@ const FM_SLACK: f64 = 0.18;
 
 /// Maximum FM passes per cut-improvement call.
 const FM_MAX_PASSES: usize = 6;
+
+/// Labels with more member tensors than this cap skip incremental gain
+/// recomputation after a move (their neighbours keep a stale gain until the
+/// next pass); the final acceptance rescore in the caller stays exact.
+const FM_GAIN_UPDATE_DEG_CAP: usize = 256;
 
 /// Number of coarse super-nodes the top span selects (`S_top = ceil(m/30)`).
 const TARGET_TOP: usize = 30;
@@ -227,6 +233,19 @@ impl Hyper {
 // Fiduccia–Mattheyses bipartition refinement on the tensor hypergraph.
 // =============================================================================
 
+/// Map a gain to a `u64` that orders like the float. `+ 0.0` normalizes `-0.0`
+/// to `+0.0` so numerically equal gains get equal keys; gains are finite sums
+/// of `log2` dimensions, never NaN.
+#[inline]
+fn gain_key(g: f64) -> u64 {
+    let bits = (g + 0.0).to_bits();
+    if bits >> 63 == 0 {
+        bits | (1 << 63)
+    } else {
+        !bits
+    }
+}
+
 /// Improve a bipartition by bounded FM passes. `part[t] == true` means side A.
 /// Balance is constrained so `|A|` stays within `[lo, hi]`. Returns the improved
 /// partition and its straddle-cut cost.
@@ -278,6 +297,19 @@ fn fm_refine(
         }
         let mut gain: Vec<f64> = (0..n).map(|t| gain_of(t, &part, &cnt_a)).collect();
         let mut locked = vec![false; n];
+        // Unlocked move candidates by current side. The maximum entry is
+        // (max gain, then smallest vertex) — the same move a linear scan over
+        // `gain` picks — at O(log n) per query/update instead of O(n) per step.
+        let mut side_a: BTreeSet<(u64, Reverse<usize>)> = BTreeSet::new();
+        let mut side_b: BTreeSet<(u64, Reverse<usize>)> = BTreeSet::new();
+        for t in 0..n {
+            let entry = (gain_key(gain[t]), Reverse(t));
+            if part[t] {
+                side_a.insert(entry);
+            } else {
+                side_b.insert(entry);
+            }
+        }
         let mut cur_cost = hyper.cut_cost(&part);
         let mut best_seen_cost = cur_cost;
         let mut best_seen_part = part.clone();
@@ -288,22 +320,27 @@ fn fm_refine(
                 break;
             }
             // Pick max-gain unlocked feasible move.
-            let mut bv: Option<usize> = None;
-            let mut bg = f64::NEG_INFINITY;
-            for t in 0..n {
-                if locked[t] {
-                    continue;
-                }
-                let feasible = if part[t] { size_a > lo } else { size_a < hi };
-                if !feasible {
-                    continue;
-                }
-                if gain[t] > bg {
-                    bg = gain[t];
-                    bv = Some(t);
-                }
+            let cand_a = if size_a > lo {
+                side_a.last().copied()
+            } else {
+                None
+            };
+            let cand_b = if size_a < hi {
+                side_b.last().copied()
+            } else {
+                None
+            };
+            let best = match (cand_a, cand_b) {
+                (Some(a), Some(b)) => Some(a.max(b)),
+                (a, b) => a.or(b),
+            };
+            let Some((_, Reverse(v))) = best else { break };
+            let ventry = (gain_key(gain[v]), Reverse(v));
+            if part[v] {
+                side_a.remove(&ventry);
+            } else {
+                side_b.remove(&ventry);
             }
-            let Some(v) = bv else { break };
 
             // Apply the move.
             cur_cost -= gain[v];
@@ -324,7 +361,7 @@ fn fm_refine(
             // Recompute gains of all vertices sharing a label with v.
             let mut touched: Vec<usize> = Vec::new();
             for &l in &hyper.tlabels[v] {
-                if hyper.label_tensors[l].len() > 256 {
+                if hyper.label_tensors[l].len() > FM_GAIN_UPDATE_DEG_CAP {
                     continue;
                 }
                 for &u in &hyper.label_tensors[l] {
@@ -334,7 +371,13 @@ fn fm_refine(
             touched.sort_unstable();
             touched.dedup();
             for &u in &touched {
-                gain[u] = gain_of(u, &part, &cnt_a);
+                let new_gain = gain_of(u, &part, &cnt_a);
+                if !locked[u] {
+                    let set = if part[u] { &mut side_a } else { &mut side_b };
+                    set.remove(&(gain_key(gain[u]), Reverse(u)));
+                    set.insert((gain_key(new_gain), Reverse(u)));
+                }
+                gain[u] = new_gain;
             }
 
             if cur_cost < best_seen_cost - 1e-12 {
@@ -1031,6 +1074,241 @@ mod tests {
 
     fn uniform_sizes(code: &EinCode<usize>, d: usize) -> HashMap<usize, usize> {
         code.unique_labels().into_iter().map(|l| (l, d)).collect()
+    }
+
+    /// Reference FM with the original linear-scan move selection (max gain,
+    /// then smallest vertex, feasibility by side). `fm_refine` must match this
+    /// exactly whatever selection data structure it uses internally.
+    fn fm_refine_reference(
+        hyper: &Hyper,
+        mut part: Vec<bool>,
+        lo: usize,
+        hi: usize,
+        start: Instant,
+        budget: Duration,
+    ) -> (Vec<bool>, f64) {
+        let n = hyper.n;
+        let nlab = hyper.log2.len();
+        let mut cnt_a = vec![0u32; nlab];
+        for (t, &p) in part.iter().enumerate() {
+            if p {
+                for &l in &hyper.tlabels[t] {
+                    cnt_a[l] += 1;
+                }
+            }
+        }
+        let mut size_a = part.iter().filter(|&&p| p).count();
+
+        let gain_of = |t: usize, part: &[bool], cnt_a: &[u32]| -> f64 {
+            let mut g = 0.0;
+            for &l in &hyper.tlabels[t] {
+                if hyper.is_out[l] {
+                    continue;
+                }
+                let deg = hyper.label_tensors[l].len() as u32;
+                let (cs, ct) = if part[t] {
+                    (cnt_a[l], deg - cnt_a[l])
+                } else {
+                    (deg - cnt_a[l], cnt_a[l])
+                };
+                let before = (ct >= 1) as i32;
+                let after = (cs >= 2) as i32;
+                g += hyper.log2[l] * (before - after) as f64;
+            }
+            g
+        };
+
+        let mut best_cost = hyper.cut_cost(&part);
+
+        for _pass in 0..FM_MAX_PASSES {
+            if start.elapsed() >= budget {
+                break;
+            }
+            let mut gain: Vec<f64> = (0..n).map(|t| gain_of(t, &part, &cnt_a)).collect();
+            let mut locked = vec![false; n];
+            let mut cur_cost = hyper.cut_cost(&part);
+            let mut best_seen_cost = cur_cost;
+            let mut best_seen_part = part.clone();
+            let mut improved_this_pass = false;
+
+            for _step in 0..n {
+                if start.elapsed() >= budget {
+                    break;
+                }
+                let mut bv: Option<usize> = None;
+                let mut bg = f64::NEG_INFINITY;
+                for t in 0..n {
+                    if locked[t] {
+                        continue;
+                    }
+                    let feasible = if part[t] { size_a > lo } else { size_a < hi };
+                    if !feasible {
+                        continue;
+                    }
+                    if gain[t] > bg {
+                        bg = gain[t];
+                        bv = Some(t);
+                    }
+                }
+                let Some(v) = bv else { break };
+
+                cur_cost -= gain[v];
+                if part[v] {
+                    for &l in &hyper.tlabels[v] {
+                        cnt_a[l] -= 1;
+                    }
+                    size_a -= 1;
+                } else {
+                    for &l in &hyper.tlabels[v] {
+                        cnt_a[l] += 1;
+                    }
+                    size_a += 1;
+                }
+                part[v] = !part[v];
+                locked[v] = true;
+
+                let mut touched: Vec<usize> = Vec::new();
+                for &l in &hyper.tlabels[v] {
+                    if hyper.label_tensors[l].len() > 256 {
+                        continue;
+                    }
+                    for &u in &hyper.label_tensors[l] {
+                        touched.push(u);
+                    }
+                }
+                touched.sort_unstable();
+                touched.dedup();
+                for &u in &touched {
+                    gain[u] = gain_of(u, &part, &cnt_a);
+                }
+
+                if cur_cost < best_seen_cost - 1e-12 {
+                    best_seen_cost = cur_cost;
+                    best_seen_part = part.clone();
+                    improved_this_pass = true;
+                }
+            }
+
+            part = best_seen_part;
+            cnt_a.iter_mut().for_each(|c| *c = 0);
+            size_a = 0;
+            for (t, &p) in part.iter().enumerate() {
+                if p {
+                    size_a += 1;
+                    for &l in &hyper.tlabels[t] {
+                        cnt_a[l] += 1;
+                    }
+                }
+            }
+            best_cost = best_seen_cost;
+            if !improved_this_pass {
+                break;
+            }
+        }
+        (part, best_cost)
+    }
+
+    #[test]
+    #[ignore]
+    fn perf_fm_refine_large() {
+        use rand::Rng;
+        use rand::SeedableRng;
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(7);
+        let n_tensors = 20000usize;
+        let n_labels = 4000usize;
+        let ixs: Vec<Vec<usize>> = (0..n_tensors)
+            .map(|_| {
+                let mut v: Vec<usize> = (0..3).map(|_| rng.random_range(0..n_labels)).collect();
+                v.sort_unstable();
+                v.dedup();
+                v
+            })
+            .collect();
+        let code = EinCode::new(ixs, Vec::new());
+        let label_map: HashMap<usize, usize> = (0..n_labels).map(|l| (l, l)).collect();
+        let log2: Vec<f64> = (0..n_labels).map(|_| 1.0).collect();
+        let hyper = Hyper::build(&code, &label_map, &log2, n_labels);
+        let part: Vec<bool> = (0..n_tensors).map(|t| t % 2 == 0).collect();
+        let lo = n_tensors / 4;
+        let hi = 3 * n_tensors / 4;
+        let budget = Duration::from_secs(3600);
+        let t0 = Instant::now();
+        let (p1, c1) = fm_refine(&hyper, part.clone(), lo, hi, Instant::now(), budget);
+        let new_t = t0.elapsed();
+        let t1 = Instant::now();
+        let (p2, c2) = fm_refine_reference(&hyper, part, lo, hi, Instant::now(), budget);
+        let ref_t = t1.elapsed();
+        assert_eq!(p1, p2);
+        assert!((c1 - c2).abs() < 1e-9);
+        println!("n=20000: new {new_t:?} vs reference {ref_t:?}");
+    }
+
+    #[test]
+    fn test_fm_refine_matches_reference_selection() {
+        use rand::Rng;
+        use rand::SeedableRng;
+
+        for seed in 0..80u64 {
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+            // Occasionally exceed the gain-update degree cap with one label
+            // shared by every tensor, to exercise the stale-gain path too.
+            let big = seed % 10 == 0;
+            let n_tensors = if big { 300 } else { rng.random_range(6..=40) };
+            let n_labels = if big { 40 } else { rng.random_range(4..=12) };
+            let mut ixs: Vec<Vec<usize>> = (0..n_tensors)
+                .map(|_| {
+                    let k = rng.random_range(1..=3.min(n_labels));
+                    let mut pool: Vec<usize> = (0..n_labels).collect();
+                    let mut chosen = Vec::with_capacity(k);
+                    for _ in 0..k {
+                        let idx = rng.random_range(0..pool.len());
+                        chosen.push(pool.swap_remove(idx));
+                    }
+                    chosen.sort_unstable();
+                    chosen
+                })
+                .collect();
+            if big {
+                for ix in ixs.iter_mut() {
+                    if !ix.contains(&0) {
+                        ix.insert(0, 0);
+                    }
+                }
+            }
+            let iy: Vec<usize> = (0..n_labels)
+                .filter(|_| rng.random_range(0..4) == 0)
+                .collect();
+            let code = EinCode::new(ixs, iy);
+            let label_map: HashMap<usize, usize> = (0..n_labels).map(|l| (l, l)).collect();
+            let log2: Vec<f64> = (0..n_labels)
+                .map(|_| (rng.random_range(1..=4) as f64).log2())
+                .collect();
+            let hyper = Hyper::build(&code, &label_map, &log2, n_labels);
+
+            let part: Vec<bool> = (0..n_tensors)
+                .map(|_| rng.random_range(0..2) == 0)
+                .collect();
+            let size_a = part.iter().filter(|&&p| p).count();
+            let lo = size_a.saturating_sub(n_tensors / 4).max(1);
+            let hi = (size_a + n_tensors / 4).min(n_tensors - 1);
+            if lo > hi {
+                continue;
+            }
+
+            let start = Instant::now();
+            let budget = Duration::from_secs(3600);
+            let (part_new, cost_new) = fm_refine(&hyper, part.clone(), lo, hi, start, budget);
+            let (part_ref, cost_ref) =
+                fm_refine_reference(&hyper, part.clone(), lo, hi, start, budget);
+            assert_eq!(
+                part_new, part_ref,
+                "seed {seed}: fm_refine diverged from reference selection"
+            );
+            assert!(
+                (cost_new - cost_ref).abs() < 1e-12,
+                "seed {seed}: cost {cost_new} != reference {cost_ref}"
+            );
+        }
     }
 
     /// Build a 2D periodic grid tensor network (each bond a distinct label).
