@@ -762,6 +762,12 @@ pub struct WarmAnnealCtx<L: Label> {
 /// fails. The resulting [`ExprTree`] carries no cached complexity, so the public
 /// `tree_complexity` recomputes exactly after each in-place mutation.
 ///
+/// # Panics
+///
+/// Panics if `size_dict` is missing a label that appears in `code`, or if
+/// `seed` references a label absent from `code` — the same completeness
+/// requirement as the TreeSA optimizer itself.
+///
 /// # Example
 ///
 /// ```

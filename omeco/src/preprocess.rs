@@ -62,6 +62,11 @@ use crate::eincode::{EinCode, NestedEinsum};
 use crate::{CodeOptimizer, Label};
 use std::collections::{HashMap, HashSet, VecDeque};
 
+/// Tolerance for comparing log2 storage sizes: sums of `log2` terms accumulated
+/// in different orders differ by far more than `f64::EPSILON`, so a size-equal
+/// merge must not be rejected on that noise.
+const LOG2_SIZE_TOL: f64 = 1e-9;
+
 /// Statistics describing how far the structural simplification pass shrank a
 /// network. Returned alongside the optimized tree by [`simplify_then_optimize`].
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -221,7 +226,7 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>, size_dict: &HashMap<L, usize>
                 let input_max = log2_size(&label_vec[t]).max(log2_size(&label_vec[u]));
                 let output_size = log2_size(&surv);
                 if surv.len() <= labels[t].len().max(labels[u].len())
-                    && output_size <= input_max + f64::EPSILON
+                    && output_size <= input_max + LOG2_SIZE_TOL
                 {
                     chosen = Some(u);
                     break 'find;
@@ -236,8 +241,13 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>, size_dict: &HashMap<L, usize>
             vec![label_vec[t].clone(), label_vec[u].clone()],
             surv.clone(),
         );
-        let child_t = subtree[t].take().expect("live tensor has subtree");
-        let child_u = subtree[u].take().expect("live tensor has subtree");
+        let Some(child_t) = subtree[t].take() else {
+            continue;
+        };
+        let Some(child_u) = subtree[u].take() else {
+            subtree[t] = Some(child_t);
+            continue;
+        };
         subtree[t] = Some(NestedEinsum::node(vec![child_t, child_u], eins));
 
         // Update label adjacency: remove u everywhere; retarget t's labels.
@@ -290,10 +300,14 @@ pub fn simplify<L: Label + Ord>(code: &EinCode<L>, size_dict: &HashMap<L, usize>
     let mut reduced_ixs: Vec<Vec<L>> = Vec::new();
     let mut subtrees: Vec<NestedEinsum<L>> = Vec::new();
     for i in 0..n {
-        if alive[i] {
-            reduced_ixs.push(label_vec[i].clone());
-            subtrees.push(subtree[i].take().expect("live tensor has subtree"));
+        if !alive[i] {
+            continue;
         }
+        let Some(sub) = subtree[i].take() else {
+            continue;
+        };
+        reduced_ixs.push(label_vec[i].clone());
+        subtrees.push(sub);
     }
     let report = SimplifyReport::new(n, subtrees.len());
     Simplified {

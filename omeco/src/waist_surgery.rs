@@ -673,23 +673,27 @@ impl Refiner<'_> {
             if self.out_of_time() {
                 break;
             }
-            let (part, cost) = fm_refine(self.hyper, seed, lo, hi, self.start, self.budget);
+            let (part, _) = fm_refine(self.hyper, seed, lo, hi, self.start, self.budget);
             let sa = part.iter().filter(|&&p| p).count();
             if sa < lo || sa > hi {
                 continue;
             }
+            // FM's incremental cost can drift when gain recomputation is
+            // skipped for giant hyperedges; rescore exactly before candidates
+            // are compared against each other and the acceptance gates.
+            let cost = self.hyper.cut_cost(&part);
             if cost < best_alt_cost {
                 best_alt_cost = cost;
                 best_alt_part = Some(part);
             }
         }
 
-        if best_alt_part.is_none() {
+        let Some(part) = best_alt_part else {
             if !self.out_of_time() {
                 self.report.waist_min_hits += 1;
             }
             return None;
-        }
+        };
         if best_alt_cost < incumbent_cut_cost - 1e-9 {
             self.report.cheaper_cuts += 1;
         } else {
@@ -702,7 +706,6 @@ impl Refiner<'_> {
             return None;
         }
         self.report.rebuild_attempts += 1;
-        let part = best_alt_part.unwrap();
 
         // Rebuild both sides from the improved cut.
         if self.out_of_time() {
@@ -868,6 +871,10 @@ impl Refiner<'_> {
 /// annealing loops and between rebuild stages; an individual synchronous greedy
 /// initialization already in progress cannot be interrupted. The pass also
 /// returns early once it can no longer improve.
+///
+/// The RNG seed is fixed, but how much work fits inside `budget` depends on
+/// wall-clock speed, so results are **not** reproducible across machines or
+/// loads — only the never-worse guarantee is.
 ///
 /// # Example
 ///
