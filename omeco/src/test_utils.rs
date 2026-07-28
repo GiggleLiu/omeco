@@ -65,6 +65,20 @@ impl NaiveContractor {
         result_idx
     }
 
+    /// Execute a one-input einsum such as a trace, reduction, or permutation.
+    pub fn contract_unary(
+        &mut self,
+        tensor_idx: usize,
+        input_labels: &[usize],
+        output_labels: &[usize],
+    ) -> usize {
+        let input = self.tensors[&tensor_idx].clone();
+        let scalar = ArrayD::from_elem(IxDyn(&[]), 1.0);
+        let result = self.einsum_contract(&input, &scalar, input_labels, &[], output_labels);
+        self.tensors.insert(tensor_idx, result);
+        tensor_idx
+    }
+
     /// Get a reference to a tensor
     pub fn get_tensor(&self, idx: usize) -> Option<&ArrayD<f64>> {
         self.tensors.get(&idx)
@@ -584,14 +598,18 @@ fn execute_nested_impl<L: crate::Label>(
 
                 (current_idx, current_labels)
             } else if child_results.len() == 1 {
-                // Single child: just pass through
                 let (idx, _) = child_results[0];
+                let input_labels: Vec<usize> = eins.ixs[0]
+                    .iter()
+                    .map(|l| *label_map.get(l).expect("Label should be in map"))
+                    .collect();
                 let output_labels: Vec<usize> = eins
                     .iy
                     .iter()
                     .map(|l| *label_map.get(l).expect("Label should be in map"))
                     .collect();
-                (idx, output_labels)
+                let result_idx = contractor.contract_unary(idx, &input_labels, &output_labels);
+                (result_idx, output_labels)
             } else {
                 // No children: this shouldn't happen for a Node
                 panic!("execute_nested: Node with no children");

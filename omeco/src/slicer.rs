@@ -287,7 +287,19 @@ fn tensor_sizes_recursive(
     scs: &mut Vec<f64>,
     labels: &mut Vec<Vec<usize>>,
 ) {
-    let node_labels = tree.labels();
+    let node_labels = match tree {
+        ExprTree::Leaf(info) => {
+            let input_dims = info.leaf_input_dims.as_deref().unwrap_or(&info.out_dims);
+            let input_sc: f64 = input_dims.iter().map(|&l| log2_sizes[l]).sum();
+            let output_sc: f64 = info.out_dims.iter().map(|&l| log2_sizes[l]).sum();
+            if input_sc >= output_sc {
+                input_dims
+            } else {
+                &info.out_dims
+            }
+        }
+        ExprTree::Node { info, .. } => &info.out_dims,
+    };
     let sc: f64 = if node_labels.is_empty() {
         0.0
     } else {
@@ -546,13 +558,30 @@ fn nested_to_expr_tree<L: Label>(
             Some(ExprTree::leaf(out_dims, *tensor_index))
         }
         NestedEinsum::Node { args, eins } => {
-            if args.len() != 2 {
-                return None;
-            }
-            let left = nested_to_expr_tree(&args[0], int_ixs, label_map)?;
-            let right = nested_to_expr_tree(&args[1], int_ixs, label_map)?;
             let out_dims: Vec<usize> = eins.iy.iter().map(|l| label_map[l]).collect();
-            Some(ExprTree::node(left, right, out_dims))
+            match args.as_slice() {
+                [child] => {
+                    // ExprTree is binary-only, so fuse a unary trace/reduction
+                    // into its child's materialized output interface. Conversion
+                    // back to NestedEinsum restores a unary node when the child
+                    // is an original tensor.
+                    let mut tree = nested_to_expr_tree(child, int_ixs, label_map)?;
+                    if let ExprTree::Leaf(info) = &mut tree {
+                        if info.leaf_input_dims.is_none() {
+                            info.leaf_input_dims = Some(info.out_dims.clone());
+                        }
+                    }
+                    tree.info_mut().out_dims = out_dims;
+                    tree.info_mut().cached = None;
+                    Some(tree)
+                }
+                [left, right] => {
+                    let left = nested_to_expr_tree(left, int_ixs, label_map)?;
+                    let right = nested_to_expr_tree(right, int_ixs, label_map)?;
+                    Some(ExprTree::node(left, right, out_dims))
+                }
+                _ => None,
+            }
         }
     }
 }
@@ -564,7 +593,21 @@ fn expr_tree_to_nested<L: Label>(
     inverse_map: &[L],
 ) -> NestedEinsum<L> {
     match tree {
-        ExprTree::Leaf(info) => NestedEinsum::leaf(info.tensor_id.unwrap_or(0)),
+        ExprTree::Leaf(info) => {
+            let tensor_index = info.tensor_id.unwrap_or(0);
+            let leaf = NestedEinsum::leaf(tensor_index);
+            let input = original_ixs.get(tensor_index).cloned().unwrap_or_default();
+            let output: Vec<L> = info
+                .out_dims
+                .iter()
+                .map(|&i| inverse_map[i].clone())
+                .collect();
+            if input == output {
+                leaf
+            } else {
+                NestedEinsum::node(vec![leaf], EinCode::new(vec![input], output))
+            }
+        }
         ExprTree::Node { left, right, info } => {
             let left_nested = expr_tree_to_nested(left, original_ixs, inverse_map);
             let right_nested = expr_tree_to_nested(right, original_ixs, inverse_map);
@@ -746,9 +789,10 @@ impl CodeSlicer for TreeSASlicer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::complexity::sliced_complexity;
     use crate::eincode::uniform_size_dict;
     use crate::greedy::GreedyMethod;
-    use crate::optimize_code;
+    use crate::{optimize_code, Treewidth};
 
     #[test]
     fn test_slicer_new() {
@@ -905,6 +949,42 @@ mod tests {
         let sliced = slice_code(&optimized, &sizes, &config, &code.ixs);
 
         assert!(sliced.is_some());
+    }
+
+    #[test]
+    fn test_slice_code_accepts_treewidth_unary_reductions() {
+        // Treewidth locally reduces each private a_i before balancing the
+        // high-degree x contraction, producing unary nodes below a binary root.
+        let code = EinCode::new(
+            vec![
+                vec!['x', 'a'],
+                vec!['x', 'b'],
+                vec!['x', 'c'],
+                vec!['x', 'd'],
+            ],
+            vec![],
+        );
+        let sizes: HashMap<char, usize> = [('x', 2), ('a', 8), ('b', 8), ('c', 8), ('d', 8)]
+            .into_iter()
+            .collect();
+        let optimized = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        let config = TreeSASlicer::fast().with_sc_target(2.0).with_niters(0);
+        let sliced = slice_code(&optimized, &sizes, &config, &code.ixs)
+            .expect("TreeSASlicer should accept unary Treewidth nodes");
+
+        fn unary_count<L: Label>(tree: &NestedEinsum<L>) -> usize {
+            match tree {
+                NestedEinsum::Leaf { .. } => 0,
+                NestedEinsum::Node { args, .. } => {
+                    usize::from(args.len() == 1) + args.iter().map(unary_count).sum::<usize>()
+                }
+            }
+        }
+
+        assert_eq!(sliced.eins.leaf_count(), code.ixs.len());
+        assert!(unary_count(&sliced.eins) > 0);
+        assert_eq!(sliced.eins.output_labels(&code.ixs), code.iy);
+        assert!(sliced_complexity(&sliced, &sizes, &code.ixs).sc <= 2.0);
     }
 
     #[test]

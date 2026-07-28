@@ -5,7 +5,7 @@
 //! network. It mirrors the `Treewidth` optimizer of the Julia reference package
 //! [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl):
 //! an *elimination order* over the index labels is computed by a treewidth
-//! heuristic, then replayed into a binary contraction tree.
+//! heuristic, then replayed into an at-most-binary contraction tree.
 //!
 //! Where the Julia package delegates to CliqueTrees.jl (min-fill and friends),
 //! omeco currently ships a single, self-contained heuristic:
@@ -20,8 +20,9 @@
 //! # How it works
 //!
 //! Each label becomes a vertex of the *primal graph*; each input tensor is an
-//! initial clique (element) over the labels it carries. Output labels (`iy`) are
-//! never eliminated. Eliminating a label forms a new clique over its current
+//! initial clique (element) over the labels it carries, and the requested output
+//! is an outer clique over `iy`. Output labels are graph-resident but never
+//! eliminated. Eliminating a label forms a new clique over its current
 //! neighborhood (the boundary of its incident elements) and absorbs the old
 //! elements. A label's score is the weighted degree of that neighborhood — the
 //! summed `log2` dimensions of the clique its elimination would create — which
@@ -30,8 +31,8 @@
 //! interned label id, so the order is fully deterministic. The resulting
 //! elimination order is then replayed: at each step the tensors sharing the
 //! eliminated label are contracted into one intermediate (dropping labels that
-//! become fully internal), yielding a binary [`NestedEinsum`] over all original
-//! tensors.
+//! become fully internal), yielding an at-most-binary [`NestedEinsum`] over all
+//! original tensors. Unary nodes represent local traces and reductions.
 //!
 //! # Complexity metrics
 //!
@@ -87,7 +88,8 @@ pub enum EliminationAlgorithm {
 /// Treewidth-heuristic contraction-order optimizer.
 ///
 /// Computes an elimination order over the index labels with the configured
-/// [`EliminationAlgorithm`], then replays it into a binary contraction tree.
+/// [`EliminationAlgorithm`], then replays it into an at-most-binary contraction
+/// tree. Unary nodes represent local traces and reductions.
 /// The optimizer is deterministic: the same input always yields the same tree.
 ///
 /// # Example
@@ -140,7 +142,8 @@ impl Treewidth {
     ///
     /// The order lists the labels in the sequence they are eliminated (output
     /// labels in `code.iy` are never eliminated and never appear). The width is
-    /// the `log2` size of the largest clique formed during elimination.
+    /// the `log2` size of the largest clique, including the initial output
+    /// clique and every clique formed during elimination.
     ///
     /// # Errors
     ///
@@ -152,8 +155,8 @@ impl Treewidth {
     /// use omeco::{EinCode, Treewidth};
     /// use std::collections::HashMap;
     ///
-    /// // A 4-tensor chain: eliminating the shared binary labels one at a time
-    /// // never builds a clique wider than 2 labels, so the width is 2.
+    /// // A 4-tensor chain with open edges a,e: eliminating b first forms the
+    /// // three-label clique {a,b,c}, so the weighted width is 3.
     /// let code = EinCode::new(
     ///     vec![vec!['a', 'b'], vec!['b', 'c'], vec!['c', 'd'], vec!['d', 'e']],
     ///     vec!['a', 'e'],
@@ -161,7 +164,7 @@ impl Treewidth {
     /// let sizes: HashMap<char, usize> =
     ///     ['a', 'b', 'c', 'd', 'e'].into_iter().map(|c| (c, 2)).collect();
     /// let elim = Treewidth::min_degree().elimination_order(&code, &sizes).unwrap();
-    /// assert_eq!(elim.width, 2.0);
+    /// assert_eq!(elim.width, 3.0);
     /// ```
     pub fn elimination_order<L: Label>(
         &self,
@@ -190,8 +193,9 @@ impl Treewidth {
 pub struct EliminationOrder<L: Label> {
     /// Labels in the order they are eliminated (output labels excluded).
     pub order: Vec<L>,
-    /// The `log2` size of the largest clique formed during elimination — an
-    /// upper bound on the contraction tree's space complexity.
+    /// The `log2` size of the largest clique, including the initial output
+    /// clique and every clique formed during elimination — an upper bound on
+    /// the contraction tree's space complexity.
     pub width: f64,
 }
 
@@ -207,8 +211,11 @@ pub enum TreewidthError {
 /// Optimize the contraction order of `code` with the [`Treewidth`] heuristic.
 ///
 /// Computes an elimination order (per `optimizer.alg`) and replays it into a
-/// binary [`NestedEinsum`] over all input tensors. A single input tensor yields
-/// a [`NestedEinsum::Leaf`].
+/// at-most-binary [`NestedEinsum`] over all input tensors, with unary nodes for
+/// local traces and reductions. A single input tensor yields a
+/// [`NestedEinsum::Leaf`] when its input and output interfaces already match, or
+/// a unary node when a trace, reduction, broadcast, or axis permutation is
+/// required.
 ///
 /// # Errors
 ///
@@ -238,6 +245,15 @@ pub fn optimize_treewidth<L: Label>(
     if code.ixs.is_empty() {
         return Err(TreewidthError::EmptyCode);
     }
+    if code.ixs.len() == 1 {
+        if code.ixs[0] == code.iy {
+            return Ok(NestedEinsum::leaf(0));
+        }
+        return Ok(NestedEinsum::node(
+            vec![NestedEinsum::leaf(0)],
+            code.clone(),
+        ));
+    }
     let hg = EliminationHyperGraph::build(code, size_dict);
     let (order, _width) = match optimizer.alg {
         EliminationAlgorithm::MinDegree => hg.min_degree_order(),
@@ -250,10 +266,12 @@ pub fn optimize_treewidth<L: Label>(
 // Internal elimination engine
 // =============================================================================
 
-/// A binary topology over leaf tensor indices, with no einsum metadata — the
-/// per-node inputs/outputs are derived later by outside-occurrence counting.
+/// An at-most-binary topology over leaf tensor indices, with no einsum metadata
+/// — the per-node inputs/outputs are derived later by outside-occurrence
+/// counting. Unary nodes materialize local reductions on a single tensor.
 enum TopoTree {
     Leaf(usize),
+    Unary(Box<TopoTree>),
     Node(Box<TopoTree>, Box<TopoTree>),
 }
 
@@ -263,10 +281,14 @@ enum TopoTree {
 struct EliminationHyperGraph<L: Label> {
     /// Original label for each id (`id -> label`).
     id_label: Vec<L>,
+    /// Original per-leaf labels, preserving axis order and repeated indices.
+    leaf_labels: Vec<Vec<L>>,
     /// Per-leaf sorted-unique label ids.
     leaf_ids: Vec<Vec<u32>>,
     /// The set of output (`iy`) label ids; these are never eliminated.
     iy_ids: HashSet<u32>,
+    /// Original output labels, preserving the requested axis order.
+    iy_labels: Vec<L>,
     /// `log2` of each id's dimension.
     log2: Vec<f64>,
     /// Number of leaves holding each id (its total hyperedge degree).
@@ -328,8 +350,10 @@ impl<L: Label> EliminationHyperGraph<L> {
         Self {
             n: leaf_ids.len(),
             id_label,
+            leaf_labels: code.ixs.clone(),
             leaf_ids,
             iy_ids,
+            iy_labels: code.iy.clone(),
             log2,
             total_count,
         }
@@ -354,7 +378,8 @@ impl<L: Label> EliminationHyperGraph<L> {
         let mut absorbed: Vec<bool> = Vec::with_capacity(self.n + m);
         // Per-variable list of incident elements.
         let mut aelem: Vec<Vec<u32>> = vec![Vec::new(); m];
-        for ids in &self.leaf_ids {
+        let output_ids = self.output_ids();
+        for ids in self.leaf_ids.iter().chain(std::iter::once(&output_ids)) {
             let e = le.len() as u32;
             for &v in ids {
                 aelem[v as usize].push(e);
@@ -363,9 +388,13 @@ impl<L: Label> EliminationHyperGraph<L> {
             absorbed.push(false);
         }
 
+        // Output labels remain live graph vertices so their dimensions affect
+        // neighboring elimination scores, but they are not eligible for the
+        // elimination heap.
         let mut alive = vec![true; m];
+        let mut eliminable = vec![true; m];
         for &id in &self.iy_ids {
-            alive[id as usize] = false; // never eliminate output labels
+            eliminable[id as usize] = false;
         }
 
         // Timestamp scratch for O(size) neighbor dedup.
@@ -378,7 +407,7 @@ impl<L: Label> EliminationHyperGraph<L> {
         let mut heap: BinaryHeap<(std::cmp::Reverse<OrdF64>, std::cmp::Reverse<u32>)> =
             BinaryHeap::new();
         for (v, &live) in alive.iter().enumerate() {
-            if live {
+            if live && eliminable[v] {
                 let d = wdeg(
                     v, &mut aelem, &le, &absorbed, &alive, w, &mut mark, &mut tick,
                 );
@@ -387,10 +416,12 @@ impl<L: Label> EliminationHyperGraph<L> {
         }
 
         let mut order: Vec<u32> = Vec::with_capacity(m);
-        let mut width = 0.0f64;
+        // The final output is itself a clique, even when its components are
+        // otherwise disconnected.
+        let mut width = self.set_cost(&output_ids);
         while let Some((std::cmp::Reverse(OrdF64(key)), std::cmp::Reverse(vid))) = heap.pop() {
             let v = vid as usize;
-            if !alive[v] {
+            if !alive[v] || !eliminable[v] {
                 continue;
             }
             // Rescore on pop: a stale entry (key no longer matches the fresh
@@ -428,10 +459,12 @@ impl<L: Label> EliminationHyperGraph<L> {
                 let uu = u as usize;
                 aelem[uu].retain(|&e| !absorbed[e as usize]);
                 aelem[uu].push(q);
-                let d2 = wdeg(
-                    uu, &mut aelem, &le, &absorbed, &alive, w, &mut mark, &mut tick,
-                );
-                heap.push((std::cmp::Reverse(OrdF64(d2)), std::cmp::Reverse(u)));
+                if eliminable[uu] {
+                    let d2 = wdeg(
+                        uu, &mut aelem, &le, &absorbed, &alive, w, &mut mark, &mut tick,
+                    );
+                    heap.push((std::cmp::Reverse(OrdF64(d2)), std::cmp::Reverse(u)));
+                }
             }
         }
 
@@ -482,7 +515,7 @@ impl<L: Label> EliminationHyperGraph<L> {
                     _ => None,
                 })
                 .collect();
-            let Some((live_union, merged_topo)) = self.merge_group(members) else {
+            let Some((live_union, mut merged_topo)) = self.merge_group(members) else {
                 continue;
             };
 
@@ -500,6 +533,14 @@ impl<L: Label> EliminationHyperGraph<L> {
                 } else {
                     dropped.push(l);
                 }
+            }
+
+            // A one-holder elimination is a real local reduction (for example
+            // T[x,a] -> T'[x]), not merely bookkeeping. Materializing it keeps
+            // the topology's actual output interface equal to `new_live`, which
+            // makes subsequent cost-based and balanced merges accurate.
+            if group.len() == 1 {
+                merged_topo = TopoTree::Unary(Box::new(merged_topo));
             }
 
             let tnew = next_tid;
@@ -543,23 +584,33 @@ impl<L: Label> EliminationHyperGraph<L> {
     }
 
     /// Contract a group of tensors into one, choosing a local greedy
-    /// min-union pairwise order. Returns the merged live set and the binary
-    /// topology, or `None` if the group is empty. Groups larger than 12 fall
-    /// back to a size-ordered chain to bound the `O(k^2)` pair search.
+    /// min-union pairwise order. Returns the merged live set and topology, or
+    /// `None` if the group is empty. Groups larger than 12 use size-ordered
+    /// balanced rounds to bound the `O(k^2)` pair search and tree depth.
     fn merge_group(&self, mut members: Vec<(Vec<u32>, TopoTree)>) -> Option<(Vec<u32>, TopoTree)> {
         if members.len() <= 1 {
             return members.pop();
         }
         if members.len() > 12 {
-            // Chain largest-first (cheap; avoids O(k^2) blow-up on big groups).
-            members.sort_by(|a, b| self.set_cost(&b.0).total_cmp(&self.set_cost(&a.0)));
-            let mut acc = members.pop()?;
-            while let Some(next) = members.pop() {
-                let u = sorted_union(&acc.0, &next.0);
-                let node = TopoTree::Node(Box::new(acc.1), Box::new(next.1));
-                acc = (u, node);
+            // Pair size-adjacent members in balanced rounds. This bounds both
+            // pair selection and reconstruction depth on very high-degree
+            // hyperedges while retaining deterministic cheap-first grouping.
+            members.sort_by(|a, b| self.set_cost(&a.0).total_cmp(&self.set_cost(&b.0)));
+            while members.len() > 1 {
+                let mut next = Vec::with_capacity((members.len() + 1) / 2);
+                let mut iter = members.into_iter();
+                while let Some(left) = iter.next() {
+                    if let Some(right) = iter.next() {
+                        let u = sorted_union(&left.0, &right.0);
+                        let node = TopoTree::Node(Box::new(left.1), Box::new(right.1));
+                        next.push((u, node));
+                    } else {
+                        next.push(left);
+                    }
+                }
+                members = next;
             }
-            return Some(acc);
+            return members.pop();
         }
         // Greedy: repeatedly merge the pair with the smallest union cost.
         while members.len() > 1 {
@@ -588,48 +639,82 @@ impl<L: Label> EliminationHyperGraph<L> {
     /// by exact outside-occurrence counting: a label is in a node's output iff
     /// it appears in `iy` or in some leaf outside the node's subtree.
     fn build_nested(&self, topo: &TopoTree) -> NestedEinsum<L> {
-        self.build_inner(topo).0
+        self.build_inner(topo, true).0
     }
 
-    /// Returns the subtree and its output label -> subtree-occurrence-count map.
-    fn build_inner(&self, topo: &TopoTree) -> (NestedEinsum<L>, HashMap<u32, u32>) {
+    /// Returns the subtree, its output label -> subtree-occurrence-count map,
+    /// and its ordered output interface.
+    fn build_inner(
+        &self,
+        topo: &TopoTree,
+        is_root: bool,
+    ) -> (NestedEinsum<L>, HashMap<u32, u32>, Vec<L>) {
         match topo {
             TopoTree::Leaf(i) => {
                 let mut counts = HashMap::with_capacity(self.leaf_ids[*i].len());
                 for &id in &self.leaf_ids[*i] {
                     counts.insert(id, 1u32);
                 }
-                (NestedEinsum::leaf(*i), counts)
+                (NestedEinsum::leaf(*i), counts, self.leaf_labels[*i].clone())
+            }
+            TopoTree::Unary(child) => {
+                let (child_tree, counts, child_out) = self.build_inner(child, false);
+                let (out_counts, node_out) = self.node_output(&counts, is_root);
+                let eins = EinCode::new(vec![child_out], node_out.clone());
+                (
+                    NestedEinsum::node(vec![child_tree], eins),
+                    out_counts,
+                    node_out,
+                )
             }
             TopoTree::Node(l, r) => {
-                let (ltree, lc) = self.build_inner(l);
-                let (rtree, rc) = self.build_inner(r);
-
-                // Children's inputs (their output label sets), ordered by id for
-                // reproducibility.
-                let left_out = self.ids_to_labels(lc.keys().copied());
-                let right_out = self.ids_to_labels(rc.keys().copied());
+                let (ltree, lc, left_out) = self.build_inner(l, false);
+                let (rtree, rc, right_out) = self.build_inner(r, false);
 
                 // Union of children output ids with subtree counts.
                 let mut counts: HashMap<u32, u32> = lc;
                 for (id, c) in rc {
                     *counts.entry(id).or_insert(0) += c;
                 }
-                // Node output: labels appearing outside the subtree or in `iy`.
-                let mut out_ids: Vec<u32> = Vec::new();
-                let mut out_counts: HashMap<u32, u32> = HashMap::with_capacity(counts.len());
-                for (&id, &sub) in &counts {
-                    if self.total_count[id as usize] > sub || self.iy_ids.contains(&id) {
-                        out_ids.push(id);
-                        out_counts.insert(id, sub);
-                    }
-                }
-                out_ids.sort_unstable();
-                let node_out = out_ids.iter().map(|&id| self.id_label[id as usize].clone());
-                let eins = EinCode::new(vec![left_out, right_out], node_out.collect());
-                (NestedEinsum::node(vec![ltree, rtree], eins), out_counts)
+                let (out_counts, node_out) = self.node_output(&counts, is_root);
+                let eins = EinCode::new(vec![left_out, right_out], node_out.clone());
+                (
+                    NestedEinsum::node(vec![ltree, rtree], eins),
+                    out_counts,
+                    node_out,
+                )
             }
         }
+    }
+
+    /// Derive a materialized node's occurrence counts and ordered output.
+    fn node_output(
+        &self,
+        counts: &HashMap<u32, u32>,
+        is_root: bool,
+    ) -> (HashMap<u32, u32>, Vec<L>) {
+        let mut out_ids: Vec<u32> = Vec::new();
+        let mut out_counts: HashMap<u32, u32> = HashMap::with_capacity(counts.len());
+        for (&id, &sub) in counts {
+            if self.total_count[id as usize] > sub || self.iy_ids.contains(&id) {
+                out_ids.push(id);
+                out_counts.insert(id, sub);
+            }
+        }
+        out_ids.sort_unstable();
+        let node_out = if is_root {
+            self.iy_labels.clone()
+        } else {
+            self.ids_to_labels(out_ids.into_iter())
+        };
+        (out_counts, node_out)
+    }
+
+    /// Output ids as a sorted clique for the elimination graph.
+    fn output_ids(&self) -> Vec<u32> {
+        let mut ids: Vec<u32> = self.iy_ids.iter().copied().collect();
+        ids.sort_unstable();
+        ids
     }
 
     /// Map an iterator of ids to labels, sorted by id for a reproducible order.
@@ -745,6 +830,7 @@ impl Ord for OrdF64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::{execute_nested, tensors_approx_equal, NaiveContractor};
     use crate::{contraction_complexity, optimize_code};
 
     fn sizes_uniform<L: Label + Clone>(labels: &[L], dim: usize) -> HashMap<L, usize> {
@@ -783,6 +869,20 @@ mod tests {
     }
 
     #[test]
+    fn test_single_tensor_output_transform_is_unary_node() {
+        let code = EinCode::new(vec![vec![0usize, 1, 1]], vec![1, 0]);
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 3)].into_iter().collect();
+        let tree = optimize_treewidth(&code, &sizes, &Treewidth::default()).unwrap();
+        match tree {
+            NestedEinsum::Node { args, eins } => {
+                assert_eq!(args, vec![NestedEinsum::leaf(0)]);
+                assert_eq!(eins, code);
+            }
+            NestedEinsum::Leaf { .. } => panic!("output transform needs a unary node"),
+        }
+    }
+
+    #[test]
     fn test_empty_code_errors() {
         let code: EinCode<char> = EinCode::new(vec![], vec![]);
         let sizes: HashMap<char, usize> = HashMap::new();
@@ -815,9 +915,9 @@ mod tests {
     }
 
     #[test]
-    fn test_chain_width_equals_two() {
-        // A path/chain of binary bonds has treewidth 1, so the largest clique
-        // formed while eliminating a bond spans two labels -> width 2.0.
+    fn test_chain_width_includes_open_edges() {
+        // Output labels remain in the primal graph. Eliminating b first forms
+        // the clique {a, b, c}, hence weighted width 3 for binary labels.
         let code = EinCode::new(
             vec![
                 vec!['a', 'b'],
@@ -831,11 +931,152 @@ mod tests {
         let elim = Treewidth::min_degree()
             .elimination_order(&code, &sizes)
             .unwrap();
-        assert_eq!(elim.width, 2.0);
+        assert_eq!(elim.width, 3.0);
         // Chain sc is 2 (one boundary bond of dim 2 kept at a time).
         let tree = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
         let cc = contraction_complexity(&tree, &sizes, &code.ixs);
         assert_eq!(cc.sc, 2.0);
+    }
+
+    #[test]
+    fn test_preserves_leaf_axis_order_and_repeated_labels() {
+        // The elimination graph uses index sets, but the emitted einsum must
+        // retain each leaf's actual axis order and diagonal multiplicity.
+        let code = EinCode::new(vec![vec![0usize, 1], vec![2, 1, 1]], vec![0, 2]);
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 3), (2, 5)].into_iter().collect();
+        let tree = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        match tree {
+            NestedEinsum::Node { eins, .. } => assert_eq!(eins.ixs, code.ixs),
+            NestedEinsum::Leaf { .. } => panic!("two-tensor network must not be a leaf"),
+        }
+    }
+
+    #[test]
+    fn test_preserves_root_output_axis_order() {
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1, 2]], vec![2, 0]);
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 3), (2, 5)].into_iter().collect();
+        let tree = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        match tree {
+            NestedEinsum::Node { eins, .. } => assert_eq!(eins.iy, code.iy),
+            NestedEinsum::Leaf { .. } => panic!("two-tensor network must not be a leaf"),
+        }
+    }
+
+    #[test]
+    fn test_preserves_numerical_result_with_permuted_and_repeated_axes() {
+        let code = EinCode::new(vec![vec![0usize, 1], vec![2, 1, 1], vec![2, 3]], vec![3, 0]);
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 3), (2, 5), (3, 7)].into_iter().collect();
+        let label_map: HashMap<usize, usize> = (0..=3).map(|label| (label, label)).collect();
+
+        let mut expected_contractor = NaiveContractor::new();
+        expected_contractor.add_tensor(0, vec![2, 3]);
+        expected_contractor.add_tensor(1, vec![5, 3, 3]);
+        expected_contractor.add_tensor(2, vec![5, 7]);
+        let mut actual_contractor = expected_contractor.clone();
+
+        let direct = NestedEinsum::node((0..3).map(NestedEinsum::leaf).collect(), code.clone());
+        let optimized = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        let expected_idx = execute_nested(&direct, &mut expected_contractor, &label_map);
+        let actual_idx = execute_nested(&optimized, &mut actual_contractor, &label_map);
+        assert!(tensors_approx_equal(
+            expected_contractor.get_tensor(expected_idx).unwrap(),
+            actual_contractor.get_tensor(actual_idx).unwrap(),
+            1e-10,
+            1e-12,
+        ));
+    }
+
+    #[test]
+    fn test_output_labels_affect_weighted_degree() {
+        // x has a lower degree than y only if the large output label o is
+        // incorrectly omitted. Keeping o graph-resident makes y the cheap
+        // first elimination and avoids a 2^119 contraction.
+        let code = EinCode::new(vec![vec![0usize, 1], vec![1, 2], vec![2]], vec![0]);
+        let sizes: HashMap<usize, usize> =
+            [(0, 1usize << 40), (1, 1usize << 40), (2, 1usize << 39)]
+                .into_iter()
+                .collect();
+        let optimizer = Treewidth::default();
+        let elim = optimizer.elimination_order(&code, &sizes).unwrap();
+        assert_eq!(elim.order, vec![2, 1]);
+        assert_eq!(elim.width, 80.0);
+
+        let tree = optimize_code(&code, &sizes, &optimizer).unwrap();
+        let cc = contraction_complexity(&tree, &sizes, &code.ixs);
+        assert!(cc.tc < 81.0, "tc = {}", cc.tc);
+    }
+
+    #[test]
+    fn test_output_clique_sets_disconnected_width() {
+        let code = EinCode::new(vec![vec!['a'], vec!['b']], vec!['b', 'a']);
+        let sizes: HashMap<char, usize> = [('a', 4), ('b', 8)].into_iter().collect();
+        let elim = Treewidth::default()
+            .elimination_order(&code, &sizes)
+            .unwrap();
+        assert!(elim.order.is_empty());
+        assert_eq!(elim.width, 5.0);
+
+        let tree = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        match tree {
+            NestedEinsum::Node { eins, .. } => assert_eq!(eins.iy, code.iy),
+            NestedEinsum::Leaf { .. } => panic!("two-tensor network must not be a leaf"),
+        }
+    }
+
+    #[test]
+    fn test_high_degree_hyperedge_builds_balanced_tree() {
+        let n = 50_000usize;
+        let code = EinCode::new(vec![vec![0usize]; n], vec![]);
+        let sizes: HashMap<usize, usize> = [(0, 2)].into_iter().collect();
+        let tree = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        assert_eq!(tree.leaf_count(), n);
+        assert!(tree.depth() <= 16, "depth = {}", tree.depth());
+    }
+
+    #[test]
+    fn test_high_degree_private_legs_are_reduced_before_balancing() {
+        // T_i[x,a_i] -> scalar. Pairing raw leaves in balanced rounds would
+        // perform O(n) contractions of cost dim(x)*dim(a)^2. Unary reduction
+        // of each private a_i first keeps both depth and total cost small.
+        let n = 32usize;
+        let code = EinCode::new((1..=n).map(|a| vec![0usize, a]).collect(), vec![]);
+        let mut sizes: HashMap<usize, usize> = (1..=n).map(|a| (a, 1024)).collect();
+        sizes.insert(0, 2);
+
+        let tree = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        let cc = contraction_complexity(&tree, &sizes, &code.ixs);
+        assert_eq!(tree.leaf_count(), n);
+        assert!(tree.depth() <= 6, "depth = {}", tree.depth());
+        assert!(cc.tc < 17.0, "tc = {}", cc.tc);
+    }
+
+    #[test]
+    fn test_unary_private_leg_reductions_preserve_numerical_result() {
+        let code = EinCode::new(
+            vec![vec![0usize, 1], vec![0, 2], vec![0, 3], vec![0, 4]],
+            vec![],
+        );
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 3), (2, 3), (3, 3), (4, 3)]
+            .into_iter()
+            .collect();
+        let label_map: HashMap<usize, usize> = (0..=4).map(|label| (label, label)).collect();
+
+        let mut expected_contractor = NaiveContractor::new();
+        for tensor_index in 0..4 {
+            expected_contractor.add_tensor(tensor_index, vec![2, 3]);
+        }
+        let mut actual_contractor = expected_contractor.clone();
+
+        let direct = NestedEinsum::node((0..4).map(NestedEinsum::leaf).collect(), code.clone());
+        let optimized = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
+        let expected_idx = execute_nested(&direct, &mut expected_contractor, &label_map);
+        let actual_idx = execute_nested(&optimized, &mut actual_contractor, &label_map);
+        assert!(tensors_approx_equal(
+            expected_contractor.get_tensor(expected_idx).unwrap(),
+            actual_contractor.get_tensor(actual_idx).unwrap(),
+            1e-10,
+            1e-12,
+        ));
     }
 
     #[test]

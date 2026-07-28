@@ -5,7 +5,8 @@ Scalable treewidth-heuristic optimizer based on variable-elimination ordering.
 ## How It Works
 
 The tensor network is viewed through its *primal graph*: index labels are
-vertices, and every input tensor is a clique over the labels it carries.
+vertices, every input tensor is a clique over the labels it carries, and the
+requested output is an outer clique over `iy`.
 Contracting the network is equivalent to eliminating the labels one at a time;
 the cost is governed by the largest clique (bag) formed along the way — the
 *treewidth* of the network.
@@ -26,10 +27,14 @@ while a live label remains:
 Fill edges are never materialized, so the ordering scales to tens of thousands
 of tensors and labels in milliseconds. Ties break by label id, so the order —
 and the resulting contraction tree — is fully **deterministic**. The order is
-then replayed into a binary contraction tree: at each elimination step the
-tensors sharing the eliminated label are contracted into one intermediate.
+then replayed into an at-most-binary contraction tree: at each elimination step
+the tensors sharing the eliminated label are contracted into one intermediate.
+Unary nodes materialize local traces or reductions when a summed label has only
+one holder.
 
-Output labels (`iy`) are never eliminated, so they survive to the root.
+Output labels (`iy`) remain graph-resident so their dimensions affect
+neighboring elimination scores, but they are never themselves eliminated.
+Their original order is preserved at the root.
 
 **Time Complexity**: near-linear in the number of tensors for sparse,
 structured networks.
