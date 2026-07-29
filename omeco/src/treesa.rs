@@ -1111,21 +1111,25 @@ pub fn anneal_surgery_rounds<L: Label>(
     for r in 0..rounds {
         let (t_surg, wr) = refine_capped(&trajectory, code, size_dict, std::time::Duration::MAX, 1);
         report.surgery_calls_total += wr.surgery_calls;
-        let Some(ctx) = prepare_warm_anneal(code, size_dict, &t_surg) else {
-            break;
+        // The context is destructured and the anneal arguments are hoisted so
+        // that the anneal stays a single-line call: coverage instrumentation
+        // attributes a multi-line call to its continuation lines, which then
+        // report as unreached even though the call runs on every round.
+        let ctx = match prepare_warm_anneal(code, size_dict, &t_surg) {
+            Some(ctx) => ctx,
+            None => break,
         };
+        let WarmAnnealCtx {
+            tree,
+            labels,
+            log2_sizes: log2,
+            nedge,
+        } = ctx;
         let mut rng = rand::rngs::SmallRng::seed_from_u64(0xA55E + r);
-        let annealed = optimize_tree_sa(
-            ctx.tree,
-            &ctx.log2_sizes,
-            &config.betas,
-            config.niters,
-            &config.score,
-            DecompositionType::Tree,
-            &mut rng,
-            ctx.nedge,
-        );
-        let cand = warm_exprtree_to_nested(&annealed, code, &ctx.labels);
+        let (betas, niters, score) = (&config.betas, config.niters, &config.score);
+        let dt = DecompositionType::Tree;
+        let annealed = optimize_tree_sa(tree, &log2, betas, niters, score, dt, &mut rng, nedge);
+        let cand = warm_exprtree_to_nested(&annealed, code, &labels);
         let surg_score = score_of(&t_surg);
         if surg_score < best_score {
             best_score = surg_score;
@@ -2362,6 +2366,67 @@ mod tests {
         let (t3, _) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
         assert!(score_of(&t1) <= s0);
         assert!(score_of(&t3) <= score_of(&t1));
+    }
+
+    /// A round's *pre-anneal* surgery tree can be the run's final winner, not
+    /// just a waypoint the following anneal improves on. The loop must
+    /// therefore rank the surgery tree against the incumbent best in its own
+    /// right.
+    ///
+    /// The instance is rigged so that only the surgery tree can win: the seed
+    /// is a deliberately bad unannealed random tree, and the round's anneal
+    /// runs at β = 0, where the Metropolis rule accepts every move — a pure
+    /// random walk that leaves the surgery tree worse than it found it. So the
+    /// improvement over the seed can only have come from the surgery step, and
+    /// the returned tree is byte-identical to one `refine_capped` iteration on
+    /// the seed. Everything is seeded, so this is deterministic.
+    #[test]
+    fn test_rounds_surgery_tree_can_win_the_round() {
+        let (code, sizes) = load_benchmark_graph("grid_4x4");
+        // Deliberately bad seed: a random tree with the annealing loop disabled.
+        let seed_cfg = TreeSA {
+            betas: vec![1.0],
+            ntrials: 1,
+            niters: 0,
+            initializer: Initializer::Random,
+            preprocess: false,
+            ..TreeSA::fast()
+        };
+        let seed = optimize_treesa(&code, &sizes, &seed_cfg).unwrap();
+        // β = 0: every proposed move is accepted, so the anneal walks away
+        // from whatever the surgery step handed it.
+        let config = TreeSA {
+            betas: vec![0.0],
+            ..TreeSA::fast()
+        };
+        let score_of = |t: &NestedEinsum<usize>| {
+            let cc = crate::contraction_complexity(t, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+
+        let (best, report) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 1);
+        let (surgical, _) = refine_capped(&seed, &code, &sizes, std::time::Duration::MAX, 1);
+
+        assert_eq!(report.best_round, 0, "the single round must have won");
+        assert!(
+            score_of(&best) < score_of(&seed),
+            "surgery must strictly improve the seed for this fixture to bite: \
+             {} vs {}",
+            score_of(&best),
+            score_of(&seed)
+        );
+        assert!(
+            report.round_scores[0] > score_of(&best),
+            "the β = 0 anneal must end worse than the surgery tree, leaving it \
+             the only candidate that can win: {} vs {}",
+            report.round_scores[0],
+            score_of(&best)
+        );
+        assert_eq!(
+            crate::json::to_json_string(&best).unwrap(),
+            crate::json::to_json_string(&surgical).unwrap(),
+            "the returned tree must be the round's surgery tree itself"
+        );
     }
 
     #[test]
