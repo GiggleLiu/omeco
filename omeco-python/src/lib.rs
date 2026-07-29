@@ -543,13 +543,19 @@ impl PyTreeSA {
     ///     niters: Iterations per temperature level (default: 50).
     ///     betas: Inverse temperature schedule. If None, uses default schedule.
     ///     score: Score function for evaluating solutions. If None, uses default.
+    ///     preprocess: Simplify the network (splice degree-2/parallel tensors) before
+    ///                 annealing, then splice the reduced tree back (default: True).
+    ///     surgery_budget: Wall-clock seconds for a post-annealing waist-surgery
+    ///                     refinement pass; 0.0 disables it (default: 0.0).
     #[new]
-    #[pyo3(signature = (ntrials=10, niters=50, betas=None, score=None))]
+    #[pyo3(signature = (ntrials=10, niters=50, betas=None, score=None, preprocess=true, surgery_budget=0.0))]
     fn new(
         ntrials: usize,
         niters: usize,
         betas: Option<Vec<f64>>,
         score: Option<PyScoreFunction>,
+        preprocess: bool,
+        surgery_budget: f64,
     ) -> Self {
         let default_betas: Vec<f64> = (1..=300).map(|i| 0.01 + 0.05 * i as f64).collect();
         let betas = betas.unwrap_or(default_betas);
@@ -561,6 +567,8 @@ impl PyTreeSA {
                 ntrials,
                 niters,
                 score,
+                preprocess,
+                surgery_budget,
                 ..Default::default()
             },
         }
@@ -604,6 +612,19 @@ impl PyTreeSA {
         PyScoreFunction {
             inner: self.inner.score.clone(),
         }
+    }
+
+    /// Whether the network is simplified before annealing and spliced back after.
+    #[getter]
+    fn preprocess(&self) -> bool {
+        self.inner.preprocess
+    }
+
+    /// Wall-clock seconds budgeted for the post-annealing waist-surgery pass
+    /// (0.0 disables it).
+    #[getter]
+    fn surgery_budget(&self) -> f64 {
+        self.inner.surgery_budget
     }
 
     fn __repr__(&self) -> String {
@@ -750,6 +771,101 @@ impl PyTreeSASlicer {
     }
 }
 
+/// Statistics describing how far the structural simplification pass shrank a
+/// network, returned alongside the optimized tree by `simplify_then_optimize`.
+#[pyclass(name = "SimplifyReport")]
+#[derive(Clone)]
+pub struct PySimplifyReport {
+    inner: omeco::preprocess::SimplifyReport,
+}
+
+#[pymethods]
+impl PySimplifyReport {
+    /// Number of tensors in the original network.
+    #[getter]
+    fn n_original(&self) -> usize {
+        self.inner.n_original
+    }
+
+    /// Number of super-tensors surviving in the reduced network.
+    #[getter]
+    fn n_reduced(&self) -> usize {
+        self.inner.n_reduced
+    }
+
+    /// Fraction of tensors removed: `1 - n_reduced / n_original` (0 when empty).
+    #[getter]
+    fn shrink(&self) -> f64 {
+        self.inner.shrink
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "SimplifyReport(n_original={}, n_reduced={}, shrink={:.3})",
+            self.inner.n_original, self.inner.n_reduced, self.inner.shrink
+        )
+    }
+}
+
+/// Diagnostics from a `waist_refine` run.
+#[pyclass(name = "WaistReport")]
+#[derive(Clone)]
+pub struct PyWaistReport {
+    inner: omeco::waist_surgery::WaistReport,
+}
+
+#[pymethods]
+impl PyWaistReport {
+    /// Number of tensors in the input network.
+    #[getter]
+    fn n_original(&self) -> usize {
+        self.inner.n_original
+    }
+
+    /// Number of waist-surgery iterations attempted.
+    #[getter]
+    fn surgery_calls(&self) -> u64 {
+        self.inner.surgery_calls
+    }
+
+    /// Iterations where bounded FM strictly improved the incumbent partition
+    /// under the same cut-weight functional.
+    #[getter]
+    fn cheaper_cuts(&self) -> u64 {
+        self.inner.cheaper_cuts
+    }
+
+    /// Candidates that passed the no-new-bottleneck gate and entered rebuilding.
+    #[getter]
+    fn rebuild_attempts(&self) -> u64 {
+        self.inner.rebuild_attempts
+    }
+
+    /// Rebuilds that strictly lowered the global time complexity and were kept.
+    #[getter]
+    fn rebuild_accepts(&self) -> u64 {
+        self.inner.rebuild_accepts
+    }
+
+    /// Iterations where the bounded FM search found no cheaper comparable cut.
+    #[getter]
+    fn waist_min_hits(&self) -> u64 {
+        self.inner.waist_min_hits
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "WaistReport(n_original={}, surgery_calls={}, cheaper_cuts={}, rebuild_attempts={}, rebuild_accepts={}, waist_min_hits={})",
+            self.inner.n_original,
+            self.inner.surgery_calls,
+            self.inner.cheaper_cuts,
+            self.inner.rebuild_attempts,
+            self.inner.rebuild_accepts,
+            self.inner.waist_min_hits
+        )
+    }
+}
+
 /// Optimize the contraction order using greedy method.
 ///
 /// Args:
@@ -796,12 +912,82 @@ fn optimize_treesa(
     optimizer: Option<PyTreeSA>,
 ) -> PyResult<PyNestedEinsum> {
     let code = EinCode::new(ixs, out);
-    let opt = optimizer.unwrap_or_else(|| PyTreeSA::new(10, 50, None, None));
+    let opt = optimizer.unwrap_or_else(|| PyTreeSA::new(10, 50, None, None, true, 0.0));
 
     opt.inner
         .optimize(&code, &sizes)
         .map(|inner| PyNestedEinsum { inner })
         .ok_or_else(|| PyValueError::new_err("Optimization failed"))
+}
+
+/// Simplify a network (splice degree-2/parallel tensors), optimize the reduced
+/// network, then splice the reduced tree back into a full contraction tree.
+///
+/// Only a `GreedyMethod` optimizer is accepted here: the reduced-network
+/// optimizer is generic over `CodeOptimizer` on the Rust side, which cannot
+/// cross the PyO3 boundary, so Greedy is the documented inner optimizer for
+/// this pipeline. TreeSA users get the same simplify/splice behavior via
+/// `TreeSA(preprocess=True)` (the default) instead of calling this function
+/// directly.
+///
+/// Args:
+///     ixs: List of index lists for each tensor.
+///     out: Output indices.
+///     sizes: Dictionary mapping indices to their dimensions.
+///     optimizer: GreedyMethod optimizer for the reduced network (default: GreedyMethod()).
+///
+/// Returns:
+///     A tuple of (optimized contraction tree, SimplifyReport).
+#[pyfunction]
+#[pyo3(signature = (ixs, out, sizes, optimizer=None))]
+fn simplify_then_optimize(
+    ixs: Vec<Vec<i64>>,
+    out: Vec<i64>,
+    sizes: HashMap<i64, usize>,
+    optimizer: Option<PyGreedyMethod>,
+) -> PyResult<(PyNestedEinsum, PySimplifyReport)> {
+    let code = EinCode::new(ixs, out);
+    let opt = optimizer.map(|o| o.inner).unwrap_or_default();
+    omeco::preprocess::simplify_then_optimize(&code, &sizes, &opt)
+        .map(|(t, r)| (PyNestedEinsum { inner: t }, PySimplifyReport { inner: r }))
+        .ok_or_else(|| PyValueError::new_err("optimization failed"))
+}
+
+/// Refine a contraction tree with a bounded waist-surgery pass: repeatedly
+/// finds and repairs the tree's costliest cut, keeping only rebuilds that
+/// strictly lower the global time complexity, within a wall-clock budget.
+///
+/// Args:
+///     tree: Seed contraction tree to refine (e.g. from `optimize_code`).
+///     ixs: List of index lists for each tensor.
+///     out: Output indices.
+///     sizes: Dictionary mapping indices to their dimensions.
+///     budget_secs: Wall-clock seconds to spend surgering; must be finite and >= 0.
+///
+/// Returns:
+///     A tuple of (refined contraction tree, WaistReport). The refined tree's
+///     time complexity is never worse than the input tree's.
+#[pyfunction]
+fn waist_refine(
+    tree: PyNestedEinsum,
+    ixs: Vec<Vec<i64>>,
+    out: Vec<i64>,
+    sizes: HashMap<i64, usize>,
+    budget_secs: f64,
+) -> PyResult<(PyNestedEinsum, PyWaistReport)> {
+    if !budget_secs.is_finite() || budget_secs < 0.0 {
+        return Err(PyValueError::new_err(
+            "budget_secs must be a non-negative finite number",
+        ));
+    }
+    let code = EinCode::new(ixs, out);
+    let (t, r) = omeco::waist_surgery::refine(
+        &tree.inner,
+        &code,
+        &sizes,
+        std::time::Duration::from_secs_f64(budget_secs),
+    );
+    Ok((PyNestedEinsum { inner: t }, PyWaistReport { inner: r }))
 }
 
 /// Optimize the contraction order using the treewidth heuristic.
@@ -1079,11 +1265,15 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTreeSA>()?;
     m.add_class::<PyTreewidth>()?;
     m.add_class::<PyTreeSASlicer>()?;
+    m.add_class::<PySimplifyReport>()?;
+    m.add_class::<PyWaistReport>()?;
     m.add_function(wrap_pyfunction!(optimize_code, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_greedy, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_exhaustive, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_treesa, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_treewidth, m)?)?;
+    m.add_function(wrap_pyfunction!(simplify_then_optimize, m)?)?;
+    m.add_function(wrap_pyfunction!(waist_refine, m)?)?;
     m.add_function(wrap_pyfunction!(contraction_complexity, m)?)?;
     m.add_function(wrap_pyfunction!(sliced_complexity, m)?)?;
     m.add_function(wrap_pyfunction!(uniform_size_dict, m)?)?;

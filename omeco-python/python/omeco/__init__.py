@@ -15,7 +15,7 @@ Classes:
         ExhaustiveSearch(verbose=False)
 
     TreeSA: Simulated annealing optimizer.
-        TreeSA(ntrials=10, niters=50, betas=None, score=None)
+        TreeSA(ntrials=10, niters=50, betas=None, score=None, preprocess=True, surgery_budget=0.0)
         TreeSA.fast(score=None)
 
     Treewidth: Scalable treewidth-heuristic elimination-order optimizer.
@@ -72,6 +72,8 @@ from omeco._core import (
     TreeSA,
     Treewidth,
     TreeSASlicer,
+    SimplifyReport,
+    WaistReport,
     # Functions
     optimize_code,
     optimize_exhaustive,
@@ -80,6 +82,8 @@ from omeco._core import (
     sliced_complexity,
     slice_code,
     uniform_size_dict,
+    simplify_then_optimize,
+    waist_refine,
 )
 
 __version__ = "0.2.6"
@@ -93,6 +97,8 @@ __all__ = [
     "TreeSA",
     "Treewidth",
     "TreeSASlicer",
+    "SimplifyReport",
+    "WaistReport",
     "optimize_code",
     "optimize_exhaustive",
     "optimize_treewidth",
@@ -100,4 +106,6 @@ __all__ = [
     "sliced_complexity",
     "slice_code",
     "uniform_size_dict",
+    "simplify_then_optimize",
+    "waist_refine",
 ]
