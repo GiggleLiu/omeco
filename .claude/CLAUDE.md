@@ -5,19 +5,15 @@
 - Rust core with Python bindings via PyO3
 - Current Version: 0.2.3
 
-## CRITICAL: Alignment with Julia OMEinsumContractionOrders
+## Relationship to Julia OMEinsumContractionOrders
 
-**This project MUST stay aligned with [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).**
-
-When making changes:
-1. **Check Julia implementation first** at `~/.julia/dev/OMEinsumContractionOrders/`
-2. **Match algorithm behavior** - TreeSA, GreedyMethod, and complexity calculations must produce equivalent results
-3. **Run comparative benchmarks** to verify alignment
-4. **Key files to compare:**
-   - `treesa.jl` ↔ `omeco/src/treesa.rs`
-   - `greedy.jl` ↔ `omeco/src/greedy.rs`
-   - `simplify.jl` ↔ `omeco/src/simplifier.rs`
-   - `json.jl` ↔ `omeco/src/json.rs`
+omeco originated as a port of
+[OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl)
+and keeps **JSON interop** (`writejson`/`readjson`) as a compatibility
+contract. Behavior and defaults are independent: changes are judged on
+omeco's own results and ergonomics, not parity with Julia. The Julia
+implementation at `~/.julia/dev/OMEinsumContractionOrders/` remains a
+useful reference when porting algorithms.
 
 ## Development Setup
 
@@ -97,8 +93,7 @@ make github-release     # 4. Create GitHub release with auto-generated notes
 - Rust: inline `#[test]` modules in source files
 - Python: tests in `omeco-python/tests/`
 - Use `criterion` for benchmarks
-- **Always compare results with Julia implementation**
-- **CRITICAL: Do NOT modify existing tests unless explicitly instructed by the user.** Tests marked "ALIGNED WITH JULIA" are verified against the Julia implementation and must not be changed.
+- Do not weaken existing regression tests to make a change pass; update expectations only with a comment explaining the behavior change.
 
 ## Project Structure
 
@@ -134,7 +129,6 @@ examples/           # Usage examples
 - Coverage >95%
 - Clippy with no warnings
 - Proper formatting
-- **Benchmark tc values must match Julia within tolerance**
 
 ## Benchmarks
 
@@ -164,14 +158,14 @@ Shared graphs in `benchmarks/graphs/`:
 - `reg3_50.json`, `reg3_100.json`, `reg3_250.json` - Random 3-regular graphs
 
 ### Expected Results
-TreeSA tc values should match Julia within stochastic variation:
-- Chain/grid graphs: exact match expected
-- Random graphs: within ~5% due to stochastic optimization
+TreeSA tc values can be compared against Julia with stochastic variation:
+- Chain/grid graphs: typically close match
+- Random graphs: within ~5% of Julia results expected due to stochastic optimization
 
 ## Debugging Performance Issues
 
-If TreeSA produces worse results than Julia:
+When investigating TreeSA results:
 1. Compare default parameters (betas, ntrials, niters)
 2. Check `contraction_output` logic in `expr_tree.rs`
 3. Verify `expr_tree_to_nested` correctly converts tree to NestedEinsum
-4. Run the same graph through both implementations and compare tc/sc
+4. Run the same graph through both implementations and compare tc/sc against Julia for reference

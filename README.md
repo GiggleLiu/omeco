@@ -6,7 +6,7 @@
 
 Tensor network contraction order optimization in Rust.
 
-Ported from [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).
+Originated as a port of [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).
 
 ## Documentation
 
