@@ -1,0 +1,40 @@
+{
+  "sets": {
+    "ci": {
+      "arms": {
+        "greedy": {},
+        "treesa": {"ntrials": 4},
+        "treesa_rounds": {"ntrials": 4, "rounds": 2}
+      },
+      "instances": [
+        {"name": "petersen", "path": "benchmarks/graphs/petersen.json", "treewidth": true},
+        {"name": "dbn_13", "path": "benchmarks/paper/instances/dbn_13.json", "treewidth": true},
+        {"name": "qft_27", "path": "benchmarks/paper/instances/qft_27.json", "treewidth": false},
+        {"name": "surfacecode_d9", "path": "benchmarks/paper/instances/surfacecode_d9.json", "treewidth": false},
+        {"name": "reg3_250", "path": "benchmarks/paper/instances/reg3_250.json", "treewidth": false}
+      ]
+    },
+    "full": {
+      "arms": {
+        "greedy": {},
+        "treesa": {},
+        "treesa_rounds": {"rounds": 8}
+      },
+      "instances": [
+        {"name": "dbn_13", "path": "benchmarks/paper/instances/dbn_13.json", "treewidth": true},
+        {"name": "qft_27", "path": "benchmarks/paper/instances/qft_27.json", "treewidth": false},
+        {"name": "surfacecode_d9", "path": "benchmarks/paper/instances/surfacecode_d9.json", "treewidth": false},
+        {"name": "surfacecode_d13", "path": "benchmarks/paper/instances/surfacecode_d13.json", "treewidth": false},
+        {"name": "surfacecode_d17", "path": "benchmarks/paper/instances/surfacecode_d17.json", "treewidth": false},
+        {"name": "surfacecode_d21", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false},
+        {"name": "ksg", "path": "benchmarks/paper/instances/ksg.json", "treewidth": false},
+        {"name": "nqueens_28", "path": "benchmarks/paper/instances/nqueens_28.json", "treewidth": false},
+        {"name": "reg3_250", "path": "benchmarks/paper/instances/reg3_250.json", "treewidth": false},
+        {"name": "reg3_1000", "path": "benchmarks/paper/instances/reg3_1000.json", "treewidth": false},
+        {"name": "rqc_97_m24", "path": "benchmarks/paper/instances/rqc_97_m24.json", "treewidth": false},
+        {"name": "sycamore_m20", "path": "benchmarks/paper/instances/sycamore_m20.json", "treewidth": false},
+        {"name": "sycamore_53_20_0", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false}
+      ]
+    }
+  }
+}
