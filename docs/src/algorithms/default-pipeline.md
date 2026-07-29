@@ -92,14 +92,15 @@ extracts the tree's most expensive cut, re-optimizes it directly on the
 tensor hypergraph with balance-constrained Fiduccia–Mattheyses passes, and
 only keeps the result if it strictly lowers `tc`.
 
-- **Helps most** on frozen-waist-prone instances: grids and surface-code-like
-  circuits, where the network has genuinely distinct good bipartitions of
-  similar cost that local mutations struggle to reach. On these instance
-  families, roughly 76% (grids) and 31% (surface-code-like circuits) of
-  surgery calls find a strictly cheaper cut.
-- **Near-no-op elsewhere.** On instances without that structure, surgery's
-  bounded search typically finds no cheaper balanced cut and returns early —
-  you pay a bounded amount of wall-clock time for little or no gain, but you
+- **Helps most** on frozen-waist-prone instances, where the network has
+  genuinely distinct good bipartitions of similar cost that local mutations
+  struggle to reach. In the companion paper's measurements, 76% of surgery
+  calls on a surface-code d=21 network and 31% on a king-graph network found
+  a strictly cheaper comparable-balance cut.
+- **Near-no-op elsewhere.** On instances without a frozen waist, surgery's
+  bounded search typically returns early after confirming the incumbent cut
+  is locally minimal — you pay a bounded amount of wall-clock time for little
+  or no gain, but you
   never regress `tc`.
 
 If you don't know in advance whether your network has this structure, a
