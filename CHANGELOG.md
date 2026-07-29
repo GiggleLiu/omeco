@@ -21,5 +21,8 @@ cost). Restore the old behavior with `preprocess: false`.
   loop as a standalone function, with a per-round score trace.
 - Python: `TreeSA(preprocess=..., surgery_iters=...)`,
   `simplify_then_optimize`, `waist_refine`, `SimplifyReport`, `WaistReport`.
+- Committed paper-benchmark artifact under `benchmarks/paper/` (manifest,
+  instances, deterministic runner, checker), plus a CI job that re-derives the
+  small `ci` set on every PR and fails on a single changed field.
 - `Label` now requires `Ord` (all built-in label types already qualify).
 - The Julia behavioral-alignment rule is retired; JSON interop is unchanged.

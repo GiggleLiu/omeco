@@ -1,9 +1,13 @@
 # Paper benchmark artifact
 
-Every contraction-order number the paper reports is produced here, by the
+Every number in the paper's released-artifact table is produced here, by the
 released library, on the reader's own machine. There is no reference host and no
-recorded oracle: the artifact is a *program plus a manifest*, and reproducing the
-paper means running it. The outputs under `expected/` are committed only so that
+recorded oracle: the artifact is a *program plus a manifest*, and reproducing
+that table means running it. The paper's headline campaign numbers are a
+different measurement — wall-clock-budgeted on one fixed host — and this
+directory does not claim to reproduce them; see
+[Calibration vs the frozen campaign](#calibration-vs-the-frozen-campaign) for
+the size of the gap and why it is there. The outputs under `expected/` are committed only so that
 they can be *re-derived* — CI regenerates the `ci` one on every push and fails on
 a single changed field, so a committed number can never quietly drift away from
 what the code does.
@@ -50,7 +54,7 @@ with integer labels. `description` records where each network came from.
 From the repository root:
 
 ```bash
-# Small set: the one CI runs on every push (~20 s on a modern laptop).
+# Small set: the one CI runs on every push (under a minute on a modern laptop).
 cargo run --release --example paper_bench -p omeco -- \
     --manifest benchmarks/paper/manifest.json \
     --set ci \
@@ -144,7 +148,10 @@ random circuit costs time and reports nothing anyone wants to read.
   entries may increase: round `r + 1` continues from round `r`'s tree even when
   that tree was worse than the incumbent best. That is the escape mechanism the
   paper is about, and flattening it to a running minimum would hide it. `round`
-  is zero-based, matching `RoundsReport::best_round`.
+  is zero-based, matching `RoundsReport::best_round`. A `curve` entry records
+  that round's *post-anneal* candidate only, while the returned tree may instead
+  be a round's pre-anneal surgery tree — so a row's `tc`/`sc` can be better than
+  every entry in its own `curve`.
 - `results` is sorted by `(instance, arm)`, independent of manifest order.
 - `format` is the schema version; bump it when a field's meaning changes, so
   that `check.py` refuses to compare artifacts across the change.
@@ -234,8 +241,8 @@ rows produced by the `full` set (`TreeSA::default()`, `rounds: 8`).
 
 | Instance | Campaign best tc (huawei, wall-clock budget) | `treesa_rounds` tc (rounds = 8, deterministic) | Gap |
 |---|---|---|---|
-| `surfacecode_d13` | 30.485 — `p4_family["13"]`, best of 5 reps, both methods tie | 30.898 | +0.413 |
-| `surfacecode_d21` | 47.364 — `p2_budget_scaling`, tuned-TreeSA reference at the 900 s budget | 49.180 | +1.816 |
+| `surfacecode_d13` | 30.485 — `p4_family["13"]`, the surface-code family sweep: 5 reps at the 90 s budget, both methods tie | 30.898 | +0.413 |
+| `surfacecode_d21` | 47.364 — `p2_budget_scaling`, our TreeSA baseline (`ref`) at the 900 s budget | 49.180 | +1.816 |
 | `ksg` | 36.356 — `p3_distributions`, best of 15 reps at the 90 s budget | 38.291 | +1.935 |
 
 (The campaign file records `tc` only, so there is no `sc` column to compare;
@@ -248,8 +255,11 @@ number of seconds on one 2-core x86 VM and took the best of many repetitions.
 A wall-clock budget buys more search on a faster host and less on a slower one,
 which is exactly the property this artifact is built to *not* have. What
 `expected/full.json` claims is bit-reproducibility: run the same commit on the
-same machine and you get the same file, and run it on a different machine and
-you get agreement to `1e-9`. It does not claim to reproduce a record. Raising
+same machine and you get the same file. Across machines the claim is weaker and
+partly untested — agreement to `1e-9` is *confirmed* for the `ci` set, which the
+ubuntu CI job re-derives and compares on every push, and *expected* for
+`full.json` by the same mechanism, but nobody has run the full set on a second
+platform. It does not claim to reproduce a record. Raising
 `rounds` in the manifest closes the gap — the rounds loop is the mechanism the
 campaign was exploiting too — at a cost that is proportional and, unlike a
 timer, still deterministic.

@@ -1,7 +1,10 @@
 //! Deterministic benchmark runner behind the paper's contraction-order tables.
 //!
-//! Every number in the paper regenerates from the released library with this
-//! binary — there is no reference host and no recorded oracle. A manifest names
+//! Every number in the paper's released-artifact table regenerates from the
+//! released library with this binary — there is no reference host and no
+//! recorded oracle. (The paper's headline campaign numbers are a separate,
+//! wall-clock-budgeted measurement; see `benchmarks/paper/README.md` for how
+//! far apart the two are.) A manifest names
 //! the instance files and the optimizer *arms*; the runner writes one JSON
 //! artifact whose bytes are stable for a fixed (manifest, set, machine).
 //!

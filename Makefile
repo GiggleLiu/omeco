@@ -107,7 +107,7 @@ benchmark: python-dev
 	$(PYTHON) benchmarks/benchmark_python.py
 	cd benchmarks && julia --project=. benchmark_julia.jl
 
-# Paper benchmark: `paper-bench` regenerates the paper's own (hours-long) set,
+# Paper benchmark: `paper-bench` regenerates the paper's own (~21 min) set,
 # `paper-bench-check` re-runs the small ci set and compares it against the
 # committed artifact. The temporary artifact goes to $TMPDIR, never a fixed path.
 paper-bench:

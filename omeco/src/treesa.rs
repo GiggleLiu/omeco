@@ -990,8 +990,11 @@ pub struct RoundsReport {
     /// requested `rounds` when the loop stops early (the trajectory tree
     /// degenerated to something that cannot be annealed, e.g. a bare leaf).
     pub rounds_run: u64,
-    /// Index of the round whose tree became the returned best, or
-    /// [`u64::MAX`] if no round improved on the seed.
+    /// Index of the round during which the returned best tree was produced —
+    /// by either that round's surgery step or its anneal, whichever won — or
+    /// [`u64::MAX`] if no round improved on the seed. It does not imply the
+    /// winner was the round's annealed tree; a pre-anneal surgery tree can be
+    /// the best of the run.
     pub best_round: u64,
     /// Score of the annealed tree at the end of each executed round, in round
     /// order. This is the trajectory trace, not a running minimum: entries may

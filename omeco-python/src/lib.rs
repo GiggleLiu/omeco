@@ -625,8 +625,9 @@ impl PyTreeSA {
         self.inner.preprocess
     }
 
-    /// Deterministic cap on post-annealing waist-surgery iterations (0
-    /// disables it).
+    /// Number of interleaved anneal-surgery rounds run after the pipeline;
+    /// each round is one waist-surgery iteration plus a warm-started anneal,
+    /// so it costs about one full anneal. 0 disables the loop.
     #[getter]
     fn surgery_iters(&self) -> u64 {
         self.inner.surgery_iters
