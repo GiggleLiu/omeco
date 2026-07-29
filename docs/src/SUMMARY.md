@@ -16,6 +16,7 @@
   - [Exhaustive Search](./algorithms/exhaustive-search.md)
   - [TreeSA](./algorithms/tree-sa.md)
   - [Treewidth](./algorithms/treewidth.md)
+  - [Default Pipeline](./algorithms/default-pipeline.md)
   - [Simplification, Warm-Start, and Waist Surgery](./algorithms/paper-algorithms.md)
   - [Algorithm Comparison](./algorithms/comparison.md)
 
