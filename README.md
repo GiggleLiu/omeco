@@ -50,8 +50,9 @@ omeco = "0.2"
 ## Python Quick Start
 
 `TreeSA()` runs the full default pipeline (simplify, anneal, splice) with no
-tuning required. Give it a `surgery_iters` cap to run extra, deterministic
-surgery iterations for a result that's never worse — see the
+tuning required. Give it a positive `surgery_iters` to run that many extra,
+deterministic anneal-surgery rounds (about one anneal each) for a result
+that's never worse — see the
 [Default Pipeline](https://GiggleLiu.github.io/omeco/algorithms/default-pipeline.html)
 page for what each stage does and when surgery helps:
 
@@ -63,7 +64,7 @@ out = [0, 3]
 sizes = {0: 100, 1: 200, 2: 50, 3: 100}
 
 tree = optimize_code(ixs, out, sizes, TreeSA())        # full default pipeline
-better = optimize_code(ixs, out, sizes, TreeSA(surgery_iters=20))  # deterministic knob, get a better tree
+better = optimize_code(ixs, out, sizes, TreeSA(surgery_iters=3))  # + 3 anneal-surgery rounds
 print(contraction_complexity(tree, ixs, sizes))
 ```
 
@@ -102,8 +103,9 @@ sliced_tree_dict = sliced.to_dict()  # Dict for the optimized sliced tree
 ## Rust Quick Start
 
 `TreeSA::default()` runs the full default pipeline (simplify, anneal,
-splice) with no tuning required. Chain `.with_surgery_iters(20)` to run extra,
-deterministic surgery iterations for a result that's never worse — see the
+splice) with no tuning required. Chain `.with_surgery_iters(3)` to run that
+many extra, deterministic anneal-surgery rounds (about one anneal each) for a
+result that's never worse — see the
 [Default Pipeline](https://GiggleLiu.github.io/omeco/algorithms/default-pipeline.html)
 page for what each stage does and when surgery helps:
 
@@ -123,8 +125,8 @@ sizes.insert('l', 100);
 
 // full default pipeline
 let tree = optimize_code(&code, &sizes, &TreeSA::default()).unwrap();
-// deterministic knob, get a better tree
-let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_iters(20)).unwrap();
+// + 3 anneal-surgery rounds
+let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_iters(3)).unwrap();
 let complexity = contraction_complexity(&tree, &sizes, &code.ixs);
 println!("Time: 2^{:.2}, Space: 2^{:.2}", complexity.tc, complexity.sc);
 ```

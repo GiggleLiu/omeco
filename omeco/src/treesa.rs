@@ -40,17 +40,29 @@ pub struct TreeSA {
     /// this field is set to `true`: splice does not preserve the
     /// path-decomposition guarantee. See [`TreeSA::path`].
     pub preprocess: bool,
-    /// Deterministic cap on the number of waist-surgery iterations run as a
-    /// post-pass on the selected tree; `0` disables surgery entirely (the
-    /// default). A positive value runs at most that many surgery iterations
-    /// after the pipeline: the result is never worse than with surgery off,
-    /// and more iterations can only be equal or better. See
-    /// [`crate::waist_surgery`].
+    /// Number of interleaved anneal–surgery rounds ([`anneal_surgery_rounds`],
+    /// the paper's Algorithm 1) run on the tree the pipeline selected; `0`
+    /// disables the loop entirely (the default). Each round applies one
+    /// waist-surgery iteration and then a full warm-started annealing pass, so
+    /// **one round costs roughly one more anneal of the network** — this knob
+    /// buys quality with time, roughly linearly.
+    ///
+    /// The best tree seen anywhere in the loop is returned, so the result is
+    /// never worse than with the loop off, and `k + 1` rounds are always equal
+    /// or better than `k`. See [`crate::waist_surgery`] for the surgery step
+    /// itself.
+    ///
+    /// # Path decomposition
+    ///
+    /// [`optimize_treesa`] auto-skips the rounds loop (treating this field as
+    /// `0`) whenever `decomposition_type` is [`DecompositionType::Path`]:
+    /// neither surgery nor the warm-started anneal preserves the
+    /// path-decomposition guarantee. See [`TreeSA::path`].
     ///
     /// # Determinism
     ///
     /// Unlike the low-level [`crate::waist_surgery::refine`]/[`refine_capped`]
-    /// wall-clock APIs, `optimize_treesa` binds surgery to no deadline —
+    /// wall-clock APIs, `optimize_treesa` binds the loop to no deadline —
     /// internal RNG seeds are fixed throughout. The whole `TreeSA` API is
     /// therefore fully reproducible across machines for any fixed config,
     /// including configs with `surgery_iters > 0`.
@@ -127,6 +139,11 @@ impl TreeSA {
     /// spliced tree a node with two non-leaf children, breaking this preset's
     /// documented "linear contraction order" guarantee
     /// (see [`NestedEinsum::is_path_decomposition`]).
+    ///
+    /// For the same reason, [`optimize_treesa`] also skips the
+    /// [`TreeSA::surgery_iters`] rounds loop for path configs: waist surgery
+    /// rebuilds subtrees around a re-optimized cut and the warm-started anneal
+    /// applies general binary-tree moves, neither of which is path-preserving.
     pub fn path() -> Self {
         Self {
             initializer: Initializer::Random,
@@ -182,7 +199,12 @@ impl TreeSA {
         self
     }
 
-    /// Set the deterministic waist-surgery iteration cap (0 disables).
+    /// Set the number of interleaved anneal–surgery rounds (0 disables).
+    ///
+    /// Each round costs roughly one extra full anneal of the network; the
+    /// returned tree is the best seen, so more rounds are never worse. The
+    /// loop is skipped for [`DecompositionType::Path`] configs (it is not
+    /// path-preserving). See [`TreeSA::surgery_iters`].
     ///
     /// # Example
     ///
@@ -199,8 +221,8 @@ impl TreeSA {
     /// let tree = optimize_treesa(&code, &sizes, &config).unwrap();
     /// assert_eq!(tree.leaf_count(), 3);
     /// ```
-    pub fn with_surgery_iters(mut self, max_iters: u64) -> Self {
-        self.surgery_iters = max_iters;
+    pub fn with_surgery_iters(mut self, rounds: u64) -> Self {
+        self.surgery_iters = rounds;
         self
     }
 }
@@ -741,16 +763,23 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 /// By default this runs the full pipeline: structural simplification
 /// ([`crate::preprocess::simplify`]), the annealing trial loop on the reduced
 /// network, and splice-back — controlled by [`TreeSA::preprocess`]. A
-/// positive [`TreeSA::surgery_iters`] additionally refines the result with
-/// [`crate::waist_surgery::refine_capped`] (never worse than surgery off;
-/// more iterations are equal or better; fully deterministic, since the cap
-/// binds iteration count rather than wall-clock time).
+/// positive [`TreeSA::surgery_iters`] then runs that many interleaved
+/// anneal–surgery rounds ([`anneal_surgery_rounds`], the paper's Algorithm 1)
+/// on the resulting tree: each round is one waist-surgery iteration followed
+/// by a full warm-started annealing pass, so it costs roughly one extra
+/// anneal per round. The best tree seen is returned, so the result is never
+/// worse than with `surgery_iters = 0`, more rounds are equal or better, and
+/// the whole thing is fully deterministic (rounds are counted, never timed).
 ///
 /// [`TreeSA::preprocess`] is automatically treated as disabled whenever
 /// [`TreeSA::decomposition_type`] is [`DecompositionType::Path`], even if the
 /// field was manually set to `true`: [`crate::preprocess::splice`] is
 /// decomposition-agnostic and can turn a path decomposition into a
 /// non-path tree (see the doc comment on [`TreeSA::path`]).
+/// [`TreeSA::surgery_iters`] is skipped in exactly the same case and for the
+/// same reason: neither the surgery step nor the warm-started anneal is
+/// path-preserving, so a `Path` config always returns the plain annealed
+/// path regardless of how many rounds were requested.
 pub fn optimize_treesa<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
@@ -765,9 +794,8 @@ pub fn optimize_treesa<L: Label>(
         optimize_treesa_core(code, size_dict, config)?
     };
 
-    if config.surgery_iters > 0 {
-        let budget = std::time::Duration::MAX;
-        return Some(refine_capped(&tree, code, size_dict, budget, config.surgery_iters).0);
+    if config.surgery_iters > 0 && config.decomposition_type != DecompositionType::Path {
+        return Some(anneal_surgery_rounds(&tree, code, size_dict, config, config.surgery_iters).0);
     }
 
     Some(tree)
@@ -953,6 +981,170 @@ pub fn warm_exprtree_to_nested<L: Label>(
     labels: &[L],
 ) -> NestedEinsum<L> {
     expr_tree_to_nested(tree, &code.ixs, labels, &code.iy)
+}
+
+/// Diagnostics from an [`anneal_surgery_rounds`] run.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoundsReport {
+    /// Number of interleaved rounds actually executed. Smaller than the
+    /// requested `rounds` when the loop stops early (the trajectory tree
+    /// degenerated to something that cannot be annealed, e.g. a bare leaf).
+    pub rounds_run: u64,
+    /// Index of the round during which the returned best tree was produced —
+    /// by either that round's surgery step or its anneal, whichever won — or
+    /// [`u64::MAX`] if no round improved on the seed. It does not imply the
+    /// winner was the round's annealed tree; a pre-anneal surgery tree can be
+    /// the best of the run.
+    pub best_round: u64,
+    /// Score of the annealed tree at the end of each executed round, in round
+    /// order. This is the trajectory trace, not a running minimum: entries may
+    /// increase, since round `r + 1` continues from round `r`'s tree even when
+    /// that tree was worse than the incumbent best.
+    pub round_scores: Vec<f64>,
+    /// Total number of waist-surgery iterations attempted across all rounds
+    /// (sum of [`crate::waist_surgery::WaistReport::surgery_calls`]).
+    pub surgery_calls_total: u64,
+}
+
+/// Deterministic interleaved anneal–surgery loop (the paper's Algorithm 1).
+///
+/// Each round applies one waist-surgery iteration
+/// ([`crate::waist_surgery::refine_capped`]) to the current trajectory tree and
+/// then runs a full warm-started simulated-annealing pass over the surgical
+/// result, using `config`'s β schedule, iteration count and score function.
+///
+/// # Trajectory chaining
+///
+/// The loop keeps two separate trees. The *trajectory* is what the next round
+/// anneals from: round `r + 1` always continues from round `r`'s annealed tree,
+/// **even if that tree is worse** than the best seen so far — this is what lets
+/// surgery escape a local optimum that pure annealing cannot leave.
+/// [`RoundsReport::round_scores`] records this trajectory verbatim and is
+/// therefore not monotone.
+///
+/// # Never worse, monotone in `rounds`
+///
+/// The *returned* tree is the best tree seen anywhere in the run, including the
+/// `seed` itself and each round's post-surgery, pre-anneal tree. Consequently
+/// the result is never worse than `seed`, and — because rounds are chained
+/// deterministically — running `n + 1` rounds is always equal or better than
+/// running `n`.
+///
+/// # Configuration used
+///
+/// Only three fields of `config` are read: [`TreeSA::betas`], [`TreeSA::niters`]
+/// and [`TreeSA::score`] (the score also ranks candidates between rounds).
+/// [`TreeSA::ntrials`], [`TreeSA::preprocess`], [`TreeSA::surgery_iters`] and
+/// [`TreeSA::decomposition_type`] are **ignored**: the loop runs a single
+/// warm-started chain rather than independent trials, takes the seed as given
+/// instead of re-running the simplify front-end, and fixes surgery at one
+/// iteration per round.
+///
+/// # Not path-preserving
+///
+/// The annealing step always applies binary-tree moves, and waist surgery
+/// rebuilds subtrees in a way that is not path-preserving, so the returned tree
+/// is a general (tree) decomposition **regardless of
+/// `config.decomposition_type`** — passing a [`TreeSA::path`] config does not
+/// yield a path decomposition, and a path-decomposed `seed` will generally come
+/// back as a non-path tree. Callers who need the path guarantee must not use
+/// this function; [`optimize_treesa`] auto-skips the rounds loop for
+/// [`DecompositionType::Path`] configs.
+///
+/// # Determinism
+///
+/// Fully reproducible: round `r` anneals with `SmallRng::seed_from_u64(0xA55E + r)`
+/// and surgery is capped by iteration count with a
+/// [`std::time::Duration::MAX`] budget, so no wall-clock deadline can ever
+/// trigger and results never depend on machine speed. Two runs with the same
+/// inputs return byte-identical trees and reports.
+///
+/// # Cost
+///
+/// One round costs roughly one full anneal of the network (`betas.len() *
+/// niters` sweeps) plus one waist-surgery iteration, so total time scales
+/// linearly in `rounds`.
+///
+/// # Panics
+///
+/// Panics if `size_dict` is missing a label appearing in `code` — the same
+/// completeness requirement as [`optimize_treesa`].
+///
+/// # Example
+///
+/// ```
+/// use omeco::treesa::anneal_surgery_rounds;
+/// use omeco::{optimize_code, EinCode, GreedyMethod, TreeSA};
+/// use std::collections::HashMap;
+///
+/// let code = EinCode::new(
+///     vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+///     vec!['i', 'l'],
+/// );
+/// let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 8), ('l', 4)].into();
+/// let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+/// let (tree, report) = anneal_surgery_rounds(&seed, &code, &sizes, &TreeSA::fast(), 2);
+/// assert_eq!(tree.leaf_count(), 3);
+/// assert_eq!(report.rounds_run, 2);
+/// ```
+pub fn anneal_surgery_rounds<L: Label>(
+    seed: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    rounds: u64,
+) -> (NestedEinsum<L>, RoundsReport) {
+    use rand::SeedableRng;
+    let score_of = |t: &NestedEinsum<L>| {
+        let cc = crate::contraction_complexity(t, size_dict, &code.ixs);
+        config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+    };
+    let mut best = seed.clone();
+    let mut best_score = score_of(&best);
+    let mut trajectory = seed.clone();
+    let mut report = RoundsReport {
+        rounds_run: 0,
+        best_round: u64::MAX,
+        round_scores: Vec::new(),
+        surgery_calls_total: 0,
+    };
+    for r in 0..rounds {
+        let (t_surg, wr) = refine_capped(&trajectory, code, size_dict, std::time::Duration::MAX, 1);
+        report.surgery_calls_total += wr.surgery_calls;
+        // The anneal arguments are hoisted into single-line bindings so that
+        // the anneal itself is a single-line call: coverage instrumentation
+        // attributes a multi-line statement to its continuation lines, which
+        // then report as unreached even though the statement runs every round.
+        // Returning early (rather than breaking) out of the same-shaped match
+        // is part of that: the returned tuple is real work on a line a bare
+        // `break` would leave without any instructions of its own.
+        let ctx = match prepare_warm_anneal(code, size_dict, &t_surg) {
+            Some(ctx) => ctx,
+            None => return (best, report),
+        };
+        let (start, log2, nedge) = (ctx.tree, ctx.log2_sizes, ctx.nedge);
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0xA55E + r);
+        let (betas, niters, score) = (&config.betas, config.niters, &config.score);
+        let dt = DecompositionType::Tree;
+        let annealed = optimize_tree_sa(start, &log2, betas, niters, score, dt, &mut rng, nedge);
+        let cand = warm_exprtree_to_nested(&annealed, code, &ctx.labels);
+        let surg_score = score_of(&t_surg);
+        if surg_score < best_score {
+            best_score = surg_score;
+            best = t_surg;
+            report.best_round = r;
+        }
+        let cand_score = score_of(&cand);
+        if cand_score < best_score {
+            best_score = cand_score;
+            best = cand.clone();
+            report.best_round = r;
+        }
+        report.round_scores.push(cand_score);
+        report.rounds_run = r + 1;
+        trajectory = cand;
+    }
+    (best, report)
 }
 
 #[cfg(test)]
@@ -2016,21 +2208,27 @@ mod tests {
     }
 
     /// `surgery_iters > 0` is fully deterministic (internal RNG seeds are
-    /// fixed and no wall-clock deadline binds `optimize_treesa`'s cap): two
-    /// runs of the same config produce byte-identical trees. It is also
-    /// never worse than the no-surgery baseline.
+    /// fixed and no wall-clock deadline binds `optimize_treesa`'s rounds
+    /// loop): two runs of the same config produce byte-identical trees. It is
+    /// also never worse than the rounds-off baseline — the loop returns the
+    /// best tree it saw, and the baseline tree is the seed it starts from.
+    ///
+    /// "Never worse" is asserted on the config's own score function, which is
+    /// the quantity the loop ranks candidates by; `tc` alone carries no such
+    /// guarantee, since a lower-scoring tree may trade `tc` against `sc`.
     #[test]
-    fn test_surgery_iters_deterministic_and_never_worse() {
-        use crate::contraction_complexity;
+    fn test_surgery_iters_rounds_deterministic_and_never_worse() {
         // 4x4 periodic grid — a frozen-waist-style instance where surgery acts.
         let code = grid_code(4, 4);
         let sizes: HashMap<usize, usize> =
             code.unique_labels().into_iter().map(|l| (l, 2)).collect();
-        let base_cfg = TreeSA::fast();
-        let base = optimize_treesa(&code, &sizes, &base_cfg).unwrap();
-        let base_tc = contraction_complexity(&base, &sizes, &code.ixs).tc;
-
         let cfg = TreeSA::fast().with_surgery_iters(5);
+        let score_of = |t: &NestedEinsum<usize>| {
+            let cc = crate::contraction_complexity(t, &sizes, &code.ixs);
+            cfg.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+        let base = optimize_treesa(&code, &sizes, &cfg.clone().with_surgery_iters(0)).unwrap();
+
         let refined_a = optimize_treesa(&code, &sizes, &cfg).unwrap();
         let refined_b = optimize_treesa(&code, &sizes, &cfg).unwrap();
         assert_eq!(
@@ -2039,8 +2237,11 @@ mod tests {
             "surgery_iters > 0 must be deterministic across runs"
         );
 
-        let refined_tc = contraction_complexity(&refined_a, &sizes, &code.ixs).tc;
-        assert!(refined_tc <= base_tc + 1e-9, "{refined_tc} > {base_tc}");
+        let (base_score, refined_score) = (score_of(&base), score_of(&refined_a));
+        assert!(
+            refined_score <= base_score + 1e-9,
+            "{refined_score} > {base_score}"
+        );
         assert_eq!(refined_a.leaf_count(), code.num_tensors());
     }
 
@@ -2055,6 +2256,186 @@ mod tests {
         let a = optimize_treesa(&code, &sizes, &cfg).unwrap();
         let b = optimize_treesa(&code, &sizes, &cfg).unwrap();
         assert_eq!(format!("{a:?}"), format!("{b:?}"));
+    }
+
+    /// `surgery_iters = k` must mean "run `k` interleaved anneal–surgery
+    /// rounds on the pipeline's tree", i.e. the wrapper is exactly the
+    /// composition of the `surgery_iters = 0` pipeline with
+    /// [`anneal_surgery_rounds`].
+    #[test]
+    fn test_surgery_iters_runs_interleaved_rounds() {
+        // The wrapper with surgery_iters=k must equal seed-then-rounds composed by hand.
+        let (code, sizes) = load_benchmark_graph("grid_4x4");
+        let base = TreeSA::fast();
+        let seed = optimize_treesa(
+            &code,
+            &sizes,
+            &TreeSA {
+                surgery_iters: 0,
+                ..base.clone()
+            },
+        )
+        .unwrap();
+        let (by_hand, _) = anneal_surgery_rounds(&seed, &code, &sizes, &base, 2);
+        let wrapped = optimize_treesa(
+            &code,
+            &sizes,
+            &TreeSA {
+                surgery_iters: 2,
+                ..base
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            crate::json::to_json_string(&wrapped).unwrap(),
+            crate::json::to_json_string(&by_hand).unwrap()
+        );
+    }
+
+    /// The rounds loop is not path-preserving, so `optimize_treesa` must skip
+    /// it entirely for `DecompositionType::Path` configs: the result is
+    /// byte-identical to the same config with surgery off, and still a path.
+    ///
+    /// The fixture must be a network the rounds loop would actually change.
+    /// The task brief specified `chain_10`, but that makes the test vacuous:
+    /// an annealed chain is already optimal, so the loop's best-seen tree is
+    /// the seed and the assertion holds even with the guard deleted (verified
+    /// by mutation). `grid_4x4` has a waist for surgery to act on — deleting
+    /// the `!= Path` guard makes this test fail.
+    #[test]
+    fn test_path_decomposition_skips_surgery() {
+        let (code, sizes) = load_benchmark_graph("grid_4x4");
+        let cfg = TreeSA::path().with_surgery_iters(2);
+        let with_surgery = optimize_treesa(&code, &sizes, &cfg).unwrap();
+        let without = optimize_treesa(&code, &sizes, &TreeSA::path()).unwrap();
+        assert_eq!(
+            crate::json::to_json_string(&with_surgery).unwrap(),
+            crate::json::to_json_string(&without).unwrap()
+        );
+        assert!(with_surgery.is_path_decomposition());
+    }
+
+    #[test]
+    fn test_rounds_report_shape_and_determinism() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(
+            &code,
+            &sizes,
+            &TreeSA {
+                surgery_iters: 0,
+                ..config.clone()
+            },
+        )
+        .unwrap();
+        let (t1, r1) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
+        let (t2, r2) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
+        assert_eq!(r1.rounds_run, 3);
+        assert_eq!(r1.round_scores.len(), 3);
+        assert!(r1.best_round == u64::MAX || r1.best_round < 3);
+        // Determinism: identical trees and traces
+        assert_eq!(
+            crate::json::to_json_string(&t1).unwrap(),
+            crate::json::to_json_string(&t2).unwrap()
+        );
+        assert_eq!(r1.round_scores, r2.round_scores);
+        assert_eq!(r1.surgery_calls_total, r2.surgery_calls_total);
+    }
+
+    #[test]
+    fn test_rounds_never_worse_and_monotone() {
+        let (code, sizes) = load_benchmark_graph("grid_6x6");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(
+            &code,
+            &sizes,
+            &TreeSA {
+                surgery_iters: 0,
+                ..config.clone()
+            },
+        )
+        .unwrap();
+        let score_of = |t: &NestedEinsum<usize>| {
+            let cc = crate::contraction_complexity(t, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+        let s0 = score_of(&seed);
+        let (t1, _) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 1);
+        let (t3, _) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
+        assert!(score_of(&t1) <= s0);
+        assert!(score_of(&t3) <= score_of(&t1));
+    }
+
+    /// A round's *pre-anneal* surgery tree can be the run's final winner, not
+    /// just a waypoint the following anneal improves on. The loop must
+    /// therefore rank the surgery tree against the incumbent best in its own
+    /// right.
+    ///
+    /// The instance is rigged so that only the surgery tree can win: the seed
+    /// is a deliberately bad unannealed random tree, and the round's anneal
+    /// runs at β = 0, where the Metropolis rule accepts every move — a pure
+    /// random walk that leaves the surgery tree worse than it found it. So the
+    /// improvement over the seed can only have come from the surgery step, and
+    /// the returned tree is byte-identical to one `refine_capped` iteration on
+    /// the seed. Everything is seeded, so this is deterministic.
+    #[test]
+    fn test_rounds_surgery_tree_can_win_the_round() {
+        let (code, sizes) = load_benchmark_graph("grid_4x4");
+        // Deliberately bad seed: a random tree with the annealing loop disabled.
+        let seed_cfg = TreeSA {
+            betas: vec![1.0],
+            ntrials: 1,
+            niters: 0,
+            initializer: Initializer::Random,
+            preprocess: false,
+            ..TreeSA::fast()
+        };
+        let seed = optimize_treesa(&code, &sizes, &seed_cfg).unwrap();
+        // β = 0: every proposed move is accepted, so the anneal walks away
+        // from whatever the surgery step handed it.
+        let config = TreeSA {
+            betas: vec![0.0],
+            ..TreeSA::fast()
+        };
+        let score_of = |t: &NestedEinsum<usize>| {
+            let cc = crate::contraction_complexity(t, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+
+        let (best, report) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 1);
+        let (surgical, _) = refine_capped(&seed, &code, &sizes, std::time::Duration::MAX, 1);
+
+        assert_eq!(report.best_round, 0, "the single round must have won");
+        assert!(
+            score_of(&best) < score_of(&seed),
+            "surgery must strictly improve the seed for this fixture to bite: \
+             {} vs {}",
+            score_of(&best),
+            score_of(&seed)
+        );
+        assert!(
+            report.round_scores[0] > score_of(&best),
+            "the β = 0 anneal must end worse than the surgery tree, leaving it \
+             the only candidate that can win: {} vs {}",
+            report.round_scores[0],
+            score_of(&best)
+        );
+        assert_eq!(
+            crate::json::to_json_string(&best).unwrap(),
+            crate::json::to_json_string(&surgical).unwrap(),
+            "the returned tree must be the round's surgery tree itself"
+        );
+    }
+
+    #[test]
+    fn test_rounds_bare_leaf_seed() {
+        let code: EinCode<usize> = EinCode::new(vec![vec![0, 1]], vec![0, 1]);
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 2)].into();
+        let seed = NestedEinsum::leaf(0);
+        let (t, r) = anneal_surgery_rounds(&seed, &code, &sizes, &TreeSA::fast(), 2);
+        assert_eq!(r.rounds_run, 0);
+        assert!(r.round_scores.is_empty());
+        assert_eq!(t.leaf_count(), 1);
     }
 
     /// Regression: manually setting `decomposition_type: Path` while leaving

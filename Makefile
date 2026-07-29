@@ -1,11 +1,15 @@
 .DEFAULT_GOAL := help
-.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-build python-test benchmark version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
+.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-build python-test benchmark paper-bench paper-bench-check version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
 
 CARGO ?= cargo
 PYTHON ?= python3
 DOC_PORT ?= 8000
 DOC_HOST ?= 127.0.0.1
 DOC_CRATE ?= omeco
+
+# Paper benchmark runner (see benchmarks/paper/README.md); run from the repo root
+PAPER_BENCH = $(CARGO) run --release --example paper_bench -p omeco -- \
+	--manifest benchmarks/paper/manifest.json
 
 # Extract current version from omeco/Cargo.toml
 VERSION := $(shell grep -m1 '^version' omeco/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
@@ -36,7 +40,9 @@ help:
 	@printf "  serve-book     Serve mdBook at http://127.0.0.1:3000\n"
 	@printf "  clean-book     Remove generated mdBook files\n"
 	@printf "\nBenchmarks:\n"
-	@printf "  benchmark     Run Python vs Julia benchmark\n"
+	@printf "  benchmark         Run Python vs Julia benchmark\n"
+	@printf "  paper-bench       Regenerate the committed full paper benchmark artifact\n"
+	@printf "  paper-bench-check Re-run the ci set and verify it against the committed artifact\n"
 	@printf "\nRelease targets:\n"
 	@printf "  version         Show current version\n"
 	@printf "  bump-patch      Bump patch version ($(VERSION) -> $(MAJOR).$(MINOR).$$(($(PATCH)+1)))\n"
@@ -100,6 +106,17 @@ python-test: python-dev
 benchmark: python-dev
 	$(PYTHON) benchmarks/benchmark_python.py
 	cd benchmarks && julia --project=. benchmark_julia.jl
+
+# Paper benchmark: `paper-bench` regenerates the paper's own (~21 min) set,
+# `paper-bench-check` re-runs the small ci set and compares it against the
+# committed artifact. The temporary artifact goes to $TMPDIR, never a fixed path.
+paper-bench:
+	$(PAPER_BENCH) --set full --out benchmarks/paper/expected/full.json
+
+paper-bench-check:
+	@tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
+	$(PAPER_BENCH) --set ci --out "$$tmp" && \
+	$(PYTHON) benchmarks/paper/check.py "$$tmp" benchmarks/paper/expected/ci.json
 
 # Version management
 version:
