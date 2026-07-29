@@ -1111,25 +1111,23 @@ pub fn anneal_surgery_rounds<L: Label>(
     for r in 0..rounds {
         let (t_surg, wr) = refine_capped(&trajectory, code, size_dict, std::time::Duration::MAX, 1);
         report.surgery_calls_total += wr.surgery_calls;
-        // The context is destructured and the anneal arguments are hoisted so
-        // that the anneal stays a single-line call: coverage instrumentation
-        // attributes a multi-line call to its continuation lines, which then
-        // report as unreached even though the call runs on every round.
+        // The anneal arguments are hoisted into single-line bindings so that
+        // the anneal itself is a single-line call: coverage instrumentation
+        // attributes a multi-line statement to its continuation lines, which
+        // then report as unreached even though the statement runs every round.
+        // Returning early (rather than breaking) out of the same-shaped match
+        // is part of that: the returned tuple is real work on a line a bare
+        // `break` would leave without any instructions of its own.
         let ctx = match prepare_warm_anneal(code, size_dict, &t_surg) {
             Some(ctx) => ctx,
-            None => break,
+            None => return (best, report),
         };
-        let WarmAnnealCtx {
-            tree,
-            labels,
-            log2_sizes: log2,
-            nedge,
-        } = ctx;
+        let (start, log2, nedge) = (ctx.tree, ctx.log2_sizes, ctx.nedge);
         let mut rng = rand::rngs::SmallRng::seed_from_u64(0xA55E + r);
         let (betas, niters, score) = (&config.betas, config.niters, &config.score);
         let dt = DecompositionType::Tree;
-        let annealed = optimize_tree_sa(tree, &log2, betas, niters, score, dt, &mut rng, nedge);
-        let cand = warm_exprtree_to_nested(&annealed, code, &labels);
+        let annealed = optimize_tree_sa(start, &log2, betas, niters, score, dt, &mut rng, nedge);
+        let cand = warm_exprtree_to_nested(&annealed, code, &ctx.labels);
         let surg_score = score_of(&t_surg);
         if surg_score < best_score {
             best_score = surg_score;
