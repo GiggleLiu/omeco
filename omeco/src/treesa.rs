@@ -7,6 +7,7 @@
 use crate::eincode::{EinCode, NestedEinsum};
 use crate::expr_tree::{apply_rule_mut, DecompositionType, ExprTree, Rule, ScratchSpace};
 use crate::greedy::{optimize_greedy, GreedyMethod};
+use crate::preprocess::{simplify, splice};
 use crate::score::ScoreFunction;
 use crate::utils::fast_log2sumexp2;
 use crate::Label;
@@ -677,7 +678,32 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 }
 
 /// Optimize an EinCode using TreeSA.
+///
+/// By default this runs the full pipeline: structural simplification
+/// ([`crate::preprocess::simplify`]), the annealing trial loop on the reduced
+/// network, and splice-back — controlled by [`TreeSA::preprocess`]. A positive
+/// [`TreeSA::surgery_budget`] additionally refines the result with
+/// [`crate::waist_surgery::refine`].
 pub fn optimize_treesa<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+) -> Option<NestedEinsum<L>> {
+    let tree = if config.preprocess {
+        let simplified = simplify(code, size_dict);
+        let reduced = optimize_treesa_core(&simplified.code, size_dict, config)?;
+        splice(&reduced, &simplified.subtrees)
+    } else {
+        optimize_treesa_core(code, size_dict, config)?
+    };
+    Some(tree)
+}
+
+/// Bare TreeSA trial loop, without the structural-simplification front-end.
+///
+/// Used directly by [`optimize_treesa`] when [`TreeSA::preprocess`] is `false`,
+/// and by the preprocessed path to optimize the already-reduced network.
+fn optimize_treesa_core<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
     config: &TreeSA,
@@ -1765,5 +1791,109 @@ mod tests {
             .with_surgery_budget(30.0);
         assert!(!tuned.preprocess);
         assert_eq!(tuned.surgery_budget, 30.0);
+    }
+
+    #[test]
+    fn test_default_pipeline_preprocess_preserves_interfaces() {
+        // Matrix chain: simplify collapses it; the spliced tree must keep all leaves.
+        let code = EinCode::new(
+            vec![
+                vec!['a', 'b'],
+                vec!['b', 'c'],
+                vec!['c', 'd'],
+                vec!['d', 'e'],
+            ],
+            vec!['a', 'e'],
+        );
+        let sizes: HashMap<char, usize> = [('a', 2), ('b', 2), ('c', 2), ('d', 2), ('e', 2)].into();
+        let tree = optimize_treesa(&code, &sizes, &TreeSA::fast()).unwrap();
+        assert_eq!(tree.leaf_count(), 4);
+        let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
+        assert!(cc.tc.is_finite());
+    }
+
+    /// Loader for the shared benchmark graph JSON (`{ "ixs", "iy", "sizes" }`,
+    /// as read by `omeco/examples/benchmark.rs`), not the `edge_list` schema
+    /// used only by `reg3_220.json` (see `test_reg3_220_treesa` in `lib.rs`).
+    fn load_benchmark_graph(name: &str) -> (EinCode<usize>, HashMap<usize, usize>) {
+        let graph_json =
+            std::fs::read_to_string(format!("../benchmarks/graphs/{name}.json")).unwrap();
+        let graph: serde_json::Value = serde_json::from_str(&graph_json).unwrap();
+        let ixs: Vec<Vec<usize>> = graph["ixs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|ix| {
+                ix.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|l| l.as_u64().unwrap() as usize)
+                    .collect()
+            })
+            .collect();
+        let iy: Vec<usize> = graph["iy"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| l.as_u64().unwrap() as usize)
+            .collect();
+        let sizes: HashMap<usize, usize> = graph["sizes"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (k.parse::<usize>().unwrap(), v.as_u64().unwrap() as usize))
+            .collect();
+        (EinCode::new(ixs, iy), sizes)
+    }
+
+    #[test]
+    fn test_default_pipeline_quality_on_benchmark_graphs() {
+        // Spec §4: default (preprocess on) is within 0.5 bits of the bare loop on
+        // the benchmark graphs; exact equality where simplify is a no-op.
+        //
+        // Deviation from task-3-brief.md Step 1: the brief paired "reg3_50" with
+        // `no_op: true`, assuming 3-regular graphs are never simplifiable. That
+        // holds for a graph with an even total degree sum, but
+        // `benchmarks/graphs/reg3_50.json` (50 vertices, odd) carries one
+        // rank-1 "defect" tensor to balance parity; simplify's rank-non-increasing
+        // rule fuses it into a neighbour (50 -> 46 tensors), so tc_pre and tc_raw
+        // are close but not bit-identical (verified: diff ~0.045 bits, well inside
+        // the 0.5-bit tolerance). Swapped in "petersen" (10 vertices, uniformly
+        // rank-3, empirically confirmed n_reduced == n_original) as the true
+        // no-op case; reg3_50 would still pass under the tolerance branch.
+        for (name, no_op) in [("grid_4x4", false), ("petersen", true)] {
+            let (code, sizes) = load_benchmark_graph(name);
+            let cfg = TreeSA::fast();
+            let with_pre = optimize_treesa(&code, &sizes, &cfg).unwrap();
+            let without =
+                optimize_treesa(&code, &sizes, &cfg.clone().with_preprocess(false)).unwrap();
+            let tc_pre = crate::contraction_complexity(&with_pre, &sizes, &code.ixs).tc;
+            let tc_raw = crate::contraction_complexity(&without, &sizes, &code.ixs).tc;
+            if no_op {
+                assert!(
+                    (tc_pre - tc_raw).abs() < 1e-9,
+                    "{name}: {tc_pre} vs {tc_raw}"
+                );
+            } else {
+                assert!(tc_pre <= tc_raw + 0.5, "{name}: {tc_pre} > {tc_raw} + 0.5");
+            }
+        }
+    }
+
+    #[test]
+    fn test_preprocess_off_matches_core_loop() {
+        let code = EinCode::new(
+            vec![vec!['a', 'b'], vec!['b', 'c'], vec!['c', 'a']],
+            Vec::<char>::new(),
+        );
+        let sizes: HashMap<char, usize> = [('a', 4), ('b', 4), ('c', 4)].into();
+        let config = TreeSA::fast().with_preprocess(false);
+        let via_public = optimize_treesa(&code, &sizes, &config).unwrap();
+        let via_core = optimize_treesa_core(&code, &sizes, &config).unwrap();
+        assert_eq!(
+            format!("{via_public:?}"),
+            format!("{via_core:?}"),
+            "preprocess=false must be byte-identical to the bare trial loop"
+        );
     }
 }
