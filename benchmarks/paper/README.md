@@ -56,7 +56,7 @@ cargo run --release --example paper_bench -p omeco -- \
     --set ci \
     --out ci.json
 
-# The paper's set. Hours, not seconds — the large circuit instances dominate.
+# The paper's set. ~21 min on an Apple-silicon laptop; the large instances dominate.
 cargo run --release --example paper_bench -p omeco -- \
     --manifest benchmarks/paper/manifest.json \
     --set full \
@@ -81,7 +81,7 @@ Two Make targets wrap the same commands:
 
 ```bash
 make paper-bench-check  # ci set -> a temporary file -> check.py against expected/ci.json
-make paper-bench        # full set -> expected/full.json (hours)
+make paper-bench        # full set -> expected/full.json (~21 min, see below)
 ```
 
 To compare two artifacts:
@@ -218,6 +218,41 @@ benchmark that is quietly weaker than it looks is worse than no benchmark.
 Adding an instance means adding a file to `instances/` and a row to the
 manifest — the runner has no instance list of its own and no discovery pass over
 the directory, so an instance nobody declared is never silently benchmarked.
+
+## Calibration vs the frozen campaign
+
+The full set takes about 21 minutes end to end on an Apple-silicon laptop
+(1266 s for 40 results; the slowest single instance × arm is `nqueens_28`'s
+`treesa_rounds` at 6 minutes).
+
+The paper's headline numbers come from a wall-clock-budgeted campaign on a
+fixed host, not from this artifact. It is worth knowing how far apart the two
+are, so here are three instances side by side. Campaign values are the *best*
+`tc` recorded anywhere in the paper repository's `data/huawei_campaign.json`
+for that instance; `treesa_rounds` values are the committed `expected/full.json`
+rows produced by the `full` set (`TreeSA::default()`, `rounds: 8`).
+
+| Instance | Campaign best tc (huawei, wall-clock budget) | `treesa_rounds` tc (rounds = 8, deterministic) | Gap |
+|---|---|---|---|
+| `surfacecode_d13` | 30.485 — `p4_family["13"]`, best of 5 reps, both methods tie | 30.898 | +0.413 |
+| `surfacecode_d21` | 47.364 — `p2_budget_scaling`, tuned-TreeSA reference at the 900 s budget | 49.180 | +1.816 |
+| `ksg` | 36.356 — `p3_distributions`, best of 15 reps at the 90 s budget | 38.291 | +1.935 |
+
+(The campaign file records `tc` only, so there is no `sc` column to compare;
+this artifact's `sc` for the three rows is 24, 40 and 27 respectively.)
+
+The gaps are expected and they are not a defect. The two sides are budgeted by
+different quantities: `rounds` is a *schedule* budget — eight rounds is eight
+rounds on any machine, forever — while the campaign gave each attempt a fixed
+number of seconds on one 2-core x86 VM and took the best of many repetitions.
+A wall-clock budget buys more search on a faster host and less on a slower one,
+which is exactly the property this artifact is built to *not* have. What
+`expected/full.json` claims is bit-reproducibility: run the same commit on the
+same machine and you get the same file, and run it on a different machine and
+you get agreement to `1e-9`. It does not claim to reproduce a record. Raising
+`rounds` in the manifest closes the gap — the rounds loop is the mechanism the
+campaign was exploiting too — at a cost that is proportional and, unlike a
+timer, still deterministic.
 
 ## Frozen campaign data
 
