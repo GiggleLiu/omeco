@@ -11,6 +11,9 @@ use std::hash::Hash;
 /// Labels are used to identify tensor dimensions in einsum notation.
 /// Common choices are `char` (e.g., `'i'`, `'j'`) or `usize` for programmatic use.
 ///
+/// Requires `Ord` for deterministic preprocessing operations that rely on
+/// consistent ordering of labels.
+///
 /// # Example
 /// ```
 /// use omeco::Label;
@@ -19,7 +22,7 @@ use std::hash::Hash;
 ///     // Works with any label type
 /// }
 /// ```
-pub trait Label: Clone + Eq + Hash + Debug + Send + Sync + 'static {}
+pub trait Label: Clone + Eq + Ord + Hash + Debug + Send + Sync + 'static {}
 
 // Implement Label for common types
 impl Label for char {}

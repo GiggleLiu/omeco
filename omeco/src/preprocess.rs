@@ -115,8 +115,8 @@ pub struct Simplified<L: Label> {
 /// a surviving tensor whose rank and dimension-aware storage are no larger than
 /// the respective maximum of the inputs. Missing dimensions are treated as one,
 /// consistently with the other optimizers. The pass is deterministic (labels,
-/// neighbours, and requeued tensors are processed in sorted order) and requires
-/// `L: Ord` for that determinism.
+/// neighbours, and requeued tensors are processed in sorted order); `Ord` is
+/// provided by the `Label` trait.
 ///
 /// # Example
 ///
@@ -133,7 +133,7 @@ pub struct Simplified<L: Label> {
 /// assert_eq!(simplified.report.n_original, 2);
 /// assert_eq!(simplified.report.n_reduced, 1);
 /// ```
-pub fn simplify<L: Label + Ord>(code: &EinCode<L>, size_dict: &HashMap<L, usize>) -> Simplified<L> {
+pub fn simplify<L: Label>(code: &EinCode<L>, size_dict: &HashMap<L, usize>) -> Simplified<L> {
     let n = code.ixs.len();
     let out_set: HashSet<L> = code.iy.iter().cloned().collect();
 
@@ -383,7 +383,7 @@ pub fn splice<L: Label>(tree: &NestedEinsum<L>, subtrees: &[NestedEinsum<L>]) ->
 /// assert!(cc.tc.is_finite());
 /// assert_eq!(report.n_original, 3);
 /// ```
-pub fn simplify_then_optimize<L: Label + Ord, O: CodeOptimizer>(
+pub fn simplify_then_optimize<L: Label, O: CodeOptimizer>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
     optimizer: &O,

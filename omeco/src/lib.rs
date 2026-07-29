@@ -1295,7 +1295,7 @@ mod large_scale_stress_tests {
     #[test]
     fn test_reg3_220_treesa() {
         // =========================================================================
-        // ALIGNED WITH JULIA - DO NOT MODIFY WITHOUT CHECKING JULIA TESTS
+        // REGRESSION (originally cross-checked against Julia test/treesa.jl)
         // Julia "sa tree" test in test/treesa.jl:
         //   Random.seed!(2)
         //   code = random_regular_eincode(220, 3)

@@ -471,6 +471,23 @@ def test_treesa_getters():
     assert len(opt.betas) > 0
 
 
+def test_treesa_repr():
+    """__repr__ must surface preprocess and surgery_iters, not just ntrials/niters/score."""
+    opt = TreeSA(ntrials=3, niters=15, preprocess=False, surgery_iters=7)
+    repr_str = repr(opt)
+    assert "TreeSA" in repr_str
+    assert "ntrials=3" in repr_str
+    assert "niters=15" in repr_str
+    assert "preprocess=False" in repr_str
+    assert "surgery_iters=7" in repr_str
+
+
+def test_treesa_surgery_iters_getter_and_default():
+    """surgery_iters defaults to 0 and round-trips through the constructor."""
+    assert TreeSA().surgery_iters == 0
+    assert TreeSA(surgery_iters=7).surgery_iters == 7
+
+
 # ============== New tests for TreeSASlicer constructor ==============
 
 

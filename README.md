@@ -6,7 +6,7 @@
 
 Tensor network contraction order optimization in Rust.
 
-Ported from [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).
+Originated as a port of [OMEinsumContractionOrders.jl](https://github.com/TensorBFS/OMEinsumContractionOrders.jl).
 
 ## Documentation
 
@@ -44,10 +44,31 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-omeco = "0.1"
+omeco = "0.2"
 ```
 
 ## Python Quick Start
+
+`TreeSA()` runs the full default pipeline (simplify, anneal, splice) with no
+tuning required. Give it a `surgery_iters` cap to run extra, deterministic
+surgery iterations for a result that's never worse — see the
+[Default Pipeline](https://GiggleLiu.github.io/omeco/algorithms/default-pipeline.html)
+page for what each stage does and when surgery helps:
+
+```python
+from omeco import optimize_code, contraction_complexity, TreeSA
+
+ixs = [[0, 1], [1, 2], [2, 3]]
+out = [0, 3]
+sizes = {0: 100, 1: 200, 2: 50, 3: 100}
+
+tree = optimize_code(ixs, out, sizes, TreeSA())        # full default pipeline
+better = optimize_code(ixs, out, sizes, TreeSA(surgery_iters=20))  # deterministic knob, get a better tree
+print(contraction_complexity(tree, ixs, sizes))
+```
+
+`GreedyMethod` is faster and lower-quality; `TreeSASlicer` reduces peak memory
+by slicing:
 
 ```python
 from omeco import (
@@ -80,8 +101,36 @@ sliced_tree_dict = sliced.to_dict()  # Dict for the optimized sliced tree
 
 ## Rust Quick Start
 
-Two core features are exposed in the quick start below: optimizing contraction
-orders and slicing for lower peak memory.
+`TreeSA::default()` runs the full default pipeline (simplify, anneal,
+splice) with no tuning required. Chain `.with_surgery_iters(20)` to run extra,
+deterministic surgery iterations for a result that's never worse — see the
+[Default Pipeline](https://GiggleLiu.github.io/omeco/algorithms/default-pipeline.html)
+page for what each stage does and when surgery helps:
+
+```rust
+use omeco::{EinCode, TreeSA, optimize_code, contraction_complexity};
+use std::collections::HashMap;
+
+let code = EinCode::new(
+    vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+    vec!['i', 'l']
+);
+let mut sizes = HashMap::new();
+sizes.insert('i', 100);
+sizes.insert('j', 200);
+sizes.insert('k', 50);
+sizes.insert('l', 100);
+
+// full default pipeline
+let tree = optimize_code(&code, &sizes, &TreeSA::default()).unwrap();
+// deterministic knob, get a better tree
+let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_iters(20)).unwrap();
+let complexity = contraction_complexity(&tree, &sizes, &code.ixs);
+println!("Time: 2^{:.2}, Space: 2^{:.2}", complexity.tc, complexity.sc);
+```
+
+Two more core features: optimizing with `GreedyMethod` and slicing for lower
+peak memory.
 
 ```rust
 use omeco::{

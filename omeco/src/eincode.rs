@@ -918,6 +918,8 @@ mod tests {
             initializer: Initializer::Greedy,
             decomposition_type: DecompositionType::Path,
             score: Default::default(),
+            preprocess: false,
+            surgery_iters: 0,
         };
         let treesa_result = optimize_treesa(&code, &sizes, &treesa_config).unwrap();
 
