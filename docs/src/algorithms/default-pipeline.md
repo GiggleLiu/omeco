@@ -8,7 +8,7 @@ pass. This page documents what runs, what it guarantees, and how to opt out.
 ## What `TreeSA::default()` runs
 
 ```
-simplify  ->  anneal trials (on the reduced network)  ->  splice  ->  [surgery, if budgeted]
+simplify  ->  anneal trials (on the reduced network)  ->  splice  ->  [k x (surgery -> anneal), if k > 0]
 ```
 
 1. **Simplify** ([`crate::preprocess::simplify`]) deterministically fuses
@@ -21,11 +21,22 @@ simplify  ->  anneal trials (on the reduced network)  ->  splice  ->  [surgery, 
 3. **Splice** ([`crate::preprocess::splice`]) expands each reduced-network
    leaf back into the binary subtree `simplify` merged it from, so the
    returned tree's leaves are exactly the original tensors again.
-4. **Surgery** ([`crate::waist_surgery::refine_capped`]) only runs if
-   [`TreeSA::surgery_iters`] is greater than `0` (the default is `0`, off).
-   When enabled, it runs at most that many surgery iterations trying to
-   improve the tree's most expensive contraction (its *waist*) and only keeps
-   changes that strictly lower `tc`.
+4. **Interleaved anneal–surgery rounds** (the companion paper's Algorithm 1)
+   only run if [`TreeSA::surgery_iters`] is greater than `0` (the default is
+   `0`, off). `surgery_iters` counts *rounds*, and each round is one
+   waist-surgery iteration ([`crate::waist_surgery::refine_capped`]) on the
+   current tree — improving its most expensive contraction, its *waist* —
+   followed by a full warm-started annealing pass over the surgical result.
+   The loop returns the best tree it saw anywhere, so it can only help.
+
+   Rounds are *chained*: round `r + 1` continues from round `r`'s annealed
+   tree even when that tree was worse than the incumbent best. Letting the
+   trajectory go uphill is the point — it is what lets surgery carry the
+   search out of a basin that local annealing moves cannot leave.
+
+   **Cost: one round ≈ one more full anneal of the network**, so runtime grows
+   roughly linearly in `surgery_iters`. Budget it like extra trials, not like
+   a cheap post-pass.
 
 This whole pipeline is what `optimize_code(ixs, out, sizes, TreeSA())` /
 `optimize_code(&code, &sizes, &TreeSA::default())` runs by default — no flags
@@ -34,27 +45,27 @@ needed to get it.
 ```python
 from omeco import optimize_code, TreeSA
 
-tree = optimize_code(ixs, out, sizes, TreeSA())                       # default pipeline
-better = optimize_code(ixs, out, sizes, TreeSA(surgery_iters=20))     # + waist surgery
+tree = optimize_code(ixs, out, sizes, TreeSA())                      # default pipeline
+better = optimize_code(ixs, out, sizes, TreeSA(surgery_iters=3))     # + 3 anneal-surgery rounds
 ```
 
 ```rust
 use omeco::{optimize_code, TreeSA};
 
 let tree = optimize_code(&code, &sizes, &TreeSA::default()).unwrap();
-let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_iters(20)).unwrap();
+let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_iters(3)).unwrap();
 ```
 
 ## Determinism
 
 The whole `TreeSA` API is **fully deterministic and machine-independent**:
-simplify, the anneal trials, splice, and — since `surgery_iters` replaced the
-old wall-clock surgery knob — the surgery post-pass too are all pure
-functions of the input network and config (internal RNG seeds are fixed, and
-no wall-clock deadline binds `optimize_treesa`'s surgery cap). Re-running the
-same configuration reproduces the same tree on any machine, with
-`surgery_iters` at any value: `0` (off), or any positive cap. More iterations
-can only be equal or better, never worse.
+simplify, the anneal trials, splice, and — since `surgery_iters` counts rounds
+rather than seconds — the anneal–surgery loop too are all pure functions of
+the input network and config (internal RNG seeds are fixed, and no wall-clock
+deadline binds `optimize_treesa`). Re-running the same configuration
+reproduces the same tree on any machine, with `surgery_iters` at any value:
+`0` (off), or any positive round count. More rounds can only be equal or
+better, never worse.
 
 Wall-clock budgets still exist, but only on the low-level
 [`crate::waist_surgery::refine`] / [`refine_capped`] APIs (and the Python
@@ -95,6 +106,11 @@ extracts the tree's most expensive cut, re-optimizes it directly on the
 tensor hypergraph with balance-constrained Fiduccia–Mattheyses passes, and
 only keeps the result if it strictly lowers `tc`.
 
+Interleaving matters as much as the surgery itself: a surgical cut is a jump
+to a different basin, and the annealing pass that follows it in the same
+round is what settles the rest of the tree around the new cut. That is why
+`surgery_iters` runs rounds rather than back-to-back surgery iterations.
+
 - **Helps most** on frozen-waist-prone instances, where the network has
   genuinely distinct good bipartitions of similar cost that local mutations
   struggle to reach. In the companion paper's measurements, 76% of surgery
@@ -102,21 +118,21 @@ only keeps the result if it strictly lowers `tc`.
   a strictly cheaper comparable-balance cut.
 - **Near-no-op elsewhere.** On instances without a frozen waist, surgery's
   bounded search typically returns early after confirming the incumbent cut
-  is locally minimal — you pay a bounded number of iterations for little
-  or no gain, but you
-  never regress `tc`.
+  is locally minimal — the round then degenerates to an extra warm-started
+  anneal, which costs time but never regresses the returned tree.
 
-If you don't know in advance whether your network has this structure, a
-positive `surgery_iters` is a safe default to try: worst case it costs a few
-iterations for no improvement, best case it recovers a meaningfully cheaper
-tree.
+If you don't know in advance whether your network has this structure, a small
+positive `surgery_iters` is a safe thing to try: worst case you spend a few
+extra anneals for no improvement, best case you recover a meaningfully
+cheaper tree. Since each round costs about one anneal, start at 2–5 rounds
+and scale up only if the trajectory is still improving.
 
 ## Escape hatches
 
 | Want | Set |
 |---|---|
 | Skip simplification, anneal the raw network directly | `preprocess: false` (Rust: `.with_preprocess(false)`; Python: `TreeSA(preprocess=False)`) |
-| Skip waist surgery (already the default) | `surgery_iters: 0` (Rust: `.with_surgery_iters(0)`; Python: `TreeSA(surgery_iters=0)`) |
+| Skip the anneal–surgery rounds (already the default) | `surgery_iters: 0` (Rust: `.with_surgery_iters(0)`; Python: `TreeSA(surgery_iters=0)`) |
 
 `TreeSA::path()` sets `preprocess: false` by construction, deliberately —
 `splice` is decomposition-agnostic: it substitutes each reduced-network leaf
@@ -125,6 +141,11 @@ path-shaped in general. Running the front-end under `path()` could give the
 spliced tree a node with two non-leaf children and break that preset's
 documented linear-contraction-order guarantee, so it opts out unconditionally
 rather than risk it.
+
+For the same reason, a `Path` decomposition also skips the anneal–surgery
+rounds: neither the surgical rebuild nor the warm-started anneal is
+path-preserving. Setting `surgery_iters` on a path config is silently ignored
+rather than allowed to return a non-path tree.
 
 ## See also
 

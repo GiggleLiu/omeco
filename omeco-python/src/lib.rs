@@ -545,9 +545,13 @@ impl PyTreeSA {
     ///     score: Score function for evaluating solutions. If None, uses default.
     ///     preprocess: Simplify the network (splice degree-2/parallel tensors) before
     ///                 annealing, then splice the reduced tree back (default: True).
-    ///     surgery_iters: Deterministic cap on post-annealing waist-surgery
-    ///                    iterations; 0 disables it (default: 0). Fully
-    ///                    reproducible across machines for any fixed config.
+    ///     surgery_iters: Number of interleaved anneal-surgery rounds run after
+    ///                    the pipeline (each round is one waist-surgery
+    ///                    iteration plus a warm-started anneal, so it costs
+    ///                    about one full anneal); 0 disables the loop
+    ///                    (default: 0). The best tree seen is returned, so more
+    ///                    rounds are never worse, and the loop is deterministic
+    ///                    and reproducible across machines for any fixed config.
     #[new]
     #[pyo3(signature = (ntrials=10, niters=50, betas=None, score=None, preprocess=true, surgery_iters=0))]
     fn new(
