@@ -690,7 +690,10 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 ///
 /// By default this runs the full pipeline: structural simplification
 /// ([`crate::preprocess::simplify`]), the annealing trial loop on the reduced
-/// network, and splice-back — controlled by [`TreeSA::preprocess`].
+/// network, and splice-back — controlled by [`TreeSA::preprocess`]. A
+/// positive [`TreeSA::surgery_budget`] additionally refines the result with
+/// [`crate::waist_surgery::refine`] (never worse; wall-clock dependent, so
+/// results with surgery enabled are not reproducible across machines).
 pub fn optimize_treesa<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
@@ -703,6 +706,13 @@ pub fn optimize_treesa<L: Label>(
     } else {
         optimize_treesa_core(code, size_dict, config)?
     };
+
+    if config.surgery_budget > 0.0 {
+        let budget = std::time::Duration::from_secs_f64(config.surgery_budget);
+        let (refined, _report) = crate::waist_surgery::refine(&tree, code, size_dict, budget);
+        return Some(refined);
+    }
+
     Some(tree)
 }
 
@@ -1915,5 +1925,66 @@ mod tests {
             format!("{via_core:?}"),
             "preprocess=false must be byte-identical to the bare trial loop"
         );
+    }
+
+    /// Build a 2D periodic grid tensor network (each bond a distinct label),
+    /// mirroring `waist_surgery`'s own `grid` test helper.
+    fn grid_code(rows: usize, cols: usize) -> EinCode<usize> {
+        let mut next = 0usize;
+        let mut edge = |_a: (usize, usize), _b: (usize, usize)| {
+            let e = next;
+            next += 1;
+            e
+        };
+        // Assign an id per undirected grid edge.
+        let mut hbond = vec![vec![0usize; cols]; rows];
+        let mut vbond = vec![vec![0usize; cols]; rows];
+        for r in 0..rows {
+            for c in 0..cols {
+                hbond[r][c] = edge((r, c), (r, (c + 1) % cols));
+                vbond[r][c] = edge((r, c), ((r + 1) % rows, c));
+            }
+        }
+        let mut ixs = Vec::new();
+        for r in 0..rows {
+            for c in 0..cols {
+                let left = hbond[r][(c + cols - 1) % cols];
+                let right = hbond[r][c];
+                let up = vbond[(r + rows - 1) % rows][c];
+                let down = vbond[r][c];
+                ixs.push(vec![left, right, up, down]);
+            }
+        }
+        EinCode::new(ixs, vec![])
+    }
+
+    #[test]
+    fn test_surgery_budget_never_worse() {
+        use crate::contraction_complexity;
+        // 4x4 periodic grid — a frozen-waist-style instance where surgery acts.
+        let code = grid_code(4, 4);
+        let sizes: HashMap<usize, usize> =
+            code.unique_labels().into_iter().map(|l| (l, 2)).collect();
+        let base_cfg = TreeSA::fast();
+        let base = optimize_treesa(&code, &sizes, &base_cfg).unwrap();
+        let base_tc = contraction_complexity(&base, &sizes, &code.ixs).tc;
+        let cfg = TreeSA::fast().with_surgery_budget(2.0);
+        let refined = optimize_treesa(&code, &sizes, &cfg).unwrap();
+        let refined_tc = contraction_complexity(&refined, &sizes, &code.ixs).tc;
+        assert!(refined_tc <= base_tc + 1e-9, "{refined_tc} > {base_tc}");
+        assert_eq!(refined.leaf_count(), code.num_tensors());
+    }
+
+    #[test]
+    fn test_surgery_off_is_reproducible() {
+        let code = EinCode::new(
+            vec![vec![0usize, 1], vec![1, 2], vec![2, 3], vec![3, 0]],
+            vec![],
+        );
+        let sizes: HashMap<usize, usize> = (0..4).map(|l| (l, 8)).collect();
+        let cfg = TreeSA::fast(); // surgery_budget == 0.0
+        let a = optimize_treesa(&code, &sizes, &cfg).unwrap();
+        let b = optimize_treesa(&code, &sizes, &cfg).unwrap();
+        assert_eq!(format!("{a:?}"), format!("{b:?}"));
     }
 }
