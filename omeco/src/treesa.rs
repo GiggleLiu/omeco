@@ -10,6 +10,7 @@ use crate::greedy::{optimize_greedy, GreedyMethod};
 use crate::preprocess::{simplify, splice};
 use crate::score::ScoreFunction;
 use crate::utils::fast_log2sumexp2;
+use crate::waist_surgery::refine_capped;
 use crate::Label;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -765,13 +766,9 @@ pub fn optimize_treesa<L: Label>(
     };
 
     if config.surgery_iters > 0 {
-        let (refined, _report) = crate::waist_surgery::refine_capped(
-            &tree,
-            code,
-            size_dict,
-            std::time::Duration::MAX,
-            config.surgery_iters,
-        );
+        let budget = std::time::Duration::MAX;
+        let (refined, _report) =
+            refine_capped(&tree, code, size_dict, budget, config.surgery_iters);
         return Some(refined);
     }
 
@@ -2085,5 +2082,24 @@ mod tests {
         let tree = optimize_treesa(&code, &sizes, &config).unwrap();
         assert!(tree.is_path_decomposition());
         assert_eq!(tree.leaf_count(), 4);
+    }
+
+    #[test]
+    fn test_random_initializer_produces_valid_tree() {
+        let code = EinCode::new(
+            vec![vec!['a', 'b'], vec!['b', 'c'], vec!['c', 'd']],
+            vec!['a', 'd'],
+        );
+        let sizes: HashMap<char, usize> = [('a', 2), ('b', 2), ('c', 2), ('d', 2)].into();
+        let config = TreeSA {
+            initializer: Initializer::Random,
+            ntrials: 1,
+            niters: 5,
+            ..TreeSA::fast()
+        };
+        let tree = optimize_treesa(&code, &sizes, &config).unwrap();
+        assert_eq!(tree.leaf_count(), 3);
+        let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
+        assert!(cc.tc.is_finite());
     }
 }
