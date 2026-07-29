@@ -135,3 +135,7 @@ warm-start API.
 - Composable stage combinators.
 - Changing `GreedyMethod`/`Treewidth` defaults.
 - Dropping Julia JSON interop.
+
+## Amendment (2026-07-29): maintainer direction replaced `surgery_budget`
+(seconds) with `surgery_iters: u64` (deterministic iteration cap, default 0 =
+off); wall-clock budgets remain only on the low-level waist_surgery APIs.

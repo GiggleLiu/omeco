@@ -15,7 +15,7 @@ Classes:
         ExhaustiveSearch(verbose=False)
 
     TreeSA: Simulated annealing optimizer.
-        TreeSA(ntrials=10, niters=50, betas=None, score=None, preprocess=True, surgery_budget=0.0)
+        TreeSA(ntrials=10, niters=50, betas=None, score=None, preprocess=True, surgery_iters=0)
         TreeSA.fast(score=None)
 
     Treewidth: Scalable treewidth-heuristic elimination-order optimizer.

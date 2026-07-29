@@ -11,10 +11,10 @@ CHAIN_SIZES = {i: 2 for i in range(5)}
 def test_treesa_pipeline_defaults():
     opt = TreeSA()
     assert opt.preprocess is True
-    assert opt.surgery_budget == 0.0
-    opt2 = TreeSA(preprocess=False, surgery_budget=1.5)
+    assert opt.surgery_iters == 0
+    opt2 = TreeSA(preprocess=False, surgery_iters=7)
     assert opt2.preprocess is False
-    assert opt2.surgery_budget == 1.5
+    assert opt2.surgery_iters == 7
 
 
 def test_treesa_default_keeps_all_leaves():
@@ -36,3 +36,14 @@ def test_waist_refine_never_worse():
     tc = contraction_complexity(refined, CHAIN_IXS, CHAIN_SIZES).tc
     assert tc <= seed_tc + 1e-9
     assert report.surgery_calls >= 0
+
+
+def test_waist_refine_max_iters_caps_surgery_calls():
+    seed = optimize_code(CHAIN_IXS, CHAIN_OUT, CHAIN_SIZES, GreedyMethod())
+    refined, report = waist_refine(
+        seed, CHAIN_IXS, CHAIN_OUT, CHAIN_SIZES, 3600.0, max_iters=2
+    )
+    assert report.surgery_calls <= 2
+    tc = contraction_complexity(refined, CHAIN_IXS, CHAIN_SIZES).tc
+    seed_tc = contraction_complexity(seed, CHAIN_IXS, CHAIN_SIZES).tc
+    assert tc <= seed_tc + 1e-9

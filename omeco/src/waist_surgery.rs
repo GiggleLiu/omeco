@@ -667,6 +667,9 @@ struct Refiner<'a> {
     log2_sizes: &'a [f64],
     start: Instant,
     budget: Duration,
+    /// Maximum number of surgery iterations to start (0 = uncapped). Checked
+    /// against `report.surgery_calls` before each iteration begins.
+    max_iters: u64,
     rng: SmallRng,
     report: WaistReport,
 }
@@ -917,7 +920,10 @@ impl Refiner<'_> {
 ///
 /// The RNG seed is fixed, but how much work fits inside `budget` depends on
 /// wall-clock speed, so results are **not** reproducible across machines or
-/// loads — only the never-worse guarantee is.
+/// loads — only the never-worse guarantee is. For a fully deterministic,
+/// machine-independent cap use [`refine_capped`] with a positive `max_iters`
+/// (this function is a thin delegate: `refine_capped(tree, code, sizes,
+/// budget, 0)`, i.e. `0` = uncapped).
 ///
 /// # Example
 ///
@@ -942,6 +948,49 @@ pub fn refine<L: Label>(
     code: &EinCode<L>,
     sizes: &HashMap<L, usize>,
     budget: Duration,
+) -> (NestedEinsum<L>, WaistReport) {
+    refine_capped(tree, code, sizes, budget, 0)
+}
+
+/// Refine a contraction tree by repeated waist surgery, identical to
+/// [`refine`] except that at most `max_iters` surgery iterations are started
+/// (`0` = uncapped, matching `refine`'s behavior exactly).
+///
+/// Each iteration increments [`WaistReport::surgery_calls`] once, before
+/// doing any work; capping stops the loop **before** starting an iteration
+/// once that counter has reached `max_iters`, so the guarantee is exactly
+/// `report.surgery_calls <= max_iters` whenever `max_iters > 0`.
+///
+/// Note that `max_iters` bounds *iterations*, not wall-clock time: `budget`
+/// still applies within each iteration (FM and rebuild-annealing loops), so
+/// pass a generous budget (e.g. [`Duration::MAX`]) if you want the iteration
+/// count to be the only limiting factor — that combination is fully
+/// deterministic and machine-independent, unlike a positive `budget` alone.
+///
+/// # Example
+///
+/// ```
+/// use omeco::waist_surgery::refine_capped;
+/// use omeco::{optimize_code, EinCode, GreedyMethod};
+/// use std::collections::HashMap;
+/// use std::time::Duration;
+///
+/// let code = EinCode::new(
+///     vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+///     vec!['i', 'l'],
+/// );
+/// let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2), ('l', 2)].into();
+/// let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+/// let (refined, report) = refine_capped(&seed, &code, &sizes, Duration::MAX, 2);
+/// assert_eq!(refined.leaf_count(), 3);
+/// assert!(report.surgery_calls <= 2);
+/// ```
+pub fn refine_capped<L: Label>(
+    tree: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    sizes: &HashMap<L, usize>,
+    budget: Duration,
+    max_iters: u64,
 ) -> (NestedEinsum<L>, WaistReport) {
     let n = code.num_tensors();
     let mut report = WaistReport {
@@ -1005,12 +1054,16 @@ pub fn refine<L: Label>(
         log2_sizes: &log2_sizes,
         start: Instant::now(),
         budget,
+        max_iters,
         rng: SmallRng::seed_from_u64(RNG_SEED),
         report,
     };
 
     let mut stale: u64 = 0;
-    while !refiner.out_of_time() && stale < MAX_STALE_ITERS {
+    while !refiner.out_of_time()
+        && stale < MAX_STALE_ITERS
+        && (refiner.max_iters == 0 || refiner.report.surgery_calls < refiner.max_iters)
+    {
         let Some(incumbent) = nested_to_expr_tree(&best, &id_label_map) else {
             break;
         };
@@ -1378,6 +1431,41 @@ mod tests {
         assert_eq!(report.surgery_calls, 0);
     }
 
+    /// `refine_capped` with a generous budget and a small `max_iters` must
+    /// stop starting new surgery iterations once the counter reaches the cap.
+    #[test]
+    fn test_refine_capped_bounds_surgery_calls() {
+        let code = grid(4, 4);
+        let sizes = uniform_sizes(&code, 2);
+        let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let (_refined, report) = refine_capped(&seed, &code, &sizes, Duration::from_secs(3600), 3);
+        assert!(
+            report.surgery_calls <= 3,
+            "surgery_calls={} > max_iters=3",
+            report.surgery_calls
+        );
+    }
+
+    /// `refine(...)` must be byte-identical to `refine_capped(..., 0)`: the
+    /// former is documented as a thin delegate to the latter.
+    #[test]
+    fn test_refine_delegates_uncapped() {
+        let code = EinCode::new(
+            vec![vec![0usize, 1], vec![1, 2], vec![2, 3], vec![3, 4]],
+            vec![0, 4],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        // A generous, identical budget on both sides: this tiny network's
+        // surgery loop terminates deterministically (MAX_STALE_ITERS) well
+        // inside it, so timing jitter cannot make the two calls diverge.
+        let (via_refine, report_refine) = refine(&seed, &code, &sizes, Duration::from_secs(3600));
+        let (via_capped, report_capped) =
+            refine_capped(&seed, &code, &sizes, Duration::from_secs(3600), 0);
+        assert_eq!(format!("{via_refine:?}"), format!("{via_capped:?}"));
+        assert_eq!(report_refine, report_capped);
+    }
+
     #[test]
     fn test_extract_waist_finds_non_root_argmax() {
         let right = ExprTree::node(
@@ -1435,6 +1523,7 @@ mod tests {
             log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::ZERO,
+            max_iters: 0,
             rng: SmallRng::seed_from_u64(RNG_SEED),
             report: WaistReport {
                 n_original: code.num_tensors(),
@@ -1464,6 +1553,7 @@ mod tests {
             log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::from_secs(1),
+            max_iters: 0,
             rng: SmallRng::seed_from_u64(RNG_SEED),
             report: WaistReport {
                 n_original: code.num_tensors(),
@@ -1521,6 +1611,7 @@ mod tests {
             log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::from_secs(2),
+            max_iters: 0,
             rng: SmallRng::seed_from_u64(RNG_SEED),
             report: WaistReport {
                 n_original: code.num_tensors(),
@@ -1581,6 +1672,7 @@ mod tests {
             log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::from_secs(2),
+            max_iters: 0,
             rng: SmallRng::seed_from_u64(RNG_SEED),
             report: WaistReport {
                 n_original: code.num_tensors(),
@@ -1658,6 +1750,7 @@ mod tests {
             log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::from_secs(1),
+            max_iters: 0,
             rng: SmallRng::seed_from_u64(RNG_SEED),
             report: WaistReport {
                 n_original: code.num_tensors(),
@@ -1714,6 +1807,7 @@ mod tests {
             log2_sizes: &log2,
             start: Instant::now(),
             budget: Duration::from_secs(1),
+            max_iters: 0,
             rng: SmallRng::seed_from_u64(RNG_SEED),
             report: WaistReport {
                 n_original: code.num_tensors(),

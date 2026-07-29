@@ -39,20 +39,23 @@ pub struct TreeSA {
     /// this field is set to `true`: splice does not preserve the
     /// path-decomposition guarantee. See [`TreeSA::path`].
     pub preprocess: bool,
-    /// Wall-clock budget in seconds for the waist-surgery post-pass on the
-    /// selected tree; `0.0` disables it. With a positive budget the result is
-    /// never worse than without, but is not reproducible across machines.
-    /// `f64::INFINITY` (or any value too large to represent as a
-    /// [`std::time::Duration`]) is treated as an effectively unlimited
-    /// budget rather than causing a panic.
-    /// See [`crate::waist_surgery`].
+    /// Deterministic cap on the number of waist-surgery iterations run as a
+    /// post-pass on the selected tree; `0` disables surgery entirely (the
+    /// default). A positive value runs at most that many surgery iterations
+    /// after the pipeline: the result is never worse than with surgery off,
+    /// and more iterations can only be equal or better. See
+    /// [`crate::waist_surgery`].
     ///
     /// # Determinism
     ///
-    /// The surgery pass's RNG seed is fixed, but how much work fits inside
-    /// the budget depends on wall-clock speed, so results with a positive
-    /// budget are **not** reproducible across machines or loads.
-    pub surgery_budget: f64,
+    /// Unlike the low-level [`crate::waist_surgery::refine`]/[`refine_capped`]
+    /// wall-clock APIs, `optimize_treesa` binds surgery to no deadline —
+    /// internal RNG seeds are fixed throughout. The whole `TreeSA` API is
+    /// therefore fully reproducible across machines for any fixed config,
+    /// including configs with `surgery_iters > 0`.
+    ///
+    /// [`refine_capped`]: crate::waist_surgery::refine_capped
+    pub surgery_iters: u64,
 }
 
 /// Method for initializing the contraction tree.
@@ -77,7 +80,7 @@ impl Default for TreeSA {
             score: ScoreFunction::default(),
             decomposition_type: DecompositionType::Tree,
             preprocess: true,
-            surgery_budget: 0.0,
+            surgery_iters: 0,
         }
     }
 }
@@ -99,7 +102,7 @@ impl TreeSA {
             score,
             decomposition_type: DecompositionType::Tree,
             preprocess: true,
-            surgery_budget: 0.0,
+            surgery_iters: 0,
         }
     }
 
@@ -178,7 +181,7 @@ impl TreeSA {
         self
     }
 
-    /// Set the waist-surgery wall-clock budget in seconds (0.0 disables).
+    /// Set the deterministic waist-surgery iteration cap (0 disables).
     ///
     /// # Example
     ///
@@ -191,12 +194,12 @@ impl TreeSA {
     ///     vec!['i', 'l'],
     /// );
     /// let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2), ('l', 2)].into();
-    /// let config = TreeSA::fast().with_surgery_budget(0.1);
+    /// let config = TreeSA::fast().with_surgery_iters(5);
     /// let tree = optimize_treesa(&code, &sizes, &config).unwrap();
     /// assert_eq!(tree.leaf_count(), 3);
     /// ```
-    pub fn with_surgery_budget(mut self, seconds: f64) -> Self {
-        self.surgery_budget = seconds;
+    pub fn with_surgery_iters(mut self, max_iters: u64) -> Self {
+        self.surgery_iters = max_iters;
         self
     }
 }
@@ -737,9 +740,10 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 /// By default this runs the full pipeline: structural simplification
 /// ([`crate::preprocess::simplify`]), the annealing trial loop on the reduced
 /// network, and splice-back — controlled by [`TreeSA::preprocess`]. A
-/// positive [`TreeSA::surgery_budget`] additionally refines the result with
-/// [`crate::waist_surgery::refine`] (never worse; wall-clock dependent, so
-/// results with surgery enabled are not reproducible across machines).
+/// positive [`TreeSA::surgery_iters`] additionally refines the result with
+/// [`crate::waist_surgery::refine_capped`] (never worse than surgery off;
+/// more iterations are equal or better; fully deterministic, since the cap
+/// binds iteration count rather than wall-clock time).
 ///
 /// [`TreeSA::preprocess`] is automatically treated as disabled whenever
 /// [`TreeSA::decomposition_type`] is [`DecompositionType::Path`], even if the
@@ -760,10 +764,14 @@ pub fn optimize_treesa<L: Label>(
         optimize_treesa_core(code, size_dict, config)?
     };
 
-    if config.surgery_budget > 0.0 {
-        let budget = std::time::Duration::try_from_secs_f64(config.surgery_budget)
-            .unwrap_or(std::time::Duration::MAX);
-        let (refined, _report) = crate::waist_surgery::refine(&tree, code, size_dict, budget);
+    if config.surgery_iters > 0 {
+        let (refined, _report) = crate::waist_surgery::refine_capped(
+            &tree,
+            code,
+            size_dict,
+            std::time::Duration::MAX,
+            config.surgery_iters,
+        );
         return Some(refined);
     }
 
@@ -1003,7 +1011,7 @@ mod tests {
                 decomposition_type: DecompositionType::Tree,
                 initializer: Initializer::Random,
                 preprocess: false,
-                surgery_budget: 0.0,
+                surgery_iters: 0,
             };
             let returned = optimize_treesa(&code, &size_dict, &config).unwrap();
             let cc = contraction_complexity(&returned, &size_dict, &code.ixs);
@@ -1853,15 +1861,15 @@ mod tests {
     fn test_treesa_pipeline_defaults() {
         let config = TreeSA::default();
         assert!(config.preprocess);
-        assert_eq!(config.surgery_budget, 0.0);
+        assert_eq!(config.surgery_iters, 0);
         let fast = TreeSA::fast();
         assert!(fast.preprocess);
-        assert_eq!(fast.surgery_budget, 0.0);
+        assert_eq!(fast.surgery_iters, 0);
         let tuned = TreeSA::default()
             .with_preprocess(false)
-            .with_surgery_budget(30.0);
+            .with_surgery_iters(30);
         assert!(!tuned.preprocess);
-        assert_eq!(tuned.surgery_budget, 30.0);
+        assert_eq!(tuned.surgery_iters, 30);
     }
 
     /// Pins the preset-level preprocess contract: `TreeSA::default()` (and
@@ -2012,8 +2020,12 @@ mod tests {
         EinCode::new(ixs, vec![])
     }
 
+    /// `surgery_iters > 0` is fully deterministic (internal RNG seeds are
+    /// fixed and no wall-clock deadline binds `optimize_treesa`'s cap): two
+    /// runs of the same config produce byte-identical trees. It is also
+    /// never worse than the no-surgery baseline.
     #[test]
-    fn test_surgery_budget_never_worse() {
+    fn test_surgery_iters_deterministic_and_never_worse() {
         use crate::contraction_complexity;
         // 4x4 periodic grid — a frozen-waist-style instance where surgery acts.
         let code = grid_code(4, 4);
@@ -2022,11 +2034,19 @@ mod tests {
         let base_cfg = TreeSA::fast();
         let base = optimize_treesa(&code, &sizes, &base_cfg).unwrap();
         let base_tc = contraction_complexity(&base, &sizes, &code.ixs).tc;
-        let cfg = TreeSA::fast().with_surgery_budget(2.0);
-        let refined = optimize_treesa(&code, &sizes, &cfg).unwrap();
-        let refined_tc = contraction_complexity(&refined, &sizes, &code.ixs).tc;
+
+        let cfg = TreeSA::fast().with_surgery_iters(5);
+        let refined_a = optimize_treesa(&code, &sizes, &cfg).unwrap();
+        let refined_b = optimize_treesa(&code, &sizes, &cfg).unwrap();
+        assert_eq!(
+            format!("{refined_a:?}"),
+            format!("{refined_b:?}"),
+            "surgery_iters > 0 must be deterministic across runs"
+        );
+
+        let refined_tc = contraction_complexity(&refined_a, &sizes, &code.ixs).tc;
         assert!(refined_tc <= base_tc + 1e-9, "{refined_tc} > {base_tc}");
-        assert_eq!(refined.leaf_count(), code.num_tensors());
+        assert_eq!(refined_a.leaf_count(), code.num_tensors());
     }
 
     #[test]
@@ -2036,26 +2056,10 @@ mod tests {
             vec![],
         );
         let sizes: HashMap<usize, usize> = (0..4).map(|l| (l, 8)).collect();
-        let cfg = TreeSA::fast(); // surgery_budget == 0.0
+        let cfg = TreeSA::fast(); // surgery_iters == 0
         let a = optimize_treesa(&code, &sizes, &cfg).unwrap();
         let b = optimize_treesa(&code, &sizes, &cfg).unwrap();
         assert_eq!(format!("{a:?}"), format!("{b:?}"));
-    }
-
-    /// Regression for the `Duration::from_secs_f64` panic on
-    /// `surgery_budget = f64::INFINITY` (unreachable from Rust with a finite
-    /// budget, but directly reachable from Python via
-    /// `TreeSA(surgery_budget=float("inf"))`). Uses a 2-tensor chain so that
-    /// `waist_surgery::refine`'s `n < 3` early return fires immediately,
-    /// regardless of how large the converted `Duration` budget is.
-    #[test]
-    fn test_surgery_budget_infinity_does_not_panic() {
-        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
-        let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2)].into();
-        let config = TreeSA::fast().with_surgery_budget(f64::INFINITY);
-        let result = optimize_treesa(&code, &sizes, &config);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().leaf_count(), 2);
     }
 
     /// Regression: manually setting `decomposition_type: Path` while leaving

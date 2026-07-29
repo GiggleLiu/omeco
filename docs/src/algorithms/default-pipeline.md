@@ -21,9 +21,9 @@ simplify  ->  anneal trials (on the reduced network)  ->  splice  ->  [surgery, 
 3. **Splice** ([`crate::preprocess::splice`]) expands each reduced-network
    leaf back into the binary subtree `simplify` merged it from, so the
    returned tree's leaves are exactly the original tensors again.
-4. **Surgery** ([`crate::waist_surgery::refine`]) only runs if
-   [`TreeSA::surgery_budget`] is greater than `0.0` (the default is `0.0`,
-   off). When enabled, it spends up to that many wall-clock seconds trying to
+4. **Surgery** ([`crate::waist_surgery::refine_capped`]) only runs if
+   [`TreeSA::surgery_iters`] is greater than `0` (the default is `0`, off).
+   When enabled, it runs at most that many surgery iterations trying to
    improve the tree's most expensive contraction (its *waist*) and only keeps
    changes that strictly lower `tc`.
 
@@ -34,30 +34,32 @@ needed to get it.
 ```python
 from omeco import optimize_code, TreeSA
 
-tree = optimize_code(ixs, out, sizes, TreeSA())                        # default pipeline
-better = optimize_code(ixs, out, sizes, TreeSA(surgery_budget=30.0))   # + waist surgery
+tree = optimize_code(ixs, out, sizes, TreeSA())                       # default pipeline
+better = optimize_code(ixs, out, sizes, TreeSA(surgery_iters=20))     # + waist surgery
 ```
 
 ```rust
 use omeco::{optimize_code, TreeSA};
 
 let tree = optimize_code(&code, &sizes, &TreeSA::default()).unwrap();
-let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_budget(30.0)).unwrap();
+let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_iters(20)).unwrap();
 ```
 
 ## Determinism
 
-- With `surgery_budget: 0.0` (the default), the pipeline's output is
-  **internally seeded, fully deterministic**: simplify, the anneal trials, and
-  splice are all pure functions of the input network (the RNG seeds are fixed
-  internally, not user-supplied), so re-running the same configuration
-  reproduces the same tree on any machine.
-- Setting `surgery_budget > 0.0` trades that reproducibility for quality: the
-  surgery pass is a cooperative, wall-clock-bounded search, so how far it
-  gets — and therefore its exact output — depends on the machine's speed. The
-  result is never worse than without surgery (surgery only ever accepts a
-  strictly cheaper tree), but it is not guaranteed to be *bit-identical*
-  across machines or hardware for the same configuration and budget.
+The whole `TreeSA` API is **fully deterministic and machine-independent**:
+simplify, the anneal trials, splice, and — since `surgery_iters` replaced the
+old wall-clock surgery knob — the surgery post-pass too are all pure
+functions of the input network and config (internal RNG seeds are fixed, and
+no wall-clock deadline binds `optimize_treesa`'s surgery cap). Re-running the
+same configuration reproduces the same tree on any machine, with
+`surgery_iters` at any value: `0` (off), or any positive cap. More iterations
+can only be equal or better, never worse.
+
+Wall-clock budgets still exist, but only on the low-level
+[`crate::waist_surgery::refine`] / [`refine_capped`] APIs (and the Python
+`waist_refine` function) for power users composing their own pipeline outside
+`TreeSA`; see [Simplification, Warm-Start, and Waist Surgery](./paper-algorithms.md).
 
 ## Preprocessing guarantees
 
@@ -100,20 +102,21 @@ only keeps the result if it strictly lowers `tc`.
   a strictly cheaper comparable-balance cut.
 - **Near-no-op elsewhere.** On instances without a frozen waist, surgery's
   bounded search typically returns early after confirming the incumbent cut
-  is locally minimal — you pay a bounded amount of wall-clock time for little
+  is locally minimal — you pay a bounded number of iterations for little
   or no gain, but you
   never regress `tc`.
 
 If you don't know in advance whether your network has this structure, a
-positive `surgery_budget` is a safe default to try: worst case it costs time
-for no improvement, best case it recovers a meaningfully cheaper tree.
+positive `surgery_iters` is a safe default to try: worst case it costs a few
+iterations for no improvement, best case it recovers a meaningfully cheaper
+tree.
 
 ## Escape hatches
 
 | Want | Set |
 |---|---|
 | Skip simplification, anneal the raw network directly | `preprocess: false` (Rust: `.with_preprocess(false)`; Python: `TreeSA(preprocess=False)`) |
-| Skip waist surgery (already the default) | `surgery_budget: 0.0` (Rust: `.with_surgery_budget(0.0)`; Python: `TreeSA(surgery_budget=0.0)`) |
+| Skip waist surgery (already the default) | `surgery_iters: 0` (Rust: `.with_surgery_iters(0)`; Python: `TreeSA(surgery_iters=0)`) |
 
 `TreeSA::path()` sets `preprocess: false` by construction, deliberately —
 `splice` is decomposition-agnostic: it substitutes each reduced-network leaf
@@ -135,4 +138,6 @@ rather than risk it.
 [`crate::preprocess::simplify`]: https://docs.rs/omeco/latest/omeco/preprocess/fn.simplify.html
 [`crate::preprocess::splice`]: https://docs.rs/omeco/latest/omeco/preprocess/fn.splice.html
 [`crate::waist_surgery::refine`]: https://docs.rs/omeco/latest/omeco/waist_surgery/fn.refine.html
-[`TreeSA::surgery_budget`]: https://docs.rs/omeco/latest/omeco/treesa/struct.TreeSA.html#structfield.surgery_budget
+[`crate::waist_surgery::refine_capped`]: https://docs.rs/omeco/latest/omeco/waist_surgery/fn.refine_capped.html
+[`refine_capped`]: https://docs.rs/omeco/latest/omeco/waist_surgery/fn.refine_capped.html
+[`TreeSA::surgery_iters`]: https://docs.rs/omeco/latest/omeco/treesa/struct.TreeSA.html#structfield.surgery_iters
