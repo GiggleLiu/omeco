@@ -101,10 +101,19 @@ impl TreeSA {
     }
 
     /// Create a path decomposition variant (linear contraction order).
+    ///
+    /// Sets `preprocess: false`: [`crate::preprocess::splice`] is
+    /// decomposition-agnostic — it substitutes each reduced-network leaf with
+    /// whatever binary subtree `simplify` merged for it, which is not
+    /// path-shaped in general. Running the front-end here can give the
+    /// spliced tree a node with two non-leaf children, breaking this preset's
+    /// documented "linear contraction order" guarantee
+    /// (see [`NestedEinsum::is_path_decomposition`]).
     pub fn path() -> Self {
         Self {
             initializer: Initializer::Random,
             decomposition_type: DecompositionType::Path,
+            preprocess: false,
             ..Default::default()
         }
     }
@@ -681,9 +690,7 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 ///
 /// By default this runs the full pipeline: structural simplification
 /// ([`crate::preprocess::simplify`]), the annealing trial loop on the reduced
-/// network, and splice-back — controlled by [`TreeSA::preprocess`]. A positive
-/// [`TreeSA::surgery_budget`] additionally refines the result with
-/// [`crate::waist_surgery::refine`].
+/// network, and splice-back — controlled by [`TreeSA::preprocess`].
 pub fn optimize_treesa<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
@@ -1791,6 +1798,19 @@ mod tests {
             .with_surgery_budget(30.0);
         assert!(!tuned.preprocess);
         assert_eq!(tuned.surgery_budget, 30.0);
+    }
+
+    /// Pins the preset-level preprocess contract: `TreeSA::default()` (and
+    /// hence `TreeSA::fast()`, which builds on it) opts into the
+    /// simplify/splice front-end, while `TreeSA::path()` opts out because
+    /// splice does not preserve the path-decomposition guarantee (see the
+    /// doc comment on `TreeSA::path`, and
+    /// `test_path_decomposition_random_graph_n50` in `lib.rs` for the
+    /// end-to-end regression coverage).
+    #[test]
+    fn test_preprocess_default_wiring_per_preset() {
+        assert!(TreeSA::default().preprocess);
+        assert!(!TreeSA::path().preprocess);
     }
 
     #[test]
