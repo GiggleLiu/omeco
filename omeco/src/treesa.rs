@@ -955,6 +955,165 @@ pub fn warm_exprtree_to_nested<L: Label>(
     expr_tree_to_nested(tree, &code.ixs, labels, &code.iy)
 }
 
+/// Diagnostics from an [`anneal_surgery_rounds`] run.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoundsReport {
+    /// Number of interleaved rounds actually executed. Smaller than the
+    /// requested `rounds` when the loop stops early (the trajectory tree
+    /// degenerated to something that cannot be annealed, e.g. a bare leaf).
+    pub rounds_run: u64,
+    /// Index of the round whose tree became the returned best, or
+    /// [`u64::MAX`] if no round improved on the seed.
+    pub best_round: u64,
+    /// Score of the annealed tree at the end of each executed round, in round
+    /// order. This is the trajectory trace, not a running minimum: entries may
+    /// increase, since round `r + 1` continues from round `r`'s tree even when
+    /// that tree was worse than the incumbent best.
+    pub round_scores: Vec<f64>,
+    /// Total number of waist-surgery iterations attempted across all rounds
+    /// (sum of [`crate::waist_surgery::WaistReport::surgery_calls`]).
+    pub surgery_calls_total: u64,
+}
+
+/// Deterministic interleaved anneal–surgery loop (the paper's Algorithm 1).
+///
+/// Each round applies one waist-surgery iteration
+/// ([`crate::waist_surgery::refine_capped`]) to the current trajectory tree and
+/// then runs a full warm-started simulated-annealing pass over the surgical
+/// result, using `config`'s β schedule, iteration count and score function.
+///
+/// # Trajectory chaining
+///
+/// The loop keeps two separate trees. The *trajectory* is what the next round
+/// anneals from: round `r + 1` always continues from round `r`'s annealed tree,
+/// **even if that tree is worse** than the best seen so far — this is what lets
+/// surgery escape a local optimum that pure annealing cannot leave.
+/// [`RoundsReport::round_scores`] records this trajectory verbatim and is
+/// therefore not monotone.
+///
+/// # Never worse, monotone in `rounds`
+///
+/// The *returned* tree is the best tree seen anywhere in the run, including the
+/// `seed` itself and each round's post-surgery, pre-anneal tree. Consequently
+/// the result is never worse than `seed`, and — because rounds are chained
+/// deterministically — running `n + 1` rounds is always equal or better than
+/// running `n`.
+///
+/// # Configuration used
+///
+/// Only three fields of `config` are read: [`TreeSA::betas`], [`TreeSA::niters`]
+/// and [`TreeSA::score`] (the score also ranks candidates between rounds).
+/// [`TreeSA::ntrials`], [`TreeSA::preprocess`], [`TreeSA::surgery_iters`] and
+/// [`TreeSA::decomposition_type`] are **ignored**: the loop runs a single
+/// warm-started chain rather than independent trials, takes the seed as given
+/// instead of re-running the simplify front-end, and fixes surgery at one
+/// iteration per round.
+///
+/// # Not path-preserving
+///
+/// The annealing step always applies binary-tree moves, and waist surgery
+/// rebuilds subtrees in a way that is not path-preserving, so the returned tree
+/// is a general (tree) decomposition **regardless of
+/// `config.decomposition_type`** — passing a [`TreeSA::path`] config does not
+/// yield a path decomposition, and a path-decomposed `seed` will generally come
+/// back as a non-path tree. Callers who need the path guarantee must not use
+/// this function; [`optimize_treesa`] auto-skips the rounds loop for
+/// [`DecompositionType::Path`] configs.
+///
+/// # Determinism
+///
+/// Fully reproducible: round `r` anneals with `SmallRng::seed_from_u64(0xA55E + r)`
+/// and surgery is capped by iteration count with a
+/// [`std::time::Duration::MAX`] budget, so no wall-clock deadline can ever
+/// trigger and results never depend on machine speed. Two runs with the same
+/// inputs return byte-identical trees and reports.
+///
+/// # Cost
+///
+/// One round costs roughly one full anneal of the network (`betas.len() *
+/// niters` sweeps) plus one waist-surgery iteration, so total time scales
+/// linearly in `rounds`.
+///
+/// # Panics
+///
+/// Panics if `size_dict` is missing a label appearing in `code` — the same
+/// completeness requirement as [`optimize_treesa`].
+///
+/// # Example
+///
+/// ```
+/// use omeco::treesa::anneal_surgery_rounds;
+/// use omeco::{optimize_code, EinCode, GreedyMethod, TreeSA};
+/// use std::collections::HashMap;
+///
+/// let code = EinCode::new(
+///     vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+///     vec!['i', 'l'],
+/// );
+/// let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 8), ('l', 4)].into();
+/// let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+/// let (tree, report) = anneal_surgery_rounds(&seed, &code, &sizes, &TreeSA::fast(), 2);
+/// assert_eq!(tree.leaf_count(), 3);
+/// assert_eq!(report.rounds_run, 2);
+/// ```
+pub fn anneal_surgery_rounds<L: Label>(
+    seed: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    rounds: u64,
+) -> (NestedEinsum<L>, RoundsReport) {
+    use rand::SeedableRng;
+    let score_of = |t: &NestedEinsum<L>| {
+        let cc = crate::contraction_complexity(t, size_dict, &code.ixs);
+        config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+    };
+    let mut best = seed.clone();
+    let mut best_score = score_of(&best);
+    let mut trajectory = seed.clone();
+    let mut report = RoundsReport {
+        rounds_run: 0,
+        best_round: u64::MAX,
+        round_scores: Vec::new(),
+        surgery_calls_total: 0,
+    };
+    for r in 0..rounds {
+        let (t_surg, wr) = refine_capped(&trajectory, code, size_dict, std::time::Duration::MAX, 1);
+        report.surgery_calls_total += wr.surgery_calls;
+        let Some(ctx) = prepare_warm_anneal(code, size_dict, &t_surg) else {
+            break;
+        };
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0xA55E + r);
+        let annealed = optimize_tree_sa(
+            ctx.tree,
+            &ctx.log2_sizes,
+            &config.betas,
+            config.niters,
+            &config.score,
+            DecompositionType::Tree,
+            &mut rng,
+            ctx.nedge,
+        );
+        let cand = warm_exprtree_to_nested(&annealed, code, &ctx.labels);
+        let surg_score = score_of(&t_surg);
+        if surg_score < best_score {
+            best_score = surg_score;
+            best = t_surg;
+            report.best_round = r;
+        }
+        let cand_score = score_of(&cand);
+        if cand_score < best_score {
+            best_score = cand_score;
+            best = cand.clone();
+            report.best_round = r;
+        }
+        report.round_scores.push(cand_score);
+        report.rounds_run = r + 1;
+        trajectory = cand;
+    }
+    (best, report)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2055,6 +2214,68 @@ mod tests {
         let a = optimize_treesa(&code, &sizes, &cfg).unwrap();
         let b = optimize_treesa(&code, &sizes, &cfg).unwrap();
         assert_eq!(format!("{a:?}"), format!("{b:?}"));
+    }
+
+    #[test]
+    fn test_rounds_report_shape_and_determinism() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(
+            &code,
+            &sizes,
+            &TreeSA {
+                surgery_iters: 0,
+                ..config.clone()
+            },
+        )
+        .unwrap();
+        let (t1, r1) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
+        let (t2, r2) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
+        assert_eq!(r1.rounds_run, 3);
+        assert_eq!(r1.round_scores.len(), 3);
+        assert!(r1.best_round == u64::MAX || r1.best_round < 3);
+        // Determinism: identical trees and traces
+        assert_eq!(
+            crate::json::to_json_string(&t1).unwrap(),
+            crate::json::to_json_string(&t2).unwrap()
+        );
+        assert_eq!(r1.round_scores, r2.round_scores);
+        assert_eq!(r1.surgery_calls_total, r2.surgery_calls_total);
+    }
+
+    #[test]
+    fn test_rounds_never_worse_and_monotone() {
+        let (code, sizes) = load_benchmark_graph("grid_6x6");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(
+            &code,
+            &sizes,
+            &TreeSA {
+                surgery_iters: 0,
+                ..config.clone()
+            },
+        )
+        .unwrap();
+        let score_of = |t: &NestedEinsum<usize>| {
+            let cc = crate::contraction_complexity(t, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+        let s0 = score_of(&seed);
+        let (t1, _) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 1);
+        let (t3, _) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
+        assert!(score_of(&t1) <= s0);
+        assert!(score_of(&t3) <= score_of(&t1));
+    }
+
+    #[test]
+    fn test_rounds_bare_leaf_seed() {
+        let code: EinCode<usize> = EinCode::new(vec![vec![0, 1]], vec![0, 1]);
+        let sizes: HashMap<usize, usize> = [(0, 2), (1, 2)].into();
+        let seed = NestedEinsum::leaf(0);
+        let (t, r) = anneal_surgery_rounds(&seed, &code, &sizes, &TreeSA::fast(), 2);
+        assert_eq!(r.rounds_run, 0);
+        assert!(r.round_scores.is_empty());
+        assert_eq!(t.leaf_count(), 1);
     }
 
     /// Regression: manually setting `decomposition_type: Path` while leaving
