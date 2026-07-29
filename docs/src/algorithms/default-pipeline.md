@@ -48,15 +48,16 @@ let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_budget
 ## Determinism
 
 - With `surgery_budget: 0.0` (the default), the pipeline's output is
-  **seeded-deterministic**: simplify, the anneal trials, and splice are all
-  pure functions of the input network and the RNG seed, so re-running with
-  the same seed reproduces the same tree on any machine.
+  **internally seeded, fully deterministic**: simplify, the anneal trials, and
+  splice are all pure functions of the input network (the RNG seeds are fixed
+  internally, not user-supplied), so re-running the same configuration
+  reproduces the same tree on any machine.
 - Setting `surgery_budget > 0.0` trades that reproducibility for quality: the
   surgery pass is a cooperative, wall-clock-bounded search, so how far it
   gets — and therefore its exact output — depends on the machine's speed. The
   result is never worse than without surgery (surgery only ever accepts a
   strictly cheaper tree), but it is not guaranteed to be *bit-identical*
-  across machines or hardware for the same seed and budget.
+  across machines or hardware for the same configuration and budget.
 
 ## Preprocessing guarantees
 

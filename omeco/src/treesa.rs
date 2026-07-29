@@ -33,11 +33,25 @@ pub struct TreeSA {
     /// Run the structural simplification front-end before annealing
     /// (simplify → optimize the reduced network → splice back). Deterministic
     /// and exactness-preserving; see [`crate::preprocess`].
+    ///
+    /// [`optimize_treesa`] auto-skips this step (treating it as `false`)
+    /// whenever `decomposition_type` is [`DecompositionType::Path`], even if
+    /// this field is set to `true`: splice does not preserve the
+    /// path-decomposition guarantee. See [`TreeSA::path`].
     pub preprocess: bool,
     /// Wall-clock budget in seconds for the waist-surgery post-pass on the
     /// selected tree; `0.0` disables it. With a positive budget the result is
     /// never worse than without, but is not reproducible across machines.
+    /// `f64::INFINITY` (or any value too large to represent as a
+    /// [`std::time::Duration`]) is treated as an effectively unlimited
+    /// budget rather than causing a panic.
     /// See [`crate::waist_surgery`].
+    ///
+    /// # Determinism
+    ///
+    /// The surgery pass's RNG seed is fixed, but how much work fits inside
+    /// the budget depends on wall-clock speed, so results with a positive
+    /// budget are **not** reproducible across machines or loads.
     pub surgery_budget: f64,
 }
 
@@ -143,12 +157,44 @@ impl TreeSA {
     }
 
     /// Enable or disable the structural simplification front-end.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use omeco::{optimize_treesa, EinCode, TreeSA};
+    /// use std::collections::HashMap;
+    ///
+    /// let code = EinCode::new(
+    ///     vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+    ///     vec!['i', 'l'],
+    /// );
+    /// let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2), ('l', 2)].into();
+    /// let config = TreeSA::fast().with_preprocess(false);
+    /// let tree = optimize_treesa(&code, &sizes, &config).unwrap();
+    /// assert_eq!(tree.leaf_count(), 3);
+    /// ```
     pub fn with_preprocess(mut self, preprocess: bool) -> Self {
         self.preprocess = preprocess;
         self
     }
 
     /// Set the waist-surgery wall-clock budget in seconds (0.0 disables).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use omeco::{optimize_treesa, EinCode, TreeSA};
+    /// use std::collections::HashMap;
+    ///
+    /// let code = EinCode::new(
+    ///     vec![vec!['i', 'j'], vec!['j', 'k'], vec!['k', 'l']],
+    ///     vec!['i', 'l'],
+    /// );
+    /// let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2), ('l', 2)].into();
+    /// let config = TreeSA::fast().with_surgery_budget(0.1);
+    /// let tree = optimize_treesa(&code, &sizes, &config).unwrap();
+    /// assert_eq!(tree.leaf_count(), 3);
+    /// ```
     pub fn with_surgery_budget(mut self, seconds: f64) -> Self {
         self.surgery_budget = seconds;
         self
@@ -694,12 +740,19 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 /// positive [`TreeSA::surgery_budget`] additionally refines the result with
 /// [`crate::waist_surgery::refine`] (never worse; wall-clock dependent, so
 /// results with surgery enabled are not reproducible across machines).
+///
+/// [`TreeSA::preprocess`] is automatically treated as disabled whenever
+/// [`TreeSA::decomposition_type`] is [`DecompositionType::Path`], even if the
+/// field was manually set to `true`: [`crate::preprocess::splice`] is
+/// decomposition-agnostic and can turn a path decomposition into a
+/// non-path tree (see the doc comment on [`TreeSA::path`]).
 pub fn optimize_treesa<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
     config: &TreeSA,
 ) -> Option<NestedEinsum<L>> {
-    let tree = if config.preprocess {
+    let preprocess = config.preprocess && config.decomposition_type != DecompositionType::Path;
+    let tree = if preprocess {
         let simplified = simplify(code, size_dict);
         let reduced = optimize_treesa_core(&simplified.code, size_dict, config)?;
         splice(&reduced, &simplified.subtrees)
@@ -708,7 +761,8 @@ pub fn optimize_treesa<L: Label>(
     };
 
     if config.surgery_budget > 0.0 {
-        let budget = std::time::Duration::from_secs_f64(config.surgery_budget);
+        let budget = std::time::Duration::try_from_secs_f64(config.surgery_budget)
+            .unwrap_or(std::time::Duration::MAX);
         let (refined, _report) = crate::waist_surgery::refine(&tree, code, size_dict, budget);
         return Some(refined);
     }
@@ -1986,5 +2040,46 @@ mod tests {
         let a = optimize_treesa(&code, &sizes, &cfg).unwrap();
         let b = optimize_treesa(&code, &sizes, &cfg).unwrap();
         assert_eq!(format!("{a:?}"), format!("{b:?}"));
+    }
+
+    /// Regression for the `Duration::from_secs_f64` panic on
+    /// `surgery_budget = f64::INFINITY` (unreachable from Rust with a finite
+    /// budget, but directly reachable from Python via
+    /// `TreeSA(surgery_budget=float("inf"))`). Uses a 2-tensor chain so that
+    /// `waist_surgery::refine`'s `n < 3` early return fires immediately,
+    /// regardless of how large the converted `Duration` budget is.
+    #[test]
+    fn test_surgery_budget_infinity_does_not_panic() {
+        let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+        let sizes: HashMap<char, usize> = [('i', 2), ('j', 2), ('k', 2)].into();
+        let config = TreeSA::fast().with_surgery_budget(f64::INFINITY);
+        let result = optimize_treesa(&code, &sizes, &config);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().leaf_count(), 2);
+    }
+
+    /// Regression: manually setting `decomposition_type: Path` while leaving
+    /// `preprocess: true` (the default) must not silently void the
+    /// path-decomposition guarantee — `optimize_treesa` auto-skips
+    /// preprocessing in this case, same as the `TreeSA::path()` preset.
+    #[test]
+    fn test_path_decomposition_holds_with_preprocess_true() {
+        let code = EinCode::new(
+            vec![
+                vec!['a', 'b'],
+                vec!['b', 'c'],
+                vec!['c', 'd'],
+                vec!['d', 'e'],
+            ],
+            vec!['a', 'e'],
+        );
+        let sizes: HashMap<char, usize> = [('a', 2), ('b', 2), ('c', 2), ('d', 2), ('e', 2)].into();
+        let mut config = TreeSA::fast();
+        config.initializer = Initializer::Random;
+        config.decomposition_type = DecompositionType::Path;
+        config.preprocess = true; // manually left on, unlike TreeSA::path()
+        let tree = optimize_treesa(&code, &sizes, &config).unwrap();
+        assert!(tree.is_path_decomposition());
+        assert_eq!(tree.leaf_count(), 4);
     }
 }

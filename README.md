@@ -44,7 +44,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-omeco = "0.1"
+omeco = "0.2"
 ```
 
 ## Python Quick Start

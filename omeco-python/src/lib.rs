@@ -629,13 +629,19 @@ impl PyTreeSA {
 
     fn __repr__(&self) -> String {
         format!(
-            "TreeSA(ntrials={}, niters={}, score={})",
+            "TreeSA(ntrials={}, niters={}, score={}, preprocess={}, surgery_budget={})",
             self.inner.ntrials,
             self.inner.niters,
             PyScoreFunction {
                 inner: self.inner.score.clone()
             }
-            .__repr__()
+            .__repr__(),
+            if self.inner.preprocess {
+                "True"
+            } else {
+                "False"
+            },
+            self.inner.surgery_budget,
         )
     }
 }

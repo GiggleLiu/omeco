@@ -471,6 +471,17 @@ def test_treesa_getters():
     assert len(opt.betas) > 0
 
 
+def test_treesa_repr():
+    """__repr__ must surface preprocess and surgery_budget, not just ntrials/niters/score."""
+    opt = TreeSA(ntrials=3, niters=15, preprocess=False, surgery_budget=1.5)
+    repr_str = repr(opt)
+    assert "TreeSA" in repr_str
+    assert "ntrials=3" in repr_str
+    assert "niters=15" in repr_str
+    assert "preprocess=False" in repr_str
+    assert "surgery_budget=1.5" in repr_str
+
+
 # ============== New tests for TreeSASlicer constructor ==============
 
 

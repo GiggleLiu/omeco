@@ -3,7 +3,7 @@
 ## Project Overview
 - **OMECO** (One More Einsum Contraction Order) - Rust library for tensor network contraction order optimization
 - Rust core with Python bindings via PyO3
-- Current Version: 0.2.3
+- Current Version: 0.2.7
 
 ## Relationship to Julia OMEinsumContractionOrders
 
