@@ -1,10 +1,12 @@
 # Paper benchmark artifact
 
 Every contraction-order number the paper reports is produced here, by the
-released library, on the reader's own machine. There is no reference host, no
-recorded oracle, and no committed table of "expected" values that a future
-change could quietly drift away from: the artifact is a *program plus a
-manifest*, and reproducing the paper means running it.
+released library, on the reader's own machine. There is no reference host and no
+recorded oracle: the artifact is a *program plus a manifest*, and reproducing the
+paper means running it. The outputs under `expected/` are committed only so that
+they can be *re-derived* — CI regenerates the `ci` one on every push and fails on
+a single changed field, so a committed number can never quietly drift away from
+what the code does.
 
 This directory is self-contained — manifest, instances, checker:
 
@@ -12,6 +14,7 @@ This directory is self-contained — manifest, instances, checker:
 |---|---|
 | `manifest.json` | Which instances, which optimizer arms, which overrides. The only place a benchmark parameter may be set. |
 | `instances/` | The thirteen paper instances, as JSON tensor networks. |
+| `expected/ci.json` | The `ci` set's output, re-derived and compared by `make paper-bench-check` (and by CI). `expected/full.json` is what `make paper-bench` writes. |
 | `check.py` | Compares two artifacts and exits nonzero on any disagreement. Standard library only, Python 3.8+. |
 | `README.md` | This file. |
 
@@ -73,6 +76,13 @@ Progress goes to stderr, the artifact to `--out`. Anything the user can get
 wrong — an unknown flag, a missing instance file, malformed JSON, a mistyped
 manifest key — prints a message naming the problem and exits with status **2**.
 The runner never reports a typo by silently falling back to a default.
+
+Two Make targets wrap the same commands:
+
+```bash
+make paper-bench-check  # ci set -> a temporary file -> check.py against expected/ci.json
+make paper-bench        # full set -> expected/full.json (hours)
+```
 
 To compare two artifacts:
 
@@ -142,8 +152,10 @@ random circuit costs time and reports nothing anyone wants to read.
 ## Determinism contract
 
 **On one machine, the artifact is byte-identical across runs.** Not "equal
-within tolerance" — the same bytes. `diff` is the honest check and it is what
-CI uses. The guarantees behind it:
+within tolerance" — the same bytes, and `diff` is the honest check there. CI
+compares with `check.py` instead, because the committed `expected/ci.json` and
+the CI runner need not share a platform. The guarantees behind byte-equality on
+one machine:
 
 - Every RNG is seeded from a fixed constant plus a loop index. Trials are run in
   parallel with rayon but collected in index order, and the best is chosen by a
@@ -162,7 +174,10 @@ CI uses. The guarantees behind it:
 Metropolis test calls them millions of times; a last-bit difference there can
 tip an accept/reject decision and change the whole trajectory. In practice the
 complexity metrics land in the same place, which is what `check.py`'s tolerance
-checks. Use `diff` when the platform is pinned (CI), `check.py` when it is not.
+checks. So `check.py` is what CI runs, since the committed artifact and the
+runner need not share a platform; `diff` is the stricter check available when
+they do — regenerating locally and diffing against the committed file tells you
+whether *anything at all* moved.
 
 The tolerance is relative — `abs(a - b) <= max(1e-9, 1e-9 * max(abs(a), abs(b)))`
 — because the fields being compared span twelve orders of magnitude. `tc`, `sc`

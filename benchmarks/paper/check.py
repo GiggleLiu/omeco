@@ -19,8 +19,9 @@ because the fields being compared span many orders of magnitude: ``tc``/``sc``/
 annealing score of order 1e12. An absolute 1e-9 would be a sensible band for
 the former and a demand for bit-exactness on the latter.
 
-On a single machine the artifacts are bit-identical and ``diff`` is the
-stricter check; use that in CI where the platform is pinned.
+CI runs this script, because the committed artifact and the CI runner need not
+share a platform. On a single machine the artifacts are bit-identical, so when
+you regenerate locally ``diff`` is the stricter check and worth running too.
 
 Standard library only, Python 3.8+.
 """

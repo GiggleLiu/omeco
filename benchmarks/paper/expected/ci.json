@@ -1,0 +1,175 @@
+{
+  "format": 1,
+  "set": "ci",
+  "results": [
+    {
+      "instance": "dbn_13",
+      "arm": "greedy",
+      "tc": 40.089541,
+      "sc": 32.0,
+      "rwc": 33.477265
+    },
+    {
+      "instance": "dbn_13",
+      "arm": "treesa",
+      "tc": 39.508881,
+      "sc": 35.0,
+      "rwc": 37.905592
+    },
+    {
+      "instance": "dbn_13",
+      "arm": "treesa_rounds",
+      "tc": 32.924983,
+      "sc": 29.0,
+      "rwc": 30.808836,
+      "curve": [
+        {
+          "round": 0,
+          "score": 3620306748202.0137
+        },
+        {
+          "round": 1,
+          "score": 5525217500107.966
+        }
+      ]
+    },
+    {
+      "instance": "dbn_13",
+      "arm": "treewidth",
+      "tc": 28.069944,
+      "sc": 22.0,
+      "rwc": 28.465306
+    },
+    {
+      "instance": "petersen",
+      "arm": "greedy",
+      "tc": 8.523562,
+      "sc": 4.0,
+      "rwc": 8.396605
+    },
+    {
+      "instance": "petersen",
+      "arm": "treesa",
+      "tc": 8.491853,
+      "sc": 4.0,
+      "rwc": 8.326429
+    },
+    {
+      "instance": "petersen",
+      "arm": "treesa_rounds",
+      "tc": 8.491853,
+      "sc": 4.0,
+      "rwc": 8.326429,
+      "curve": [
+        {
+          "round": 0,
+          "score": 360.0
+        },
+        {
+          "round": 1,
+          "score": 360.0
+        }
+      ]
+    },
+    {
+      "instance": "petersen",
+      "arm": "treewidth",
+      "tc": 8.523562,
+      "sc": 4.0,
+      "rwc": 8.396605
+    },
+    {
+      "instance": "qft_27",
+      "arm": "greedy",
+      "tc": 38.323508,
+      "sc": 32.0,
+      "rwc": 34.380336
+    },
+    {
+      "instance": "qft_27",
+      "arm": "treesa",
+      "tc": 30.681567,
+      "sc": 27.0,
+      "rwc": 30.229213
+    },
+    {
+      "instance": "qft_27",
+      "arm": "treesa_rounds",
+      "tc": 30.198245,
+      "sc": 27.0,
+      "rwc": 29.651725,
+      "curve": [
+        {
+          "round": 0,
+          "score": 1849001728.0
+        },
+        {
+          "round": 1,
+          "score": 1984019360.000002
+        }
+      ]
+    },
+    {
+      "instance": "reg3_250",
+      "arm": "greedy",
+      "tc": 62.066429,
+      "sc": 46.0,
+      "rwc": 47.137203
+    },
+    {
+      "instance": "reg3_250",
+      "arm": "treesa",
+      "tc": 48.002093,
+      "sc": 32.0,
+      "rwc": 36.652098
+    },
+    {
+      "instance": "reg3_250",
+      "arm": "treesa_rounds",
+      "tc": 41.40444,
+      "sc": 36.0,
+      "rwc": 39.908527,
+      "curve": [
+        {
+          "round": 0,
+          "score": 105788631234639.47
+        },
+        {
+          "round": 1,
+          "score": 281821316477065.4
+        }
+      ]
+    },
+    {
+      "instance": "surfacecode_d9",
+      "arm": "greedy",
+      "tc": 23.406563,
+      "sc": 16.0,
+      "rwc": 18.901695
+    },
+    {
+      "instance": "surfacecode_d9",
+      "arm": "treesa",
+      "tc": 21.743061,
+      "sc": 16.0,
+      "rwc": 19.840927
+    },
+    {
+      "instance": "surfacecode_d9",
+      "arm": "treesa_rounds",
+      "tc": 21.743061,
+      "sc": 16.0,
+      "rwc": 19.840927,
+      "curve": [
+        {
+          "round": 0,
+          "score": 3568206.0
+        },
+        {
+          "round": 1,
+          "score": 3841510.0
+        }
+      ]
+    }
+  ]
+}
