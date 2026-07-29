@@ -767,9 +767,7 @@ pub fn optimize_treesa<L: Label>(
 
     if config.surgery_iters > 0 {
         let budget = std::time::Duration::MAX;
-        let (refined, _report) =
-            refine_capped(&tree, code, size_dict, budget, config.surgery_iters);
-        return Some(refined);
+        return Some(refine_capped(&tree, code, size_dict, budget, config.surgery_iters).0);
     }
 
     Some(tree)
@@ -2101,5 +2099,33 @@ mod tests {
         assert_eq!(tree.leaf_count(), 3);
         let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
         assert!(cc.tc.is_finite());
+    }
+
+    #[test]
+    fn test_rw_weighted_score_optimizes() {
+        let code = EinCode::new(
+            vec![
+                vec!['a', 'b'],
+                vec!['b', 'c'],
+                vec!['c', 'd'],
+                vec!['d', 'a'],
+            ],
+            vec![],
+        );
+        let sizes: HashMap<char, usize> = [('a', 4), ('b', 4), ('c', 4), ('d', 4)].into();
+        let score = ScoreFunction {
+            rw_weight: 1.0,
+            ..ScoreFunction::default()
+        };
+        let config = TreeSA {
+            score,
+            ntrials: 1,
+            niters: 10,
+            ..TreeSA::fast()
+        };
+        let tree = optimize_treesa(&code, &sizes, &config).unwrap();
+        assert_eq!(tree.leaf_count(), 4);
+        let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
+        assert!(cc.rwc.is_finite());
     }
 }
