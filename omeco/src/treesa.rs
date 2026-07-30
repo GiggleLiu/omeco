@@ -816,6 +816,23 @@ pub fn optimize_treesa<L: Label>(
     Some(tree)
 }
 
+/// Run `f` on `pool`, or on the current (global) pool if it could not be built.
+///
+/// Splitting this out from the call site keeps the fallback testable: a
+/// thread-spawn failure is otherwise impossible to provoke in a unit test, and
+/// untested error handling is how a "cannot allocate threads" turns into a
+/// silent wrong answer.
+fn install_or_run<T, F>(pool: Result<rayon::ThreadPool, rayon::ThreadPoolBuildError>, f: F) -> T
+where
+    F: FnOnce() -> T + Send,
+    T: Send,
+{
+    match pool {
+        Ok(pool) => pool.install(f),
+        Err(_) => f(),
+    }
+}
+
 /// Order trial scores so that any NaN loses, whatever its sign bit.
 ///
 /// A trial whose tree has an intermediate too large to represent scores NaN:
@@ -966,14 +983,11 @@ fn optimize_treesa_core<L: Label>(
             })
             .collect::<Vec<_>>()
     };
-    let results = match rayon::ThreadPoolBuilder::new()
+    let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .stack_size(stack_size)
-        .build()
-    {
-        Ok(pool) => pool.install(run_trials),
-        Err(_) => run_trials(),
-    };
+        .build();
+    let results = install_or_run(pool, run_trials);
 
     // Find best result
     let (best_tree, _) = results
@@ -2396,6 +2410,31 @@ mod tests {
         };
         let tree = optimize_treesa(&code, &sizes, &config).expect("must not crash");
         assert_eq!(tree.leaf_count(), code.num_tensors());
+    }
+
+    /// The optimizer must still produce a result when a worker pool cannot be
+    /// created: "out of threads" is not "this network has no contraction".
+    #[test]
+    fn test_install_or_run_falls_back_when_the_pool_cannot_be_built() {
+        let good = rayon::ThreadPoolBuilder::new().num_threads(2).build();
+        assert!(good.is_ok());
+        assert_eq!(install_or_run(good, || 7u32), 7);
+
+        let refused = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .spawn_handler(|_| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "spawn refused",
+                ))
+            })
+            .build();
+        assert!(refused.is_err(), "the spawn handler must fail the build");
+        assert_eq!(
+            install_or_run(refused, || 7u32),
+            7,
+            "work must still run when the pool cannot be built"
+        );
     }
 
     /// A NaN score must lose regardless of its sign bit, and regardless of
