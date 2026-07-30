@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-build python-test benchmark paper-bench paper-bench-check version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
+.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark paper-bench paper-bench-check version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
 
 CARGO ?= cargo
 PYTHON ?= python3
@@ -31,7 +31,8 @@ help:
 	@printf "  serve-docs    Serve rustdoc at http://%s:%s/%s\n" "$(DOC_HOST)" "$(DOC_PORT)" "$(DOC_CRATE)"
 	@printf "  clean         Clean build artifacts\n"
 	@printf "\nPython targets:\n"
-	@printf "  python-dev    Build and install Python package locally\n"
+	@printf "  python-dev    Build and install Python package locally (release)\n"
+	@printf "  python-dev-debug Build and install unoptimized (Rust debugging only)\n"
 	@printf "  python-build  Build Python wheel\n"
 	@printf "  python-test   Run Python tests\n"
 	@printf "\nDocumentation:\n"
@@ -93,7 +94,13 @@ clean:
 	$(CARGO) clean
 
 # Python targets
+# --release matters: an unoptimized extension is roughly an order of magnitude
+# slower, which reads as a library performance problem rather than a build
+# choice. Use python-dev-debug only when debugging the Rust side.
 python-dev:
+	cd omeco-python && maturin develop --release
+
+python-dev-debug:
 	cd omeco-python && maturin develop
 
 python-build:

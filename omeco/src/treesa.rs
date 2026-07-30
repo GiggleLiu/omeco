@@ -708,9 +708,18 @@ fn expr_tree_to_nested_counted<L: Label>(
                 right, ixs, inverse, open_set, globals, openedges, next_level,
             );
 
-            // Merge the two subtrees' occurrence counts.
+            // Merge the two subtrees' occurrence counts, folding the smaller
+            // map into the larger. Always folding into the left map costs
+            // O(|right|) per node, which is quadratic on trees whose heavy
+            // side is the right child; small-to-large merging keeps the total
+            // near-linear. Counts are added, so the merged contents — and
+            // therefore every lookup below and in the caller — are unchanged.
             let mut within = left_within;
-            for (l, c) in right_within {
+            let mut folded = right_within;
+            if folded.len() > within.len() {
+                std::mem::swap(&mut within, &mut folded);
+            }
+            for (l, c) in folded {
                 *within.entry(l).or_insert(0) += c;
             }
 
@@ -721,14 +730,22 @@ fn expr_tree_to_nested_counted<L: Label>(
             let iy: Vec<L> = if level == 0 {
                 openedges.to_vec()
             } else {
+                // `seen` replaces a `Vec::contains` scan per label, which was
+                // quadratic in the width of the intermediate — the dominant
+                // cost on circuit-like networks, whose intermediates expose
+                // hundreds of labels. Insertion order is preserved, and a
+                // label that fails the output test is deterministic, so
+                // skipping its duplicates yields the same `out` as retesting.
                 let mut out: Vec<L> = Vec::new();
+                let mut seen: HashSet<L> = HashSet::with_capacity(left_out.len() + right_out.len());
                 for l in left_out.iter().chain(right_out.iter()) {
-                    if !out.contains(l) {
-                        let w = within.get(l).copied().unwrap_or(0);
-                        let g = global_count.get(l).copied().unwrap_or(0);
-                        if open_set.contains(l) || w < g {
-                            out.push(l.clone());
-                        }
+                    if !seen.insert(l.clone()) {
+                        continue;
+                    }
+                    let w = within.get(l).copied().unwrap_or(0);
+                    let g = global_count.get(l).copied().unwrap_or(0);
+                    if open_set.contains(l) || w < g {
+                        out.push(l.clone());
                     }
                 }
                 out
@@ -1150,6 +1167,117 @@ pub fn anneal_surgery_rounds<L: Label>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Frozen pre-optimization body of [`expr_tree_to_nested_counted`]
+    /// (issue #29), kept verbatim as the differential-test oracle: the
+    /// left-biased count merge and the `Vec::contains` dedup that the
+    /// optimized version replaces. Any output difference is a regression.
+    fn expr_tree_to_nested_counted_reference<L: Label>(
+        tree: &ExprTree,
+        original_ixs: &[Vec<L>],
+        inverse_map: &[L],
+        open_set: &HashSet<L>,
+        global_count: &HashMap<L, usize>,
+        openedges: &[L],
+        level: usize,
+    ) -> (NestedEinsum<L>, HashMap<L, usize>, Vec<L>) {
+        match tree {
+            ExprTree::Leaf(info) => {
+                let tid = info.tensor_id.unwrap_or(0);
+                let input_labels = original_ixs.get(tid).cloned().unwrap_or_default();
+                let output_labels = info
+                    .out_dims
+                    .iter()
+                    .map(|&id| inverse_map[id].clone())
+                    .collect::<Vec<L>>();
+                let mut within: HashMap<L, usize> = HashMap::new();
+                for l in &input_labels {
+                    *within.entry(l.clone()).or_insert(0) += 1;
+                }
+                let leaf = NestedEinsum::leaf(tid);
+                let nested = if input_labels == output_labels {
+                    leaf
+                } else {
+                    NestedEinsum::node(
+                        vec![leaf],
+                        EinCode::new(vec![input_labels], output_labels.clone()),
+                    )
+                };
+                (nested, within, output_labels)
+            }
+            ExprTree::Node { left, right, .. } => {
+                let (left_nested, left_within, left_out) = expr_tree_to_nested_counted_reference(
+                    left,
+                    original_ixs,
+                    inverse_map,
+                    open_set,
+                    global_count,
+                    openedges,
+                    level + 1,
+                );
+                let (right_nested, right_within, right_out) = expr_tree_to_nested_counted_reference(
+                    right,
+                    original_ixs,
+                    inverse_map,
+                    open_set,
+                    global_count,
+                    openedges,
+                    level + 1,
+                );
+                let mut within = left_within;
+                for (l, c) in right_within {
+                    *within.entry(l).or_insert(0) += c;
+                }
+                let iy: Vec<L> = if level == 0 {
+                    openedges.to_vec()
+                } else {
+                    let mut out: Vec<L> = Vec::new();
+                    for l in left_out.iter().chain(right_out.iter()) {
+                        if !out.contains(l) {
+                            let w = within.get(l).copied().unwrap_or(0);
+                            let g = global_count.get(l).copied().unwrap_or(0);
+                            if open_set.contains(l) || w < g {
+                                out.push(l.clone());
+                            }
+                        }
+                    }
+                    out
+                };
+                let eins = EinCode::new(vec![left_out, right_out], iy.clone());
+                (
+                    NestedEinsum::node(vec![left_nested, right_nested], eins),
+                    within,
+                    iy,
+                )
+            }
+        }
+    }
+
+    /// Reference entry point mirroring [`expr_tree_to_nested`].
+    fn expr_tree_to_nested_ref<L: Label>(
+        tree: &ExprTree,
+        original_ixs: &[Vec<L>],
+        inverse_map: &[L],
+        openedges: &[L],
+    ) -> NestedEinsum<L> {
+        let mut global_count: HashMap<L, usize> = HashMap::new();
+        for ix in original_ixs {
+            for l in ix {
+                *global_count.entry(l.clone()).or_insert(0) += 1;
+            }
+        }
+        let open_set: HashSet<L> = openedges.iter().cloned().collect();
+        expr_tree_to_nested_counted_reference(
+            tree,
+            original_ixs,
+            inverse_map,
+            &open_set,
+            &global_count,
+            openedges,
+            0,
+        )
+        .0
+    }
 
     /// Trial selection must rank trials by the cost of the tree the optimizer
     /// actually emits. The SA-internal `tree_complexity` shares Julia's
@@ -2089,6 +2217,125 @@ mod tests {
         assert_eq!(tree.leaf_count(), 4);
         let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
         assert!(cc.tc.is_finite());
+    }
+
+    /// A brick-wall circuit amplitude network: `|0>` boundary tensors, rank-4
+    /// two-qubit gates in alternating even/odd layers, `<0|` boundary. All
+    /// bonds dimension 2, no open index. Its contraction trees are deep and
+    /// expose wide intermediates — the shape absent from every
+    /// `benchmarks/graphs` fixture, and the one that exposed issue #29.
+    fn brickwall_circuit(nqubits: usize, ngates: usize) -> (EinCode<usize>, HashMap<usize, usize>) {
+        let mut ixs: Vec<Vec<usize>> = Vec::new();
+        let mut wire: Vec<usize> = (0..nqubits).collect();
+        let mut next = nqubits;
+        for &w in wire.iter() {
+            ixs.push(vec![w]);
+        }
+        let mut placed = 0;
+        let mut layer = 0;
+        while placed < ngates {
+            let mut i = layer % 2;
+            while i + 1 < nqubits && placed < ngates {
+                let (a, b) = (next, next + 1);
+                next += 2;
+                ixs.push(vec![wire[i], wire[i + 1], a, b]);
+                wire[i] = a;
+                wire[i + 1] = b;
+                placed += 1;
+                i += 2;
+            }
+            layer += 1;
+        }
+        for &w in wire.iter() {
+            ixs.push(vec![w]);
+        }
+        let sizes: HashMap<usize, usize> = (0..next).map(|l| (l, 2)).collect();
+        (EinCode::new(ixs, Vec::new()), sizes)
+    }
+
+    /// Issue #29: the optimized conversion must be output-identical to the
+    /// frozen pre-optimization body on every tree shape, including the deep,
+    /// wide-intermediate trees where the two differ in cost.
+    #[test]
+    fn test_conversion_matches_frozen_reference() {
+        use rand::SeedableRng;
+
+        for seed in 0..40u64 {
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+            let n_tensors = rng.random_range(4..=14);
+            let n_labels = rng.random_range(3..=9);
+            let ixs: Vec<Vec<usize>> = (0..n_tensors)
+                .map(|_| {
+                    let rank = rng.random_range(1..=3);
+                    (0..rank).map(|_| rng.random_range(0..n_labels)).collect()
+                })
+                .collect();
+            let n_open = rng.random_range(0..=2);
+            let iy: Vec<usize> = (0..n_open).map(|_| rng.random_range(0..n_labels)).collect();
+            let code = EinCode::new(ixs, iy);
+            let sizes: HashMap<usize, usize> = (0..n_labels).map(|l| (l, 2)).collect();
+
+            let (label_map, labels) = build_label_map(&code);
+            let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+            let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+            let tree = init_random(
+                &int_ixs,
+                &int_iy,
+                labels.len(),
+                DecompositionType::Tree,
+                &mut rng,
+            );
+
+            let got = expr_tree_to_nested(&tree, &code.ixs, &labels, &code.iy);
+            let want = expr_tree_to_nested_ref(&tree, &code.ixs, &labels, &code.iy);
+            assert_eq!(
+                crate::json::to_json_string(&got).unwrap(),
+                crate::json::to_json_string(&want).unwrap(),
+                "seed {seed}: optimized conversion diverged from the frozen reference"
+            );
+            let _ = sizes;
+        }
+    }
+
+    /// Issue #29 scaling guard for the conversion alone.
+    ///
+    /// Times only [`expr_tree_to_nested`] on a deep circuit tree with wide
+    /// intermediates — the shape where the left-biased count merge and the
+    /// `Vec::contains` dedup were quadratic. Deliberately avoids the greedy
+    /// initializer, whose own cost on circuit networks dominates this path by
+    /// three orders of magnitude and would make the bound measure the wrong
+    /// thing. Release timing is a few milliseconds and debug well under a
+    /// second, so the 10 s bound cannot flake while still failing outright if
+    /// the quadratic behavior returns.
+    #[test]
+    fn test_conversion_scales_on_deep_circuit_trees() {
+        use rand::SeedableRng;
+
+        let (code, sizes) = brickwall_circuit(201, 2000);
+        assert_eq!(code.num_tensors(), 2402);
+        let (label_map, labels) = build_label_map(&code);
+        let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+        let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(7);
+        let tree = init_random(
+            &int_ixs,
+            &int_iy,
+            labels.len(),
+            DecompositionType::Tree,
+            &mut rng,
+        );
+
+        let start = std::time::Instant::now();
+        let nested = expr_tree_to_nested(&tree, &code.ixs, &labels, &code.iy);
+        let elapsed = start.elapsed();
+
+        assert_eq!(nested.leaf_count(), 2402);
+        assert!(
+            elapsed < std::time::Duration::from_secs(10),
+            "converting a 2402-tensor circuit tree took {elapsed:?}; \
+             issue #29's quadratic conversion has likely returned"
+        );
+        let _ = sizes;
     }
 
     /// Loader for the shared benchmark graph JSON (`{ "ixs", "iy", "sizes" }`,
