@@ -818,6 +818,21 @@ pub fn optimize_treesa<L: Label>(
     Some(tree)
 }
 
+/// Worker-thread stack reservation for a network of `num_tensors` tensors.
+///
+/// The recursive tree walks use a few hundred bytes per level and can recurse
+/// once per leaf on a fully unbalanced tree, so the requirement grows linearly
+/// with the network. 4 KiB per tensor leaves roughly an order of magnitude of
+/// headroom over the measured frame sizes; the floor keeps small networks on a
+/// conventional stack and the ceiling bounds the reservation for very large
+/// ones. Stacks are virtual, so unused pages are never committed.
+fn trial_stack_size(num_tensors: usize) -> usize {
+    const PER_TENSOR: usize = 4 * 1024;
+    const MIN: usize = 32 * 1024 * 1024;
+    const MAX: usize = 1024 * 1024 * 1024;
+    num_tensors.saturating_mul(PER_TENSOR).clamp(MIN, MAX)
+}
+
 /// Bare TreeSA trial loop, without the structural-simplification front-end.
 ///
 /// Used directly by [`optimize_treesa`] when [`TreeSA::preprocess`] is `false`,
@@ -845,17 +860,36 @@ fn optimize_treesa_core<L: Label>(
     let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
     let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
 
-    // Run parallel trials
-    let results: Vec<_> = (0..config.ntrials)
-        .into_par_iter()
-        .map(|trial_idx| {
-            // Use thread-local RNG seeded with trial index for reproducibility
-            use rand::SeedableRng;
-            let mut rng = rand::rngs::SmallRng::seed_from_u64(trial_idx as u64 + 42);
+    // Run parallel trials on a pool whose worker stacks are sized for this
+    // network (issue #29). The tree walks below — conversion, complexity,
+    // and the SA cost model — recurse once per tree level, and a contraction
+    // tree can be as deep as it has leaves. Rayon's default worker stack is
+    // far smaller than the main thread's, so a deep tree overflows it and the
+    // process dies on a signal (SIGBUS/SIGSEGV) with no Rust-level error —
+    // observed on circuit networks, where trees are deep. `ntrials == 1` hid
+    // the fault because that work runs on the calling thread.
+    //
+    // Stacks are virtual and paged in on demand, so a generous reservation
+    // costs nothing until it is used. Thread-count behavior (including
+    // `RAYON_NUM_THREADS`) matches the global pool this replaces.
+    let stack_size = trial_stack_size(code.num_tensors());
+    let pool = rayon::ThreadPoolBuilder::new()
+        .stack_size(stack_size)
+        .build()
+        .ok()?;
+    let results: Vec<_> = pool.install(|| {
+        (0..config.ntrials)
+            .into_par_iter()
+            .map(|trial_idx| {
+                // Use thread-local RNG seeded with trial index for reproducibility
+                use rand::SeedableRng;
+                let mut rng = rand::rngs::SmallRng::seed_from_u64(trial_idx as u64 + 42);
 
-            // Initialize tree
-            let tree = match config.initializer {
-                Initializer::Greedy => init_greedy(code, size_dict, &label_map, &int_ixs, &int_iy)
+                // Initialize tree
+                let tree = match config.initializer {
+                    Initializer::Greedy => init_greedy(
+                        code, size_dict, &label_map, &int_ixs, &int_iy,
+                    )
                     .unwrap_or_else(|| {
                         init_random(
                             &int_ixs,
@@ -865,44 +899,49 @@ fn optimize_treesa_core<L: Label>(
                             &mut rng,
                         )
                     }),
-                Initializer::Random => init_random(
-                    &int_ixs,
-                    &int_iy,
-                    nedge,
+                    Initializer::Random => init_random(
+                        &int_ixs,
+                        &int_iy,
+                        nedge,
+                        config.decomposition_type,
+                        &mut rng,
+                    ),
+                };
+
+                // Optimize
+                let optimized = optimize_tree_sa(
+                    tree,
+                    &log2_sizes,
+                    &config.betas,
+                    config.niters,
+                    &config.score,
                     config.decomposition_type,
                     &mut rng,
-                ),
-            };
+                    nedge,
+                );
 
-            // Optimize
-            let optimized = optimize_tree_sa(
-                tree,
-                &log2_sizes,
-                &config.betas,
-                config.niters,
-                &config.score,
-                config.decomposition_type,
-                &mut rng,
-                nedge,
-            );
+                // Convert with openedges for correct root output (issue #13) and
+                // score the trial by the tree as it will be emitted: the
+                // SA-internal `tree_complexity` does not count dangling-label
+                // reductions (matching Julia's `tcscrw`), so ranking trials by it
+                // can select a tree that is worse than another trial's.
+                let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy);
+                let cc = crate::contraction_complexity(&nested, size_dict, &code.ixs);
+                let score = config.score.evaluate(cc.tc, cc.sc, cc.rwc);
 
-            // Convert with openedges for correct root output (issue #13) and
-            // score the trial by the tree as it will be emitted: the
-            // SA-internal `tree_complexity` does not count dangling-label
-            // reductions (matching Julia's `tcscrw`), so ranking trials by it
-            // can select a tree that is worse than another trial's.
-            let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy);
-            let cc = crate::contraction_complexity(&nested, size_dict, &code.ixs);
-            let score = config.score.evaluate(cc.tc, cc.sc, cc.rwc);
-
-            (nested, score)
-        })
-        .collect();
+                (nested, score)
+            })
+            .collect()
+    });
 
     // Find best result
+    // `total_cmp` rather than `partial_cmp(..).unwrap()`: a trial whose tree
+    // has an intermediate too large to represent scores NaN, and unwrapping
+    // there aborts the optimizer on valid input. `total_cmp` is a total order
+    // that sorts NaN above every finite score, so such a trial simply loses.
     let (best_tree, _) = results
         .into_iter()
-        .min_by(|(_, s1), (_, s2)| s1.partial_cmp(s2).unwrap())?;
+        .min_by(|(_, s1), (_, s2)| s1.total_cmp(s2))?;
 
     Some(best_tree)
 }
@@ -2295,6 +2334,43 @@ mod tests {
             );
             let _ = sizes;
         }
+    }
+
+    /// Issue #29: multi-trial optimization of a circuit network completes.
+    ///
+    /// The reported fault was a worker-thread stack overflow that killed the
+    /// process on a signal (exit 138, SIGBUS on macOS) for `ntrials > 1`
+    /// while `ntrials == 1` survived, because only the multi-trial path moves
+    /// the recursive tree walks onto Rayon workers, whose default stack is
+    /// far smaller than the main thread's. Reproducing the overflow itself
+    /// needs a ~6500-tensor network and minutes of annealing (recorded in the
+    /// issue), and an overflow aborts the whole test binary rather than
+    /// failing one case, so this is a fast smoke test over the same code path
+    /// rather than a reproduction: it would not have failed before the fix.
+    #[test]
+    fn test_multi_trial_survives_deep_circuit_trees() {
+        let (code, sizes) = brickwall_circuit(201, 2000);
+        let config = TreeSA {
+            ntrials: 4,
+            niters: 1,
+            betas: vec![1.0],
+            preprocess: false,
+            ..TreeSA::default()
+        };
+        let tree = optimize_treesa(&code, &sizes, &config).expect("must not crash");
+        assert_eq!(tree.leaf_count(), code.num_tensors());
+    }
+
+    /// The worker stack reservation grows with the network and stays within
+    /// its documented bounds.
+    #[test]
+    fn test_trial_stack_size_bounds() {
+        // Small networks sit on the floor; large ones scale; huge ones cap.
+        assert_eq!(trial_stack_size(1), 32 * 1024 * 1024);
+        assert_eq!(trial_stack_size(6492), 32 * 1024 * 1024);
+        assert_eq!(trial_stack_size(100_000), 100_000 * 4 * 1024);
+        assert_eq!(trial_stack_size(usize::MAX), 1024 * 1024 * 1024);
+        assert!(trial_stack_size(100_000) > trial_stack_size(6492));
     }
 
     /// Issue #29 scaling guard for the conversion alone.
