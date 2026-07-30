@@ -739,12 +739,10 @@ fn expr_tree_to_nested_counted<L: Label>(
                 let mut out: Vec<L> = Vec::new();
                 let mut seen: HashSet<L> = HashSet::with_capacity(left_out.len() + right_out.len());
                 for l in left_out.iter().chain(right_out.iter()) {
-                    if !seen.insert(l.clone()) {
-                        continue;
-                    }
+                    let first_occurrence = seen.insert(l.clone());
                     let w = within.get(l).copied().unwrap_or(0);
                     let g = global_count.get(l).copied().unwrap_or(0);
-                    if open_set.contains(l) || w < g {
+                    if first_occurrence && (open_set.contains(l) || w < g) {
                         out.push(l.clone());
                     }
                 }
@@ -2371,6 +2369,58 @@ mod tests {
         assert_eq!(trial_stack_size(100_000), 100_000 * 4 * 1024);
         assert_eq!(trial_stack_size(usize::MAX), 1024 * 1024 * 1024);
         assert!(trial_stack_size(100_000) > trial_stack_size(6492));
+    }
+
+    /// The conversion's output dedup must keep a label shared by both
+    /// children exactly once. Every contracted bond between two subtrees
+    /// appears in both children's outputs, so this exercises the duplicate
+    /// path directly, including a shared label that is still needed above and
+    /// therefore must survive as an output.
+    #[test]
+    fn test_conversion_dedups_labels_shared_by_both_children() {
+        // Label 0 joins t0 and t1 and also appears in t2 outside the pair, so
+        // it is exposed by both children of the (t0, t1) node and must remain
+        // an output of that node exactly once.
+        let code: EinCode<usize> = EinCode::new(
+            vec![vec![0, 1], vec![0, 2], vec![0, 3], vec![1, 2, 3]],
+            vec![],
+        );
+        let sizes: HashMap<usize, usize> = (0..4).map(|l| (l, 2)).collect();
+        let (label_map, labels) = build_label_map(&code);
+        let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+        let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+        use rand::SeedableRng;
+
+        for seed in 0..12u64 {
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+            let tree = init_random(
+                &int_ixs,
+                &int_iy,
+                labels.len(),
+                DecompositionType::Tree,
+                &mut rng,
+            );
+            let got = expr_tree_to_nested(&tree, &code.ixs, &labels, &code.iy);
+            let want = expr_tree_to_nested_ref(&tree, &code.ixs, &labels, &code.iy);
+            assert_eq!(
+                crate::json::to_json_string(&got).unwrap(),
+                crate::json::to_json_string(&want).unwrap()
+            );
+            // No node may list a label twice in its output.
+            fn check_unique(n: &NestedEinsum<usize>) {
+                if let NestedEinsum::Node { eins, args } = n {
+                    let mut seen = HashSet::new();
+                    for l in &eins.iy {
+                        assert!(seen.insert(*l), "duplicate label {l} in node output");
+                    }
+                    for a in args {
+                        check_unique(a);
+                    }
+                }
+            }
+            check_unique(&got);
+        }
+        let _ = sizes;
     }
 
     /// Issue #29 scaling guard for the conversion alone.
