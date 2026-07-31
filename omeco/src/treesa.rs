@@ -708,9 +708,18 @@ fn expr_tree_to_nested_counted<L: Label>(
                 right, ixs, inverse, open_set, globals, openedges, next_level,
             );
 
-            // Merge the two subtrees' occurrence counts.
+            // Merge the two subtrees' occurrence counts, folding the smaller
+            // map into the larger. Always folding into the left map costs
+            // O(|right|) per node, which is quadratic on trees whose heavy
+            // side is the right child; small-to-large merging keeps the total
+            // near-linear. Counts are added, so the merged contents — and
+            // therefore every lookup below and in the caller — are unchanged.
             let mut within = left_within;
-            for (l, c) in right_within {
+            let mut folded = right_within;
+            if folded.len() > within.len() {
+                std::mem::swap(&mut within, &mut folded);
+            }
+            for (l, c) in folded {
                 *within.entry(l).or_insert(0) += c;
             }
 
@@ -721,14 +730,20 @@ fn expr_tree_to_nested_counted<L: Label>(
             let iy: Vec<L> = if level == 0 {
                 openedges.to_vec()
             } else {
+                // `seen` replaces a `Vec::contains` scan per label, which was
+                // quadratic in the width of the intermediate — the dominant
+                // cost on circuit-like networks, whose intermediates expose
+                // hundreds of labels. Insertion order is preserved, and a
+                // label that fails the output test is deterministic, so
+                // skipping its duplicates yields the same `out` as retesting.
                 let mut out: Vec<L> = Vec::new();
+                let mut seen: HashSet<L> = HashSet::with_capacity(left_out.len() + right_out.len());
                 for l in left_out.iter().chain(right_out.iter()) {
-                    if !out.contains(l) {
-                        let w = within.get(l).copied().unwrap_or(0);
-                        let g = global_count.get(l).copied().unwrap_or(0);
-                        if open_set.contains(l) || w < g {
-                            out.push(l.clone());
-                        }
+                    let first_occurrence = seen.insert(l.clone());
+                    let w = within.get(l).copied().unwrap_or(0);
+                    let g = global_count.get(l).copied().unwrap_or(0);
+                    if first_occurrence && (open_set.contains(l) || w < g) {
+                        out.push(l.clone());
                     }
                 }
                 out
@@ -801,6 +816,69 @@ pub fn optimize_treesa<L: Label>(
     Some(tree)
 }
 
+/// Run `f` on `pool`, or on the current (global) pool if it could not be built.
+///
+/// Splitting this out from the call site keeps the fallback testable: a
+/// thread-spawn failure is otherwise impossible to provoke in a unit test, and
+/// untested error handling is how a "cannot allocate threads" turns into a
+/// silent wrong answer.
+fn install_or_run<T, F>(pool: Result<rayon::ThreadPool, rayon::ThreadPoolBuildError>, f: F) -> T
+where
+    F: FnOnce() -> T + Send,
+    T: Send,
+{
+    match pool {
+        Ok(pool) => pool.install(f),
+        Err(_) => f(),
+    }
+}
+
+/// Order trial scores so that any NaN loses, whatever its sign bit.
+///
+/// A trial whose tree has an intermediate too large to represent scores NaN:
+/// with the default `rw_weight` of zero, `rw_weight * 2f64.powf(rwc)` is
+/// `0.0 * inf`. Ranking such trials needs care on two counts.
+///
+/// `partial_cmp(..).unwrap()` panics on them, aborting the optimizer on valid
+/// input. `f64::total_cmp` does not panic but is not a fix either: it orders
+/// by sign bit, and the sign of a hardware-produced NaN is platform-dependent
+/// — x86_64 yields a negative NaN for `0.0 * inf` where aarch64 yields a
+/// positive one. Under `total_cmp` the overflowed trial would therefore *win*
+/// on x86_64 and lose on aarch64, which both returns a nonsense tree and
+/// breaks the cross-platform determinism the committed benchmark artifact
+/// depends on. Testing `is_nan()` explicitly is sign-agnostic.
+fn nan_last(a: f64, b: f64) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    match (a.is_nan(), b.is_nan()) {
+        (false, false) => a.total_cmp(&b),
+        (false, true) => Ordering::Less,
+        (true, false) => Ordering::Greater,
+        (true, true) => Ordering::Equal,
+    }
+}
+
+/// Worker-thread stack reservation for a network of `num_tensors` tensors.
+///
+/// The recursive tree walks use a few hundred bytes per level and can recurse
+/// once per leaf on a fully unbalanced tree — a path decomposition reaches
+/// exactly that — so the requirement grows linearly with the network. 4 KiB
+/// per tensor leaves roughly an order of magnitude of headroom over the
+/// measured frame sizes, and the floor keeps small networks on a conventional
+/// stack.
+///
+/// The 1 GiB ceiling means this is a mitigation sized for realistic networks,
+/// not a guarantee for arbitrary ones: beyond about 262 000 tensors the budget
+/// per level starts shrinking again, and a deep enough tree at that scale
+/// could still overflow. Making the walks iterative is the only complete fix.
+/// Stacks are virtual, so unused pages are not resident, but they do consume
+/// address space and per-thread resources.
+fn trial_stack_size(num_tensors: usize) -> usize {
+    const PER_TENSOR: usize = 4 * 1024;
+    const MIN: usize = 32 * 1024 * 1024;
+    const MAX: usize = 1024 * 1024 * 1024;
+    num_tensors.saturating_mul(PER_TENSOR).clamp(MIN, MAX)
+}
+
 /// Bare TreeSA trial loop, without the structural-simplification front-end.
 ///
 /// Used directly by [`optimize_treesa`] when [`TreeSA::preprocess`] is `false`,
@@ -828,17 +906,40 @@ fn optimize_treesa_core<L: Label>(
     let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
     let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
 
-    // Run parallel trials
-    let results: Vec<_> = (0..config.ntrials)
-        .into_par_iter()
-        .map(|trial_idx| {
-            // Use thread-local RNG seeded with trial index for reproducibility
-            use rand::SeedableRng;
-            let mut rng = rand::rngs::SmallRng::seed_from_u64(trial_idx as u64 + 42);
+    // Run parallel trials on a pool whose worker stacks are sized for this
+    // network (issue #29). The tree walks below — conversion, complexity,
+    // and the SA cost model — recurse once per tree level, and a contraction
+    // tree can be as deep as it has leaves. Rayon's default worker stack is
+    // far smaller than the main thread's, so a deep tree overflows it and the
+    // process dies on a signal (SIGBUS/SIGSEGV) with no Rust-level error —
+    // observed on circuit networks, where trees are deep. `ntrials == 1` hid
+    // the fault because that work runs on the calling thread.
+    //
+    // The pool is capped at the number of trials — a trial is sequential, so
+    // extra workers would idle while still reserving a stack each — and
+    // otherwise takes the global pool's width, which is what honors
+    // `RAYON_NUM_THREADS`. Note this does not inherit a caller's own custom
+    // pool: work that used to run on it now runs here instead.
+    //
+    // If the pool cannot be built (thread or address-space exhaustion), fall
+    // back to the global pool rather than reporting failure: returning `None`
+    // would be indistinguishable from "this network has no contraction", and
+    // a caller that is merely out of threads should still get an answer.
+    let stack_size = trial_stack_size(code.num_tensors());
+    let num_threads = config.ntrials.min(rayon::current_num_threads()).max(1);
+    let run_trials = || {
+        (0..config.ntrials)
+            .into_par_iter()
+            .map(|trial_idx| {
+                // Use thread-local RNG seeded with trial index for reproducibility
+                use rand::SeedableRng;
+                let mut rng = rand::rngs::SmallRng::seed_from_u64(trial_idx as u64 + 42);
 
-            // Initialize tree
-            let tree = match config.initializer {
-                Initializer::Greedy => init_greedy(code, size_dict, &label_map, &int_ixs, &int_iy)
+                // Initialize tree
+                let tree = match config.initializer {
+                    Initializer::Greedy => init_greedy(
+                        code, size_dict, &label_map, &int_ixs, &int_iy,
+                    )
                     .unwrap_or_else(|| {
                         init_random(
                             &int_ixs,
@@ -848,44 +949,50 @@ fn optimize_treesa_core<L: Label>(
                             &mut rng,
                         )
                     }),
-                Initializer::Random => init_random(
-                    &int_ixs,
-                    &int_iy,
-                    nedge,
+                    Initializer::Random => init_random(
+                        &int_ixs,
+                        &int_iy,
+                        nedge,
+                        config.decomposition_type,
+                        &mut rng,
+                    ),
+                };
+
+                // Optimize
+                let optimized = optimize_tree_sa(
+                    tree,
+                    &log2_sizes,
+                    &config.betas,
+                    config.niters,
+                    &config.score,
                     config.decomposition_type,
                     &mut rng,
-                ),
-            };
+                    nedge,
+                );
 
-            // Optimize
-            let optimized = optimize_tree_sa(
-                tree,
-                &log2_sizes,
-                &config.betas,
-                config.niters,
-                &config.score,
-                config.decomposition_type,
-                &mut rng,
-                nedge,
-            );
+                // Convert with openedges for correct root output (issue #13) and
+                // score the trial by the tree as it will be emitted: the
+                // SA-internal `tree_complexity` does not count dangling-label
+                // reductions (matching Julia's `tcscrw`), so ranking trials by it
+                // can select a tree that is worse than another trial's.
+                let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy);
+                let cc = crate::contraction_complexity(&nested, size_dict, &code.ixs);
+                let score = config.score.evaluate(cc.tc, cc.sc, cc.rwc);
 
-            // Convert with openedges for correct root output (issue #13) and
-            // score the trial by the tree as it will be emitted: the
-            // SA-internal `tree_complexity` does not count dangling-label
-            // reductions (matching Julia's `tcscrw`), so ranking trials by it
-            // can select a tree that is worse than another trial's.
-            let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy);
-            let cc = crate::contraction_complexity(&nested, size_dict, &code.ixs);
-            let score = config.score.evaluate(cc.tc, cc.sc, cc.rwc);
-
-            (nested, score)
-        })
-        .collect();
+                (nested, score)
+            })
+            .collect::<Vec<_>>()
+    };
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .stack_size(stack_size)
+        .build();
+    let results = install_or_run(pool, run_trials);
 
     // Find best result
     let (best_tree, _) = results
         .into_iter()
-        .min_by(|(_, s1), (_, s2)| s1.partial_cmp(s2).unwrap())?;
+        .min_by(|(_, s1), (_, s2)| nan_last(*s1, *s2))?;
 
     Some(best_tree)
 }
@@ -1150,6 +1257,117 @@ pub fn anneal_surgery_rounds<L: Label>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Frozen pre-optimization body of [`expr_tree_to_nested_counted`]
+    /// (issue #29), kept verbatim as the differential-test oracle: the
+    /// left-biased count merge and the `Vec::contains` dedup that the
+    /// optimized version replaces. Any output difference is a regression.
+    fn expr_tree_to_nested_counted_reference<L: Label>(
+        tree: &ExprTree,
+        original_ixs: &[Vec<L>],
+        inverse_map: &[L],
+        open_set: &HashSet<L>,
+        global_count: &HashMap<L, usize>,
+        openedges: &[L],
+        level: usize,
+    ) -> (NestedEinsum<L>, HashMap<L, usize>, Vec<L>) {
+        match tree {
+            ExprTree::Leaf(info) => {
+                let tid = info.tensor_id.unwrap_or(0);
+                let input_labels = original_ixs.get(tid).cloned().unwrap_or_default();
+                let output_labels = info
+                    .out_dims
+                    .iter()
+                    .map(|&id| inverse_map[id].clone())
+                    .collect::<Vec<L>>();
+                let mut within: HashMap<L, usize> = HashMap::new();
+                for l in &input_labels {
+                    *within.entry(l.clone()).or_insert(0) += 1;
+                }
+                let leaf = NestedEinsum::leaf(tid);
+                let nested = if input_labels == output_labels {
+                    leaf
+                } else {
+                    NestedEinsum::node(
+                        vec![leaf],
+                        EinCode::new(vec![input_labels], output_labels.clone()),
+                    )
+                };
+                (nested, within, output_labels)
+            }
+            ExprTree::Node { left, right, .. } => {
+                let (left_nested, left_within, left_out) = expr_tree_to_nested_counted_reference(
+                    left,
+                    original_ixs,
+                    inverse_map,
+                    open_set,
+                    global_count,
+                    openedges,
+                    level + 1,
+                );
+                let (right_nested, right_within, right_out) = expr_tree_to_nested_counted_reference(
+                    right,
+                    original_ixs,
+                    inverse_map,
+                    open_set,
+                    global_count,
+                    openedges,
+                    level + 1,
+                );
+                let mut within = left_within;
+                for (l, c) in right_within {
+                    *within.entry(l).or_insert(0) += c;
+                }
+                let iy: Vec<L> = if level == 0 {
+                    openedges.to_vec()
+                } else {
+                    let mut out: Vec<L> = Vec::new();
+                    for l in left_out.iter().chain(right_out.iter()) {
+                        if !out.contains(l) {
+                            let w = within.get(l).copied().unwrap_or(0);
+                            let g = global_count.get(l).copied().unwrap_or(0);
+                            if open_set.contains(l) || w < g {
+                                out.push(l.clone());
+                            }
+                        }
+                    }
+                    out
+                };
+                let eins = EinCode::new(vec![left_out, right_out], iy.clone());
+                (
+                    NestedEinsum::node(vec![left_nested, right_nested], eins),
+                    within,
+                    iy,
+                )
+            }
+        }
+    }
+
+    /// Reference entry point mirroring [`expr_tree_to_nested`].
+    fn expr_tree_to_nested_ref<L: Label>(
+        tree: &ExprTree,
+        original_ixs: &[Vec<L>],
+        inverse_map: &[L],
+        openedges: &[L],
+    ) -> NestedEinsum<L> {
+        let mut global_count: HashMap<L, usize> = HashMap::new();
+        for ix in original_ixs {
+            for l in ix {
+                *global_count.entry(l.clone()).or_insert(0) += 1;
+            }
+        }
+        let open_set: HashSet<L> = openedges.iter().cloned().collect();
+        expr_tree_to_nested_counted_reference(
+            tree,
+            original_ixs,
+            inverse_map,
+            &open_set,
+            &global_count,
+            openedges,
+            0,
+        )
+        .0
+    }
 
     /// Trial selection must rank trials by the cost of the tree the optimizer
     /// actually emits. The SA-internal `tree_complexity` shares Julia's
@@ -2089,6 +2307,240 @@ mod tests {
         assert_eq!(tree.leaf_count(), 4);
         let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
         assert!(cc.tc.is_finite());
+    }
+
+    /// A brick-wall circuit amplitude network: `|0>` boundary tensors, rank-4
+    /// two-qubit gates in alternating even/odd layers, `<0|` boundary. All
+    /// bonds dimension 2, no open index. Its contraction trees are deep and
+    /// expose wide intermediates — the shape absent from every
+    /// `benchmarks/graphs` fixture, and the one that exposed issue #29.
+    fn brickwall_circuit(nqubits: usize, ngates: usize) -> (EinCode<usize>, HashMap<usize, usize>) {
+        let mut ixs: Vec<Vec<usize>> = Vec::new();
+        let mut wire: Vec<usize> = (0..nqubits).collect();
+        let mut next = nqubits;
+        for &w in wire.iter() {
+            ixs.push(vec![w]);
+        }
+        let mut placed = 0;
+        let mut layer = 0;
+        while placed < ngates {
+            let mut i = layer % 2;
+            while i + 1 < nqubits && placed < ngates {
+                let (a, b) = (next, next + 1);
+                next += 2;
+                ixs.push(vec![wire[i], wire[i + 1], a, b]);
+                wire[i] = a;
+                wire[i + 1] = b;
+                placed += 1;
+                i += 2;
+            }
+            layer += 1;
+        }
+        for &w in wire.iter() {
+            ixs.push(vec![w]);
+        }
+        let sizes: HashMap<usize, usize> = (0..next).map(|l| (l, 2)).collect();
+        (EinCode::new(ixs, Vec::new()), sizes)
+    }
+
+    /// Issue #29: the optimized conversion must be output-identical to the
+    /// frozen pre-optimization body on every tree shape, including the deep,
+    /// wide-intermediate trees where the two differ in cost.
+    #[test]
+    fn test_conversion_matches_frozen_reference() {
+        use rand::SeedableRng;
+
+        for seed in 0..40u64 {
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+            let n_tensors = rng.random_range(4..=14);
+            let n_labels = rng.random_range(3..=9);
+            let ixs: Vec<Vec<usize>> = (0..n_tensors)
+                .map(|_| {
+                    let rank = rng.random_range(1..=3);
+                    (0..rank).map(|_| rng.random_range(0..n_labels)).collect()
+                })
+                .collect();
+            let n_open = rng.random_range(0..=2);
+            let iy: Vec<usize> = (0..n_open).map(|_| rng.random_range(0..n_labels)).collect();
+            let code = EinCode::new(ixs, iy);
+            let sizes: HashMap<usize, usize> = (0..n_labels).map(|l| (l, 2)).collect();
+
+            let (label_map, labels) = build_label_map(&code);
+            let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+            let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+            let tree = init_random(
+                &int_ixs,
+                &int_iy,
+                labels.len(),
+                DecompositionType::Tree,
+                &mut rng,
+            );
+
+            let got = expr_tree_to_nested(&tree, &code.ixs, &labels, &code.iy);
+            let want = expr_tree_to_nested_ref(&tree, &code.ixs, &labels, &code.iy);
+            assert_eq!(
+                crate::json::to_json_string(&got).unwrap(),
+                crate::json::to_json_string(&want).unwrap(),
+                "seed {seed}: optimized conversion diverged from the frozen reference"
+            );
+            let _ = sizes;
+        }
+    }
+
+    /// Issue #29: multi-trial optimization of a circuit network completes.
+    ///
+    /// The reported fault was a worker-thread stack overflow that killed the
+    /// process on a signal (exit 138, SIGBUS on macOS) for `ntrials > 1`
+    /// while `ntrials == 1` survived, because only the multi-trial path moves
+    /// the recursive tree walks onto Rayon workers, whose default stack is
+    /// far smaller than the main thread's. Reproducing the overflow itself
+    /// needs a ~6500-tensor network and minutes of annealing (recorded in the
+    /// issue), and an overflow aborts the whole test binary rather than
+    /// failing one case, so this is a fast smoke test over the same code path
+    /// rather than a reproduction: it would not have failed before the fix.
+    #[test]
+    fn test_multi_trial_survives_deep_circuit_trees() {
+        let (code, sizes) = brickwall_circuit(201, 2000);
+        let config = TreeSA {
+            ntrials: 4,
+            niters: 1,
+            betas: vec![1.0],
+            preprocess: false,
+            ..TreeSA::default()
+        };
+        let tree = optimize_treesa(&code, &sizes, &config).expect("must not crash");
+        assert_eq!(tree.leaf_count(), code.num_tensors());
+    }
+
+    /// The optimizer must still produce a result when a worker pool cannot be
+    /// created: "out of threads" is not "this network has no contraction".
+    #[test]
+    fn test_install_or_run_falls_back_when_the_pool_cannot_be_built() {
+        let good = rayon::ThreadPoolBuilder::new().num_threads(2).build();
+        assert!(good.is_ok());
+        assert_eq!(install_or_run(good, || 7u32), 7);
+
+        let refused = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .spawn_handler(|_| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "spawn refused",
+                ))
+            })
+            .build();
+        assert!(refused.is_err(), "the spawn handler must fail the build");
+        assert_eq!(
+            install_or_run(refused, || 7u32),
+            7,
+            "work must still run when the pool cannot be built"
+        );
+    }
+
+    /// A NaN score must lose regardless of its sign bit, and regardless of
+    /// which side of the comparison it is on.
+    ///
+    /// `f64::total_cmp` alone is not enough: it orders by sign bit, and the
+    /// sign of a hardware NaN from `0.0 * inf` differs between x86_64
+    /// (negative) and aarch64 (positive), so an overflowed trial would win on
+    /// one architecture and lose on the other.
+    #[test]
+    fn test_nan_scores_always_lose() {
+        use std::cmp::Ordering;
+
+        let pos_nan = f64::NAN;
+        let neg_nan = -f64::NAN;
+        assert!(pos_nan.is_nan() && neg_nan.is_nan());
+        assert!(
+            neg_nan.is_sign_negative(),
+            "need a negative NaN for this test"
+        );
+
+        for nan in [pos_nan, neg_nan] {
+            for finite in [0.0_f64, -1e30, 1e300, f64::INFINITY] {
+                assert_eq!(nan_last(finite, nan), Ordering::Less);
+                assert_eq!(nan_last(nan, finite), Ordering::Greater);
+            }
+            assert_eq!(nan_last(nan, nan), Ordering::Equal);
+        }
+
+        // Ordinary scores keep their usual order, so selection is unchanged.
+        assert_eq!(nan_last(1.0, 2.0), Ordering::Less);
+        assert_eq!(nan_last(2.0, 1.0), Ordering::Greater);
+        assert_eq!(nan_last(1.0, 1.0), Ordering::Equal);
+
+        // `min_by` therefore never returns the NaN element.
+        let scores = [neg_nan, 5.0_f64, pos_nan, 3.0_f64];
+        let best = scores
+            .iter()
+            .copied()
+            .min_by(|a, b| nan_last(*a, *b))
+            .unwrap();
+        assert_eq!(best, 3.0, "min_by must skip NaN scores of either sign");
+    }
+
+    /// The worker stack reservation grows with the network and stays within
+    /// its documented bounds.
+    #[test]
+    fn test_trial_stack_size_bounds() {
+        // Small networks sit on the floor; large ones scale; huge ones cap.
+        assert_eq!(trial_stack_size(1), 32 * 1024 * 1024);
+        assert_eq!(trial_stack_size(6492), 32 * 1024 * 1024);
+        assert_eq!(trial_stack_size(100_000), 100_000 * 4 * 1024);
+        assert_eq!(trial_stack_size(usize::MAX), 1024 * 1024 * 1024);
+        assert!(trial_stack_size(100_000) > trial_stack_size(6492));
+    }
+
+    /// The conversion's output dedup must keep a label shared by both
+    /// children exactly once. Every contracted bond between two subtrees
+    /// appears in both children's outputs, so this exercises the duplicate
+    /// path directly, including a shared label that is still needed above and
+    /// therefore must survive as an output.
+    #[test]
+    fn test_conversion_dedups_labels_shared_by_both_children() {
+        // Label 0 joins t0 and t1 and also appears in t2 outside the pair, so
+        // it is exposed by both children of the (t0, t1) node and must remain
+        // an output of that node exactly once.
+        let code: EinCode<usize> = EinCode::new(
+            vec![vec![0, 1], vec![0, 2], vec![0, 3], vec![1, 2, 3]],
+            vec![],
+        );
+        let sizes: HashMap<usize, usize> = (0..4).map(|l| (l, 2)).collect();
+        let (label_map, labels) = build_label_map(&code);
+        let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
+        let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
+        use rand::SeedableRng;
+
+        for seed in 0..12u64 {
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+            let tree = init_random(
+                &int_ixs,
+                &int_iy,
+                labels.len(),
+                DecompositionType::Tree,
+                &mut rng,
+            );
+            let got = expr_tree_to_nested(&tree, &code.ixs, &labels, &code.iy);
+            let want = expr_tree_to_nested_ref(&tree, &code.ixs, &labels, &code.iy);
+            assert_eq!(
+                crate::json::to_json_string(&got).unwrap(),
+                crate::json::to_json_string(&want).unwrap()
+            );
+            // No node may list a label twice in its output.
+            fn check_unique(n: &NestedEinsum<usize>) {
+                if let NestedEinsum::Node { eins, args } = n {
+                    let mut seen = HashSet::new();
+                    for l in &eins.iy {
+                        assert!(seen.insert(*l), "duplicate label {l} in node output");
+                    }
+                    for a in args {
+                        check_unique(a);
+                    }
+                }
+            }
+            check_unique(&got);
+        }
+        let _ = sizes;
     }
 
     /// Loader for the shared benchmark graph JSON (`{ "ixs", "iy", "sizes" }`,

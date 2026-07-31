@@ -25,8 +25,12 @@ For development or the latest features:
 git clone https://github.com/GiggleLiu/omeco.git
 cd omeco/omeco-python
 pip install maturin
-maturin develop
+maturin develop --release
 ```
+
+Build with `--release`. An unoptimized extension is roughly an order of
+magnitude slower on large networks, which is easily mistaken for a library
+performance problem. Omit the flag only when debugging the Rust side.
 
 ### Verify Installation
 
