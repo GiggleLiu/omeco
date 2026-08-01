@@ -1880,9 +1880,13 @@ mod tests {
             .collect();
         let seed = optimize_code(&code, &sizes, &Treewidth::default()).unwrap();
 
-        let (refined, report) = refine(&seed, &code, &sizes, Duration::from_millis(50));
+        // Iteration-capped rather than wall-clock budgeted: a 50 ms budget is
+        // not enough to complete a surgery call under coverage instrumentation,
+        // which made `surgery_calls >= 1` fail intermittently in CI. Capping at
+        // one iteration asserts the same thing deterministically.
+        let (refined, report) = refine_capped(&seed, &code, &sizes, Duration::MAX, 1);
 
-        assert!(report.surgery_calls >= 1);
+        assert_eq!(report.surgery_calls, 1);
         assert_eq!(refined.leaf_count(), code.num_tensors());
         assert_eq!(refined.output_labels(&code.ixs), code.iy);
     }
