@@ -443,107 +443,43 @@ pub fn tree_to_nested_einsum<L: Label>(
     incidence_list: &IncidenceList<usize, L>,
     openedges: &[L],
 ) -> NestedEinsum<L> {
-    // First, collect all leaf indices to build the mapping from the incidence list
-    let mut leaf_labels: HashMap<usize, Vec<L>> = HashMap::new();
-    collect_leaf_labels(tree, incidence_list, &mut leaf_labels);
-
-    // Then recursively build the nested einsum with level tracking
-    // At level 0 (root), use openedges; at level > 0, compute intermediate output
-    build_nested_with_level(tree, &leaf_labels, incidence_list, openedges, 0)
+    build_nested_with_level(tree, incidence_list, openedges, 0).0
 }
 
-fn collect_leaf_labels<L: Label>(
-    tree: &ContractionTree,
-    incidence_list: &IncidenceList<usize, L>,
-    labels: &mut HashMap<usize, Vec<L>>,
-) {
-    match tree {
-        ContractionTree::Leaf(idx) => {
-            if let Some(edges) = incidence_list.edges(idx) {
-                labels.insert(*idx, edges.clone());
-            }
-        }
-        ContractionTree::Node { left, right } => {
-            collect_leaf_labels(left, incidence_list, labels);
-            collect_leaf_labels(right, incidence_list, labels);
-        }
-    }
-}
-
+/// Returns the converted subtree together with the labels it exposes to its
+/// parent and the original tensor ids it covers. Both are needed by the parent
+/// and were previously recomputed by re-walking the subtree at every node,
+/// which made the conversion cubic in the tensor count (issue #31).
+///
+/// `il` is abbreviated so the recursive calls fit on one line.
 fn build_nested_with_level<L: Label>(
     tree: &ContractionTree,
-    leaf_labels: &HashMap<usize, Vec<L>>,
-    incidence_list: &IncidenceList<usize, L>,
+    il: &IncidenceList<usize, L>,
     openedges: &[L],
     level: usize,
-) -> NestedEinsum<L> {
+) -> (NestedEinsum<L>, Vec<L>, Vec<usize>) {
     match tree {
-        ContractionTree::Leaf(idx) => NestedEinsum::leaf(*idx),
+        ContractionTree::Leaf(idx) => {
+            let labels = il.edges(idx).cloned().unwrap_or_default();
+            (NestedEinsum::leaf(*idx), labels, vec![*idx])
+        }
         ContractionTree::Node { left, right } => {
-            // Get labels from children
-            let left_labels = get_subtree_labels(left, leaf_labels, incidence_list);
-            let right_labels = get_subtree_labels(right, leaf_labels, incidence_list);
+            let lhs = build_nested_with_level(left, il, openedges, level + 1);
+            let rhs = build_nested_with_level(right, il, openedges, level + 1);
+            let (left_nested, left_labels, mut vertices) = lhs;
+            let (right_nested, right_labels, right_vertices) = rhs;
 
-            // At level 0 (root), use openedges; otherwise compute intermediate output
             let output_labels = if level == 0 {
                 openedges.to_vec()
             } else {
-                let left_vertices = get_subtree_vertices(left);
-                let right_vertices = get_subtree_vertices(right);
-                compute_contraction_output_with_hypergraph(
-                    &left_labels,
-                    &right_labels,
-                    incidence_list,
-                    &left_vertices,
-                    &right_vertices,
-                )
+                let (ll, rl) = (&left_labels, &right_labels);
+                compute_contraction_output_with_hypergraph(ll, rl, il, &vertices, &right_vertices)
             };
 
-            // Build children recursively with incremented level
-            let left_nested =
-                build_nested_with_level(left, leaf_labels, incidence_list, openedges, level + 1);
-            let right_nested =
-                build_nested_with_level(right, leaf_labels, incidence_list, openedges, level + 1);
-
-            // Create the einsum code for this contraction
-            let eins = EinCode::new(vec![left_labels, right_labels], output_labels);
-
-            NestedEinsum::node(vec![left_nested, right_nested], eins)
-        }
-    }
-}
-
-fn get_subtree_labels<L: Label>(
-    tree: &ContractionTree,
-    leaf_labels: &HashMap<usize, Vec<L>>,
-    incidence_list: &IncidenceList<usize, L>,
-) -> Vec<L> {
-    match tree {
-        ContractionTree::Leaf(idx) => leaf_labels.get(idx).cloned().unwrap_or_default(),
-        ContractionTree::Node { left, right } => {
-            let left_labels = get_subtree_labels(left, leaf_labels, incidence_list);
-            let right_labels = get_subtree_labels(right, leaf_labels, incidence_list);
-            let left_vertices = get_subtree_vertices(left);
-            let right_vertices = get_subtree_vertices(right);
-            compute_contraction_output_with_hypergraph(
-                &left_labels,
-                &right_labels,
-                incidence_list,
-                &left_vertices,
-                &right_vertices,
-            )
-        }
-    }
-}
-
-/// Get all leaf vertex IDs from a subtree.
-fn get_subtree_vertices(tree: &ContractionTree) -> Vec<usize> {
-    match tree {
-        ContractionTree::Leaf(idx) => vec![*idx],
-        ContractionTree::Node { left, right } => {
-            let mut vertices = get_subtree_vertices(left);
-            vertices.extend(get_subtree_vertices(right));
-            vertices
+            let eins = EinCode::new(vec![left_labels, right_labels], output_labels.clone());
+            vertices.extend(right_vertices);
+            let node = NestedEinsum::node(vec![left_nested, right_nested], eins);
+            (node, output_labels, vertices)
         }
     }
 }
@@ -906,6 +842,65 @@ mod tests {
         assert!(cost1 > cost2);
         assert!(cost2 < cost1);
         assert!(cost1 == Cost(1.0));
+    }
+
+    /// Greedy must scale near-linearly on circuit networks (issue #31).
+    ///
+    /// `tree_to_nested_einsum` used to recompute each subtree's labels and
+    /// vertex set at every node, which is cubic in the tensor count. It was
+    /// invisible on the balanced trees of the existing fixtures and severe on
+    /// the deep trees that circuits produce: 20 s at 6494 tensors, versus
+    /// 0.2 s after the rewrite.
+    ///
+    /// The assertion is a *ratio* between two sizes rather than an absolute
+    /// time, so it is independent of machine speed. Cubic growth over this
+    /// 3x range costs ~27x; the observed near-linear cost is ~4x. The 12x
+    /// bound sits well clear of both.
+    #[test]
+    fn test_greedy_scales_near_linearly_on_circuits() {
+        fn brickwall(nq: usize, layers: usize) -> (EinCode<usize>, HashMap<usize, usize>) {
+            let mut ixs: Vec<Vec<usize>> = Vec::new();
+            let mut wire: Vec<usize> = (0..nq).collect();
+            let mut next = nq;
+            for &w in wire.iter() {
+                ixs.push(vec![w]);
+            }
+            for layer in 0..layers {
+                let mut i = layer % 2;
+                while i + 1 < nq {
+                    let (a, b) = (next, next + 1);
+                    next += 2;
+                    ixs.push(vec![wire[i], wire[i + 1], a, b]);
+                    wire[i] = a;
+                    wire[i + 1] = b;
+                    i += 2;
+                }
+            }
+            for &w in wire.iter() {
+                ixs.push(vec![w]);
+            }
+            (
+                EinCode::new(ixs, Vec::new()),
+                (0..next).map(|l| (l, 2)).collect(),
+            )
+        }
+
+        let mut times = Vec::new();
+        for nq in [101usize, 301usize] {
+            let (code, sizes) = brickwall(nq, 20);
+            let start = std::time::Instant::now();
+            let tree = crate::optimize_code(&code, &sizes, &GreedyMethod::default());
+            times.push(start.elapsed().as_secs_f64());
+            assert!(tree.is_some());
+        }
+        let ratio = times[1] / times[0].max(1e-9);
+        assert!(
+            ratio < 12.0,
+            "greedy cost grew {ratio:.1}x for a 3x larger circuit \
+             ({:.3}s -> {:.3}s); issue #31's cubic conversion has likely returned",
+            times[0],
+            times[1]
+        );
     }
 
     /// Regression test for the greedy tie-break cascade bug.
