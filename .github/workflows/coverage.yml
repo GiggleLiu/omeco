@@ -21,11 +21,13 @@ jobs:
         run: cargo install cargo-tarpaulin
       
       - name: Generate coverage
-        run: cargo tarpaulin --all-features --packages omeco --timeout 300 --out xml --exclude-files "omeco/examples/*"
+        # LLVM instrumentation preserves source mappings across the Rayon trial
+        # workers. The ptrace engine reports executed multiline call arguments
+        # as misses, which makes patch coverage depend on formatting.
+        run: cargo tarpaulin --engine llvm --all-features --packages omeco --timeout 300 --out xml --exclude-files "omeco/examples/*"
       
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
-

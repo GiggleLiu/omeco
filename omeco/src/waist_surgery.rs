@@ -2248,6 +2248,50 @@ mod tests {
     }
 
     #[test]
+    fn test_single_cut_move_respects_balance_outputs_and_boundaries() {
+        let ring = EinCode::new(
+            vec![vec![0usize, 3], vec![0, 1], vec![1, 2], vec![2, 3]],
+            vec![1],
+        );
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let hyper = Hyper::build(&ring, &label_map, &[1.0; 4], 4);
+        let part = vec![true, true, false, false];
+        let mut rng = SmallRng::seed_from_u64(9);
+
+        // At an exact-size balance constraint neither side may move, even
+        // though the ring has boundary tensors.
+        assert!(single_cut_move(&hyper, part.clone(), 2, 2, &mut rng).is_none());
+
+        // With slack, output label 1 is encountered but excluded from gain;
+        // one of the remaining boundary moves is still proposed.
+        assert!(single_cut_move(&hyper, part, 1, 3, &mut rng).is_some());
+
+        // Two disconnected components have no boundary tensor at this cut.
+        let disconnected = EinCode::new(
+            vec![vec![0usize], vec![0], vec![1], vec![1]],
+            Vec::<usize>::new(),
+        );
+        let hyper = Hyper::build(&disconnected, &label_map, &[1.0; 4], 4);
+        assert!(single_cut_move(&hyper, vec![true, true, false, false], 1, 3, &mut rng).is_none());
+    }
+
+    #[test]
+    fn test_attachment_and_graft_reject_disconnected_targets() {
+        let code = EinCode::new(vec![vec![0usize], vec![0]], Vec::<usize>::new());
+        let label_map: HashMap<usize, usize> = [(0, 0)].into();
+        let hyper = Hyper::build(&code, &label_map, &[1.0], 1);
+        let mut rng = SmallRng::seed_from_u64(13);
+        let leaf = ExprTree::leaf(vec![0], 0);
+
+        assert_eq!(
+            choose_attachment(&leaf, &[true, false], true, &[0], &hyper, &mut rng),
+            Some(Vec::new())
+        );
+        assert!(choose_attachment(&leaf, &[true, false], true, &[], &hyper, &mut rng).is_none());
+        assert!(graft_leaf(leaf, &[false], ExprTree::leaf(vec![0], 1)).is_none());
+    }
+
+    #[test]
     fn test_waist_update_proposal_preserves_leaf_permutation_and_interface() {
         let code = EinCode::new(
             vec![vec![0usize, 3], vec![0, 1], vec![1, 2], vec![2, 3]],

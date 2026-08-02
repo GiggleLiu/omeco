@@ -3172,12 +3172,13 @@ mod tests {
             &[1.0; 4],
         );
         let mut rng = SmallRng::seed_from_u64(11);
+        let score = ScoreFunction::default().with_rw_weight(0.25);
         let after = optimize_tree_sa_mixed(
             tree,
             &[1.0; 4],
             &[0.1, 1.0],
             10,
-            &ScoreFunction::default(),
+            &score,
             DecompositionType::Tree,
             &mut rng,
             4,
@@ -3185,6 +3186,21 @@ mod tests {
             1.0,
         );
         assert_eq!(format!("{after:?}"), before);
+    }
+
+    #[test]
+    fn test_fine_tune_builds_a_coarse_to_fine_span_ladder() {
+        let mut tree = ExprTree::leaf(Vec::new(), 0);
+        for tensor in 1..61 {
+            tree = ExprTree::node(tree, ExprTree::leaf(Vec::new(), tensor), Vec::new());
+        }
+        let mut rng = SmallRng::seed_from_u64(17);
+        let score = |candidate: &ExprTree| candidate.leaf_count() as f64;
+
+        let (best, endpoint) = fine_tune_tree_sa(tree, &[], &[], 0, &score, &mut rng, 0);
+
+        assert_eq!(best.leaf_count(), 61);
+        assert_eq!(endpoint.leaf_count(), 61);
     }
 
     #[test]
