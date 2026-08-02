@@ -51,7 +51,7 @@ omeco = "0.2"
 
 `TreeSA()` runs the full default pipeline (simplify, anneal, splice) with no
 tuning required. Give it a positive `surgery_iters` to run that many extra,
-deterministic anneal-surgery rounds (about one anneal each) for a result
+deterministic surgery and cold span-gated fine-tuning rounds for a result
 that's never worse — see the
 [Default Pipeline](https://GiggleLiu.github.io/omeco/algorithms/default-pipeline.html)
 page for what each stage does and when surgery helps:
@@ -65,6 +65,7 @@ sizes = {0: 100, 1: 200, 2: 50, 3: 100}
 
 tree = optimize_code(ixs, out, sizes, TreeSA())        # full default pipeline
 better = optimize_code(ixs, out, sizes, TreeSA(surgery_iters=3))  # + 3 anneal-surgery rounds
+mixed = optimize_code(ixs, out, sizes, TreeSA(surgery_probability=0.001))  # 0.1% surgery updates
 print(contraction_complexity(tree, ixs, sizes))
 ```
 
@@ -104,7 +105,7 @@ sliced_tree_dict = sliced.to_dict()  # Dict for the optimized sliced tree
 
 `TreeSA::default()` runs the full default pipeline (simplify, anneal,
 splice) with no tuning required. Chain `.with_surgery_iters(3)` to run that
-many extra, deterministic anneal-surgery rounds (about one anneal each) for a
+many extra, deterministic surgery and cold span-gated fine-tuning rounds for a
 result that's never worse — see the
 [Default Pipeline](https://GiggleLiu.github.io/omeco/algorithms/default-pipeline.html)
 page for what each stage does and when surgery helps:
@@ -127,6 +128,12 @@ sizes.insert('l', 100);
 let tree = optimize_code(&code, &sizes, &TreeSA::default()).unwrap();
 // + 3 anneal-surgery rounds
 let better = optimize_code(&code, &sizes, &TreeSA::default().with_surgery_iters(3)).unwrap();
+// replace 0.1% of local sweeps with same-temperature surgery updates
+let mixed = optimize_code(
+    &code,
+    &sizes,
+    &TreeSA::default().with_surgery_probability(0.001),
+).unwrap();
 let complexity = contraction_complexity(&tree, &sizes, &code.ixs);
 println!("Time: 2^{:.2}, Space: 2^{:.2}", complexity.tc, complexity.sc);
 ```
@@ -252,6 +259,8 @@ let result = optimize_code(&code, &sizes, &custom);
 - `ntrials`: Number of parallel trials (uses rayon)
 - `niters`: Iterations per temperature level
 - `score`: Scoring function with complexity weights
+- `surgery_probability`: Probability that a local sweep is replaced by one
+  global waist update at the current inverse temperature (`0.0` by default)
 
 ## Complexity Metrics
 

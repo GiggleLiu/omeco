@@ -31,7 +31,8 @@ use std::time::Instant;
 
 use omeco::treesa::anneal_surgery_rounds;
 use omeco::{
-    contraction_complexity, optimize_code, EinCode, GreedyMethod, NestedEinsum, TreeSA, Treewidth,
+    contraction_complexity, optimize_code, simplify, splice, EinCode, GreedyMethod, NestedEinsum,
+    TreeSA, Treewidth,
 };
 use serde::{Deserialize, Serialize};
 
@@ -68,6 +69,7 @@ struct ArmsSpec {
     greedy: Option<GreedyArm>,
     treesa: Option<TreeSAArm>,
     treesa_rounds: Option<RoundsArm>,
+    treesa_surgery_rule: Option<SurgeryRuleArm>,
 }
 
 /// The greedy arm takes no configuration; `{}` is the only legal value.
@@ -90,6 +92,14 @@ struct RoundsArm {
     /// Required: a rounds arm without a round count is a manifest bug, not a
     /// request for zero rounds.
     rounds: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SurgeryRuleArm {
+    ntrials: Option<usize>,
+    niters: Option<usize>,
+    probability: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,16 +146,19 @@ struct ResultRow {
     tc: f64,
     sc: f64,
     rwc: f64,
-    /// Per-round trajectory score, emitted by the `treesa_rounds` arm only.
+    /// Per-round retained-incumbent trace, emitted by `treesa_rounds` only.
     #[serde(skip_serializing_if = "Option::is_none")]
     curve: Option<Vec<CurvePoint>>,
 }
 
 #[derive(Debug, Serialize)]
 struct CurvePoint {
-    /// Zero-based round index, matching `RoundsReport::best_round`.
     round: u64,
-    score: f64,
+    tc_before: f64,
+    tc_after_surgery: f64,
+    tc_after_anneal: f64,
+    tc_retained: f64,
+    surgery_accepted: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -320,20 +333,29 @@ fn run_instance(
 
     if let Some(arm) = &arms.treesa_rounds {
         let started = Instant::now();
-        // The seed is the plain `treesa` result under this arm's own
-        // overrides; driving `anneal_surgery_rounds` directly (rather than
-        // setting `surgery_iters`) is bit-identical and additionally exposes
-        // the per-round trajectory.
-        let config = treesa_config(arm.ntrials, arm.niters);
-        let seed = optimized(optimize_code(code, sizes, &config), "treesa_rounds");
-        let (tree, report) = anneal_surgery_rounds(&seed, code, sizes, &config, arm.rounds);
+        // Match `optimize_treesa`: simplify, anneal and run the rounds on the
+        // reduced hypergraph, then restore the retained contractions. Driving
+        // the public stages explicitly exposes the per-round trajectory.
+        let simplified = simplify(code, sizes);
+        let mut config = treesa_config(arm.ntrials, arm.niters);
+        config.preprocess = false;
+        let seed = optimized(
+            optimize_code(&simplified.code, sizes, &config),
+            "treesa_rounds",
+        );
+        let (reduced, report) =
+            anneal_surgery_rounds(&seed, &simplified.code, sizes, &config, arm.rounds);
+        let tree = splice(&reduced, &simplified.subtrees);
         let curve = report
-            .round_scores
+            .round_trace
             .iter()
-            .enumerate()
-            .map(|(i, s)| CurvePoint {
-                round: i as u64,
-                score: round6(*s),
+            .map(|trace| CurvePoint {
+                round: trace.round,
+                tc_before: round6(trace.tc_before),
+                tc_after_surgery: round6(trace.tc_after_surgery),
+                tc_after_anneal: round6(trace.tc_after_anneal),
+                tc_retained: round6(trace.tc_retained),
+                surgery_accepted: trace.surgery_accepted,
             })
             .collect();
         rows.push(row(
@@ -345,6 +367,28 @@ fn run_instance(
             Some(curve),
         ));
         report_progress(&spec.name, "treesa_rounds", started);
+    }
+
+    if let Some(arm) = &arms.treesa_surgery_rule {
+        let started = Instant::now();
+        if !arm.probability.is_finite() || !(0.0..=1.0).contains(&arm.probability) {
+            fail(&format!(
+                "instance `{}`: arm `treesa_surgery_rule` probability must be finite and in [0, 1], got {}",
+                spec.name, arm.probability
+            ));
+        }
+        let config =
+            treesa_config(arm.ntrials, arm.niters).with_surgery_probability(arm.probability);
+        let tree = optimized(optimize_code(code, sizes, &config), "treesa_surgery_rule");
+        rows.push(row(
+            &spec.name,
+            "treesa_surgery_rule",
+            &tree,
+            code,
+            sizes,
+            None,
+        ));
+        report_progress(&spec.name, "treesa_surgery_rule", started);
     }
 
     if spec.treewidth {
@@ -397,7 +441,7 @@ fn main() {
     results.sort_by(|a, b| (&a.instance, &a.arm).cmp(&(&b.instance, &b.arm)));
 
     let output = Output {
-        format: 1,
+        format: 2,
         set: args.set,
         results,
     };

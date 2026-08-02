@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "set": "ci",
   "results": [
     {
@@ -19,17 +19,25 @@
     {
       "instance": "dbn_13",
       "arm": "treesa_rounds",
-      "tc": 32.924983,
-      "sc": 29.0,
-      "rwc": 30.808836,
+      "tc": 30.744297,
+      "sc": 26.0,
+      "rwc": 28.580163,
       "curve": [
         {
           "round": 0,
-          "score": 3620306748202.0137
+          "tc_before": 39.508881,
+          "tc_after_surgery": 36.14333,
+          "tc_after_anneal": 36.952964,
+          "tc_retained": 36.14333,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 5525217500107.966
+          "tc_before": 36.14333,
+          "tc_after_surgery": 31.110717,
+          "tc_after_anneal": 31.265409,
+          "tc_retained": 30.744297,
+          "surgery_accepted": true
         }
       ]
     },
@@ -63,11 +71,19 @@
       "curve": [
         {
           "round": 0,
-          "score": 360.0
+          "tc_before": 8.491853,
+          "tc_after_surgery": 8.491853,
+          "tc_after_anneal": 8.491853,
+          "tc_retained": 8.491853,
+          "surgery_accepted": false
         },
         {
           "round": 1,
-          "score": 360.0
+          "tc_before": 8.491853,
+          "tc_after_surgery": 8.491853,
+          "tc_after_anneal": 8.491853,
+          "tc_retained": 8.491853,
+          "surgery_accepted": false
         }
       ]
     },
@@ -95,17 +111,25 @@
     {
       "instance": "qft_27",
       "arm": "treesa_rounds",
-      "tc": 30.198245,
+      "tc": 30.267092,
       "sc": 27.0,
-      "rwc": 29.651725,
+      "rwc": 29.938547,
       "curve": [
         {
           "round": 0,
-          "score": 1849001728.0
+          "tc_before": 30.681567,
+          "tc_after_surgery": 30.267092,
+          "tc_after_anneal": 30.843804,
+          "tc_retained": 30.267092,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 1984019360.000002
+          "tc_before": 30.267092,
+          "tc_after_surgery": 30.267092,
+          "tc_after_anneal": 31.336857,
+          "tc_retained": 30.267092,
+          "surgery_accepted": false
         }
       ]
     },
@@ -126,17 +150,25 @@
     {
       "instance": "reg3_250",
       "arm": "treesa_rounds",
-      "tc": 41.40444,
-      "sc": 36.0,
-      "rwc": 39.908527,
+      "tc": 43.197674,
+      "sc": 37.0,
+      "rwc": 41.665937,
       "curve": [
         {
           "round": 0,
-          "score": 105788631234639.47
+          "tc_before": 48.002093,
+          "tc_after_surgery": 43.438224,
+          "tc_after_anneal": 43.291038,
+          "tc_retained": 43.291038,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 281821316477065.4
+          "tc_before": 43.291038,
+          "tc_after_surgery": 43.291038,
+          "tc_after_anneal": 43.197674,
+          "tc_retained": 43.197674,
+          "surgery_accepted": false
         }
       ]
     },
@@ -157,17 +189,25 @@
     {
       "instance": "surfacecode_d9",
       "arm": "treesa_rounds",
-      "tc": 21.743061,
+      "tc": 21.742173,
       "sc": 16.0,
-      "rwc": 19.840927,
+      "rwc": 19.866315,
       "curve": [
         {
           "round": 0,
-          "score": 3568206.0
+          "tc_before": 21.739585,
+          "tc_after_surgery": 21.739585,
+          "tc_after_anneal": 21.805338,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         },
         {
           "round": 1,
-          "score": 3841510.0
+          "tc_before": 21.738694,
+          "tc_after_surgery": 21.738694,
+          "tc_after_anneal": 21.860719,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         }
       ]
     }

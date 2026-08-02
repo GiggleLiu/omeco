@@ -3,9 +3,12 @@
 Every number in the paper's released-artifact table is produced here, by the
 released library, on the reader's own machine. There is no reference host and no
 recorded oracle: the artifact is a *program plus a manifest*, and reproducing
-that table means running it. The paper's headline campaign numbers are a
-different measurement — wall-clock-budgeted on one fixed host — and this
-directory does not claim to reproduce them; see
+that table means running it. The `figure2b` set separately reproduces the
+surface-code mechanism panel with a deterministic 32-round work budget: it
+must cross the panel's pre-surgery record and show an accepted rebuild causing
+a drop. It must also expose at least one uphill fine-tuning endpoint separately
+from the monotone retained incumbent. The broader headline campaign remains a
+wall-clock-budgeted measurement on one fixed host; see
 [Calibration vs the frozen campaign](#calibration-vs-the-frozen-campaign) for
 the size of the gap and why it is there. The outputs under `expected/` are committed only so that
 they can be *re-derived* — CI regenerates the `ci` one on every push and fails on
@@ -19,7 +22,11 @@ This directory is self-contained — manifest, instances, checker:
 | `manifest.json` | Which instances, which optimizer arms, which overrides. The only place a benchmark parameter may be set. |
 | `instances/` | The thirteen paper instances, as JSON tensor networks. |
 | `expected/ci.json` | The `ci` set's output, re-derived and compared by `make paper-bench-check` (and by CI). `expected/full.json` is what `make paper-bench` writes. |
+| `expected/figure2b.json` | The 32-round surface-code reproduction, checked numerically and by the Figure 2(b) semantic contract. |
+| `expected/figure2b.svg` | Static fixed-work rendering of that JSON: retained incumbent, raw fine-tuning endpoints, and accepted rebuilds. |
 | `check.py` | Compares two artifacts and exits nonzero on any disagreement. Standard library only, Python 3.8+. |
+| `verify_figure2b.py` | Verifies the record crossing, incumbent ratchet, and accepted-rebuild mechanism. |
+| `plot_figure2b.py` | Renders the checked JSON as a dependency-free vector figure. |
 | `README.md` | This file. |
 
 The runner itself is `omeco/examples/paper_bench.rs`, an example binary in the
@@ -65,12 +72,20 @@ cargo run --release --example paper_bench -p omeco -- \
     --manifest benchmarks/paper/manifest.json \
     --set full \
     --out full.json
+
+# Figure 2(b): deterministic surfacecode_d21 trajectory (32 rounds).
+cargo run --release --example paper_bench -p omeco -- \
+    --manifest benchmarks/paper/manifest.json \
+    --set figure2b \
+    --out figure2b.json
+python3 benchmarks/paper/verify_figure2b.py figure2b.json
+python3 benchmarks/paper/plot_figure2b.py figure2b.json figure2b.svg
 ```
 
 Flags:
 
 - `--manifest <file>` — manifest to read (required).
-- `--set <name>` — set within the manifest, `ci` or `full` (required).
+- `--set <name>` — set within the manifest, `ci`, `figure2b`, or `full` (required).
 - `--out <file>` — where to write the JSON artifact (required).
 - `--repo-root <dir>` — root that instance paths in the manifest resolve
   against. Defaults to `.`, so the commands above must be run from the
@@ -81,10 +96,12 @@ wrong — an unknown flag, a missing instance file, malformed JSON, a mistyped
 manifest key — prints a message naming the problem and exits with status **2**.
 The runner never reports a typo by silently falling back to a default.
 
-Two Make targets wrap the same commands:
+Four Make targets wrap the same commands:
 
 ```bash
 make paper-bench-check  # ci set -> a temporary file -> check.py against expected/ci.json
+make paper-figure2b-check  # 32 rounds -> semantic verifier + exact artifact check
+make paper-figure2b-plot   # committed JSON -> publication-ready static SVG
 make paper-bench        # full set -> expected/full.json (~21 min, see below)
 ```
 
@@ -107,14 +124,16 @@ a result, and on any float leaf differing by more than a **relative** `1e-9`
 |---|---|
 | `greedy` | `GreedyMethod::default()` — the cheap baseline. |
 | `treesa` | `TreeSA::default()` with the manifest's overrides and `surgery_iters: 0` — annealing alone. |
-| `treesa_rounds` | The `treesa` result of the *same* configuration, then `rounds` interleaved anneal–surgery rounds (`anneal_surgery_rounds`, the paper's Algorithm 1). |
+| `treesa_rounds` | The reduced-network `treesa` result of the *same* configuration, then `rounds` interleaved surgery and cold span-gated fine-tuning rounds (`anneal_surgery_rounds`, the paper's Algorithm 1), then splice-back. |
+| `treesa_surgery_rule` | One `TreeSA::default()` run with `surgery_probability` set from the required manifest `probability`; surgery replaces local sweeps at the current temperature. |
 | `treewidth` | `Treewidth::default()`, on instances flagged `"treewidth": true` only. |
 
-`treesa` and `treesa_rounds` are deliberately built from the same seed
-computation, so a row pair at equal `ntrials`/`niters` isolates exactly what the
-rounds loop adds. The runner calls `anneal_surgery_rounds` directly rather than
-setting `TreeSA::surgery_iters`; the two are bit-identical (a library test pins
-this), and the direct call additionally exposes the per-round trajectory.
+`treesa` and `treesa_rounds` are deliberately built from the same reduced-network
+seed computation, so a row pair at equal `ntrials`/`niters` isolates exactly what
+the rounds loop adds. Both splice back only after their reduced-network search.
+The runner composes `simplify`, `anneal_surgery_rounds`, and `splice` directly;
+that is bit-identical to setting `TreeSA::surgery_iters` (a library test pins
+this) and additionally exposes the per-round trajectory.
 
 `treewidth` is opt-in per instance because the elimination-order heuristic is
 only meaningful on the structured, low-treewidth instances — running it on a
@@ -124,7 +143,7 @@ random circuit costs time and reports nothing anyone wants to read.
 
 ```json
 {
-  "format": 1,
+  "format": 2,
   "set": "ci",
   "results": [
     {
@@ -134,8 +153,14 @@ random circuit costs time and reports nothing anyone wants to read.
       "sc": 29.0,
       "rwc": 30.808836,
       "curve": [
-        {"round": 0, "score": 3620306748202.0137},
-        {"round": 1, "score": 5525217500107.966}
+        {
+          "round": 0,
+          "tc_before": 38.329681,
+          "tc_after_surgery": 34.087463,
+          "tc_after_anneal": 35.103284,
+          "tc_retained": 34.087463,
+          "surgery_accepted": true
+        }
       ]
     }
   ]
@@ -143,15 +168,13 @@ random circuit costs time and reports nothing anyone wants to read.
 ```
 
 - `tc`, `sc`, `rwc` are `contraction_complexity` in log2 scale.
-- `curve` appears on `treesa_rounds` rows only. It is
-  `RoundsReport::round_scores` — the *trajectory*, not a running minimum, so
-  entries may increase: round `r + 1` continues from round `r`'s tree even when
-  that tree was worse than the incumbent best. That is the escape mechanism the
-  paper is about, and flattening it to a running minimum would hide it. `round`
-  is zero-based, matching `RoundsReport::best_round`. A `curve` entry records
-  that round's *post-anneal* candidate only, while the returned tree may instead
-  be a round's pre-anneal surgery tree — so a row's `tc`/`sc` can be better than
-  every entry in its own `curve`.
+- `curve` appears on `treesa_rounds` rows only. It is the log2 time-complexity
+  trace from `RoundsReport::round_trace`: the retained incumbent before the
+  round, the surgery candidate, the fine-tuning endpoint, and the retained
+  incumbent afterward. `tc_after_anneal` may be worse after fine tuning, but
+  `tc_retained` cannot increase and is the tree used by the next round.
+  `surgery_accepted` marks the rebuild events plotted as crosses in the paper's
+  Figure 2(b).
 - `results` is sorted by `(instance, arm)`, independent of manifest order.
 - `format` is the schema version; bump it when a field's meaning changes, so
   that `check.py` refuses to compare artifacts across the change.
@@ -188,13 +211,8 @@ whether *anything at all* moved.
 
 The tolerance is relative — `abs(a - b) <= max(1e-9, 1e-9 * max(abs(a), abs(b)))`
 — because the fields being compared span twelve orders of magnitude. `tc`, `sc`
-and `rwc` are log2 quantities of order 10, where an absolute `1e-9` is a
-reasonable band. A `curve` score is a raw annealing score, i.e. a weighted sum of
-`2^tc`-scale terms, so on realistic instances it is around `1e12`; there the same
-absolute band would be finer than the spacing between adjacent doubles, and would
-turn "compare across platforms" into "demand bit-exactness". Six-decimal rounding
-is likewise a no-op at that magnitude. Scaling the band with the value keeps one
-rule honest for both.
+and `rwc`, including every `curve` complexity, are log2 quantities of order 10,
+where an absolute `1e-9` is a reasonable band.
 
 ## Manifest policy
 
@@ -209,6 +227,7 @@ Allowed keys:
 - Arm `greedy`: none; `{}` is the only legal value.
 - Arm `treesa`: `ntrials`, `niters`.
 - Arm `treesa_rounds`: `ntrials`, `niters`, `rounds` (required).
+- Arm `treesa_surgery_rule`: `ntrials`, `niters`, `probability` (required).
 - Instance: `name`, `path` (repo-root-relative), `treewidth` (required).
 
 Any other key is a hard error naming the key. Omitted `ntrials`/`niters` mean
@@ -228,9 +247,9 @@ the directory, so an instance nobody declared is never silently benchmarked.
 
 ## Calibration vs the frozen campaign
 
-The full set takes about 21 minutes end to end on an Apple-silicon laptop
-(1266 s for 40 results; the slowest single instance × arm is `nqueens_28`'s
-`treesa_rounds` at 6 minutes).
+The current format-2 full set took 1289.1 s (21.5 minutes) for 40 results on
+the Huawei benchmark host; the slowest single instance × arm was
+`nqueens_28`'s `treesa_rounds` at 220.7 s.
 
 The paper's headline numbers come from a wall-clock-budgeted campaign on a
 fixed host, not from this artifact. It is worth knowing how far apart the two
@@ -241,12 +260,12 @@ rows produced by the `full` set (`TreeSA::default()`, `rounds: 8`).
 
 | Instance | Campaign best tc (huawei, wall-clock budget) | `treesa_rounds` tc (rounds = 8, deterministic) | Gap |
 |---|---|---|---|
-| `surfacecode_d13` | 30.485 — `p4_family["13"]`, the surface-code family sweep: 5 reps at the 90 s budget, both methods tie | 30.898 | +0.413 |
-| `surfacecode_d21` | 47.364 — `p2_budget_scaling`, our TreeSA baseline (`ref`) at the 900 s budget | 49.180 | +1.816 |
-| `ksg` | 36.356 — `p3_distributions`, best of 15 reps at the 90 s budget | 38.291 | +1.935 |
+| `surfacecode_d13` | 30.485 — `p4_family["13"]`, the surface-code family sweep: 5 reps at the 90 s budget, both methods tie | 30.557 | +0.072 |
+| `surfacecode_d21` | 47.364 — `p2_budget_scaling`, our TreeSA baseline (`ref`) at the 900 s budget | 48.395 | +1.031 |
+| `ksg` | 36.356 — `p3_distributions`, best of 15 reps at the 90 s budget | 37.016 | +0.660 |
 
 (The campaign file records `tc` only, so there is no `sc` column to compare;
-this artifact's `sc` for the three rows is 24, 40 and 27 respectively.)
+this artifact's `sc` for the three rows is 24, 40 and 30 respectively.)
 
 The gaps are expected and they are not a defect. The two sides are budgeted by
 different quantities: `rounds` is a *schedule* budget — eight rounds is eight
@@ -256,13 +275,13 @@ A wall-clock budget buys more search on a faster host and less on a slower one,
 which is exactly the property this artifact is built to *not* have. What
 `expected/full.json` claims is bit-reproducibility: run the same commit on the
 same machine and you get the same file. Across machines the claim is weaker and
-partly untested — agreement to `1e-9` is *confirmed* for the `ci` set, which the
-ubuntu CI job re-derives and compares on every push, and *expected* for
-`full.json` by the same mechanism, but nobody has run the full set on a second
-platform. It does not claim to reproduce a record. Raising
-`rounds` in the manifest closes the gap — the rounds loop is the mechanism the
-campaign was exploiting too — at a cost that is proportional and, unlike a
-timer, still deterministic.
+partly untested — agreement to `1e-9` is *confirmed* across the Huawei host and
+Apple silicon for both the `ci` and `figure2b` sets. `full.json` was generated
+on Huawei and is expected to agree by the same mechanism, but its complete
+cross-platform rerun remains unchecked. The eight-round `full` set does not
+claim to reproduce a record. The 32-round `figure2b` set does cross the panel's
+47.824 pre-surgery record at 47.813971 while preserving a fixed work budget;
+it does not claim the campaign's 47.377 median.
 
 ## Frozen campaign data
 
