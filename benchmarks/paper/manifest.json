@@ -14,6 +14,15 @@
         {"name": "reg3_250", "path": "benchmarks/paper/instances/reg3_250.json", "treewidth": false}
       ]
     },
+    "figure2b": {
+      "arms": {
+        "treesa": {},
+        "treesa_rounds": {"rounds": 32}
+      },
+      "instances": [
+        {"name": "surfacecode_d21", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false}
+      ]
+    },
     "full": {
       "arms": {
         "greedy": {},

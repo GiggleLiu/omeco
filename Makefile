@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark paper-bench paper-bench-check version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
+.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark paper-bench paper-bench-check paper-figure2b-check paper-figure2b-plot version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
 
 CARGO ?= cargo
 PYTHON ?= python3
@@ -44,6 +44,8 @@ help:
 	@printf "  benchmark         Run Python vs Julia benchmark\n"
 	@printf "  paper-bench       Regenerate the committed full paper benchmark artifact\n"
 	@printf "  paper-bench-check Re-run the ci set and verify it against the committed artifact\n"
+	@printf "  paper-figure2b-check Reproduce the Figure 2(b) surface-code trajectory\n"
+	@printf "  paper-figure2b-plot  Render the committed Figure 2(b) trajectory as SVG\n"
 	@printf "\nRelease targets:\n"
 	@printf "  version         Show current version\n"
 	@printf "  bump-patch      Bump patch version ($(VERSION) -> $(MAJOR).$(MINOR).$$(($(PATCH)+1)))\n"
@@ -124,6 +126,17 @@ paper-bench-check:
 	@tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
 	$(PAPER_BENCH) --set ci --out "$$tmp" && \
 	$(PYTHON) benchmarks/paper/check.py "$$tmp" benchmarks/paper/expected/ci.json
+
+paper-figure2b-check:
+	@tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
+	$(PAPER_BENCH) --set figure2b --out "$$tmp" && \
+	$(PYTHON) benchmarks/paper/verify_figure2b.py "$$tmp" && \
+	$(PYTHON) benchmarks/paper/check.py "$$tmp" benchmarks/paper/expected/figure2b.json
+
+paper-figure2b-plot:
+	$(PYTHON) benchmarks/paper/plot_figure2b.py \
+		benchmarks/paper/expected/figure2b.json \
+		benchmarks/paper/expected/figure2b.svg
 
 # Version management
 version:

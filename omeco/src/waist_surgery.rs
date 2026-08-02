@@ -229,6 +229,82 @@ impl Hyper {
     }
 }
 
+/// Cached, timer-free proposal state for TreeSA's global surgery update.
+///
+/// Construction is linear in the network and happens once per TreeSA trial;
+/// each proposal then moves one boundary tensor across the waist with a
+/// leaf prune-and-regraft (SPR) edit. Unaffected subtrees retain their exact
+/// topology.
+pub(crate) struct WaistUpdate {
+    code: EinCode<usize>,
+    hyper: Hyper,
+    log2_sizes: Vec<f64>,
+    label_map: HashMap<usize, usize>,
+}
+
+impl WaistUpdate {
+    pub(crate) fn new(ixs: &[Vec<usize>], iy: &[usize], log2_sizes: &[f64]) -> Self {
+        let code = EinCode::new(ixs.to_vec(), iy.to_vec());
+        let label_map: HashMap<usize, usize> = (0..log2_sizes.len()).map(|i| (i, i)).collect();
+        let hyper = Hyper::build(&code, &label_map, log2_sizes, log2_sizes.len());
+        Self {
+            code,
+            hyper,
+            log2_sizes: log2_sizes.to_vec(),
+            label_map,
+        }
+    }
+
+    /// Propose one global waist update. The proposal itself neither accepts nor
+    /// anneals; TreeSA applies its ordinary Metropolis test at the current beta.
+    pub(crate) fn propose<R: Rng>(&self, incumbent: &ExprTree, rng: &mut R) -> Option<ExprTree> {
+        let (_, a_leaves) = extract_waist(incumbent, &self.log2_sizes)?;
+        let n = self.hyper.n;
+        if a_leaves.is_empty() || a_leaves.len() >= n {
+            return None;
+        }
+        let mut current = vec![false; n];
+        for tensor in a_leaves {
+            if tensor < n {
+                current[tensor] = true;
+            }
+        }
+        let target_a = current.iter().filter(|&&side| side).count();
+        let lo = ((target_a as f64 * (1.0 - FM_SLACK)).floor() as usize).max(1);
+        let hi = ((target_a as f64 * (1.0 + FM_SLACK)).ceil() as usize).min(n - 1);
+
+        // One sampled surgery event performs one leaf-SPR move. Repeated update
+        // opportunities supply the iteration; there is no hidden FM loop.
+        let part = single_cut_move(&self.hyper, current.clone(), lo, hi, rng)?;
+        let size_a = part.iter().filter(|&&side| side).count();
+        if size_a < lo || size_a > hi {
+            return None;
+        }
+
+        let moved_tensor = current
+            .iter()
+            .zip(&part)
+            .position(|(before, after)| before != after)?;
+        let target_side = part[moved_tensor];
+        let (pruned, moved_leaf) = detach_leaf(incumbent, moved_tensor)?;
+        let attachment = choose_attachment(
+            &pruned,
+            &part,
+            target_side,
+            &self.hyper.tlabels[moved_tensor],
+            &self.hyper,
+            rng,
+        )?;
+        let grafted = graft_leaf(pruned, &attachment, moved_leaf)?;
+
+        // Re-derive every cached interface from the new topology. This is an
+        // exact normalization step, not a topology rebuild: SPR is the only
+        // structural mutation above.
+        let nested = expr_to_nested_counted(&grafted, &self.code.ixs, &self.code.iy);
+        nested_to_expr_tree(&nested, &self.label_map)
+    }
+}
+
 // =============================================================================
 // Fiduccia–Mattheyses bipartition refinement on the tensor hypergraph.
 // =============================================================================
@@ -251,12 +327,24 @@ fn gain_key(g: f64) -> u64 {
 /// partition and its straddle-cut cost.
 fn fm_refine(
     hyper: &Hyper,
-    mut part: Vec<bool>,
+    part: Vec<bool>,
     lo: usize,
     hi: usize,
     start: Instant,
     budget: Duration,
 ) -> (Vec<bool>, f64) {
+    fm_refine_core(hyper, part, lo, hi, FM_MAX_PASSES, Some((start, budget)))
+}
+
+fn fm_refine_core(
+    hyper: &Hyper,
+    mut part: Vec<bool>,
+    lo: usize,
+    hi: usize,
+    max_passes: usize,
+    deadline: Option<(Instant, Duration)>,
+) -> (Vec<bool>, f64) {
+    let out_of_time = || deadline.is_some_and(|(start, budget)| start.elapsed() >= budget);
     let n = hyper.n;
     let nlab = hyper.log2.len();
     let mut cnt_a = vec![0u32; nlab];
@@ -291,8 +379,8 @@ fn fm_refine(
 
     let mut best_cost = hyper.cut_cost(&part);
 
-    for _pass in 0..FM_MAX_PASSES {
-        if start.elapsed() >= budget {
+    for _pass in 0..max_passes {
+        if out_of_time() {
             break;
         }
         let mut gain: Vec<f64> = (0..n).map(|t| gain_of(t, &part, &cnt_a)).collect();
@@ -316,7 +404,7 @@ fn fm_refine(
         let mut improved_this_pass = false;
 
         for _step in 0..n {
-            if start.elapsed() >= budget {
+            if out_of_time() {
                 break;
             }
             // Pick max-gain unlocked feasible move.
@@ -407,6 +495,196 @@ fn fm_refine(
     (part, best_cost)
 }
 
+/// Make one bounded FM-style move across the current waist. Candidates are
+/// boundary tensors whose move respects the balance band; one of the eight
+/// highest-gain candidates is sampled to retain exploration. Whole-tree
+/// Metropolis acceptance is performed by TreeSA, not here.
+fn single_cut_move<R: Rng>(
+    hyper: &Hyper,
+    mut part: Vec<bool>,
+    lo: usize,
+    hi: usize,
+    rng: &mut R,
+) -> Option<Vec<bool>> {
+    let mut cnt_a = vec![0u32; hyper.log2.len()];
+    for (tensor, &in_a) in part.iter().enumerate() {
+        if in_a {
+            for &label in &hyper.tlabels[tensor] {
+                cnt_a[label] += 1;
+            }
+        }
+    }
+    let size_a = part.iter().filter(|&&in_a| in_a).count();
+    let mut top: Vec<(f64, usize)> = Vec::with_capacity(9);
+    for (tensor, &tensor_in_a) in part.iter().enumerate().take(hyper.n) {
+        if (tensor_in_a && size_a <= lo) || (!tensor_in_a && size_a >= hi) {
+            continue;
+        }
+        let boundary = hyper.tlabels[tensor].iter().any(|&label| {
+            let degree = hyper.label_tensors[label].len() as u32;
+            cnt_a[label] > 0 && cnt_a[label] < degree
+        });
+        if !boundary {
+            continue;
+        }
+        let mut gain = 0.0;
+        for &label in &hyper.tlabels[tensor] {
+            if hyper.is_out[label] {
+                continue;
+            }
+            let degree = hyper.label_tensors[label].len() as u32;
+            let (same, other) = if tensor_in_a {
+                (cnt_a[label], degree - cnt_a[label])
+            } else {
+                (degree - cnt_a[label], cnt_a[label])
+            };
+            gain += hyper.log2[label] * ((other >= 1) as i32 - (same >= 2) as i32) as f64;
+        }
+        top.push((gain, tensor));
+        top.sort_by(|a, b| b.0.total_cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        top.truncate(8);
+    }
+    if top.is_empty() {
+        return None;
+    }
+    let (_, tensor) = top[rng.random_range(0..top.len())];
+    part[tensor] = !part[tensor];
+    Some(part)
+}
+
+/// Detach one leaf and suppress the unary branch left at its former parent.
+/// All other subtrees are cloned without changing their relative topology.
+fn detach_leaf(tree: &ExprTree, tensor: usize) -> Option<(ExprTree, ExprTree)> {
+    fn rec(tree: &ExprTree, tensor: usize) -> Option<(Option<ExprTree>, ExprTree)> {
+        match tree {
+            ExprTree::Leaf(info) => (info.tensor_id == Some(tensor)).then(|| (None, tree.clone())),
+            ExprTree::Node { left, right, info } => {
+                if let Some((new_left, leaf)) = rec(left, tensor) {
+                    let pruned = match new_left {
+                        Some(left) => {
+                            ExprTree::node(left, (**right).clone(), info.out_dims.clone())
+                        }
+                        None => (**right).clone(),
+                    };
+                    return Some((Some(pruned), leaf));
+                }
+                let (new_right, leaf) = rec(right, tensor)?;
+                let pruned = match new_right {
+                    Some(right) => ExprTree::node((**left).clone(), right, info.out_dims.clone()),
+                    None => (**left).clone(),
+                };
+                Some((Some(pruned), leaf))
+            }
+        }
+    }
+
+    let (pruned, leaf) = rec(tree, tensor)?;
+    Some((pruned?, leaf))
+}
+
+#[derive(Debug)]
+struct AttachmentCandidate {
+    shared_weight: f64,
+    span: usize,
+    path: Vec<bool>,
+}
+
+/// Choose a connected attachment edge wholly inside the tensor's destination
+/// side. Higher shared-index weight is preferred; smaller subtrees break ties
+/// so the edit stays local. Sampling among the top eight retains exploration.
+fn choose_attachment<R: Rng>(
+    tree: &ExprTree,
+    part: &[bool],
+    target_side: bool,
+    moved_labels: &[usize],
+    hyper: &Hyper,
+    rng: &mut R,
+) -> Option<Vec<bool>> {
+    fn visit(
+        tree: &ExprTree,
+        part: &[bool],
+        target_side: bool,
+        moved_labels: &[usize],
+        hyper: &Hyper,
+        path: &mut Vec<bool>,
+        top: &mut Vec<AttachmentCandidate>,
+    ) -> (bool, usize) {
+        let (all_target, span) = match tree {
+            ExprTree::Leaf(info) => (
+                info.tensor_id.and_then(|tensor| part.get(tensor).copied()) == Some(target_side),
+                1,
+            ),
+            ExprTree::Node { left, right, .. } => {
+                path.push(false);
+                let (left_target, left_span) =
+                    visit(left, part, target_side, moved_labels, hyper, path, top);
+                path.pop();
+                path.push(true);
+                let (right_target, right_span) =
+                    visit(right, part, target_side, moved_labels, hyper, path, top);
+                path.pop();
+                (left_target && right_target, left_span + right_span)
+            }
+        };
+
+        if all_target {
+            let shared_weight: f64 = moved_labels
+                .iter()
+                .filter(|&&label| !hyper.is_out[label] && tree.labels().contains(&label))
+                .map(|&label| hyper.log2[label])
+                .sum();
+            if shared_weight > 0.0 {
+                top.push(AttachmentCandidate {
+                    shared_weight,
+                    span,
+                    path: path.clone(),
+                });
+                top.sort_by(|a, b| {
+                    b.shared_weight
+                        .total_cmp(&a.shared_weight)
+                        .then_with(|| a.span.cmp(&b.span))
+                        .then_with(|| a.path.cmp(&b.path))
+                });
+                top.truncate(8);
+            }
+        }
+        (all_target, span)
+    }
+
+    let mut top = Vec::with_capacity(9);
+    visit(
+        tree,
+        part,
+        target_side,
+        moved_labels,
+        hyper,
+        &mut Vec::new(),
+        &mut top,
+    );
+    if top.is_empty() {
+        None
+    } else {
+        Some(top.swap_remove(rng.random_range(0..top.len())).path)
+    }
+}
+
+/// Attach `leaf` as a sibling of the subtree at `path`.
+fn graft_leaf(tree: ExprTree, path: &[bool], leaf: ExprTree) -> Option<ExprTree> {
+    if path.is_empty() {
+        return Some(ExprTree::node(tree, leaf, Vec::new()));
+    }
+    let ExprTree::Node { left, right, info } = tree else {
+        return None;
+    };
+    if path[0] {
+        let right = graft_leaf(*right, &path[1..], leaf)?;
+        Some(ExprTree::node(*left, right, info.out_dims))
+    } else {
+        let left = graft_leaf(*left, &path[1..], leaf)?;
+        Some(ExprTree::node(left, *right, info.out_dims))
+    }
+}
+
 /// Grow a connected region of `target` tensors by BFS from `seed` over the tensor
 /// adjacency; the region is side A.
 fn bfs_seed(hyper: &Hyper, seed: usize, target: usize) -> Vec<bool> {
@@ -489,7 +767,7 @@ fn node_tc(ix1: &[usize], ix2: &[usize], iy: &[usize], log2_sizes: &[f64]) -> f6
 // =============================================================================
 
 /// One span-gated SA sweep: only rewrite nodes whose leaf span is `>= min_span`.
-fn gated_sweep(
+pub(crate) fn gated_sweep(
     tree: &mut ExprTree,
     beta: f64,
     min_span: usize,
@@ -645,6 +923,33 @@ fn expr_to_nested_counted(
     rec(tree, ixs, &open_set, &global_count).0
 }
 
+fn side_open_labels(hyper: &Hyper, part: &[bool]) -> (Vec<usize>, Vec<usize>) {
+    let mut open_a = Vec::new();
+    let mut open_b = Vec::new();
+    for (label, tensors) in hyper.label_tensors.iter().enumerate() {
+        if tensors.is_empty() {
+            continue;
+        }
+        let mut in_a = false;
+        let mut in_b = false;
+        for &tensor in tensors {
+            if part[tensor] {
+                in_a = true;
+            } else {
+                in_b = true;
+            }
+        }
+        let output = hyper.is_out[label];
+        if in_a && (in_b || output) {
+            open_a.push(label);
+        }
+        if in_b && (in_a || output) {
+            open_b.push(label);
+        }
+    }
+    (open_a, open_b)
+}
+
 /// Remap the leaf tensor indices of a `NestedEinsum` through `map` (leaf i -> map[i]).
 fn remap_leaves(tree: &NestedEinsum<usize>, map: &[usize]) -> NestedEinsum<usize> {
     match tree {
@@ -791,32 +1096,7 @@ impl Refiner<'_> {
     /// Open label-ids for each side: a label is open on side A iff it occurs in A
     /// and (occurs in B or is an output label). Symmetric for B.
     fn side_open_labels(&self, part: &[bool]) -> (Vec<usize>, Vec<usize>) {
-        let nlab = self.hyper.log2.len();
-        let mut open_a = Vec::new();
-        let mut open_b = Vec::new();
-        for l in 0..nlab {
-            let ts = &self.hyper.label_tensors[l];
-            if ts.is_empty() {
-                continue;
-            }
-            let mut in_a = false;
-            let mut in_b = false;
-            for &t in ts {
-                if part[t] {
-                    in_a = true;
-                } else {
-                    in_b = true;
-                }
-            }
-            let out = self.hyper.is_out[l];
-            if in_a && (in_b || out) {
-                open_a.push(l);
-            }
-            if in_b && (in_a || out) {
-                open_b.push(l);
-            }
-        }
-        (open_a, open_b)
+        side_open_labels(self.hyper, part)
     }
 
     /// Solve a side sub-einsum: greedy + a fixed number of cold span-gated anneal
@@ -992,6 +1272,22 @@ pub fn refine_capped<L: Label>(
     budget: Duration,
     max_iters: u64,
 ) -> (NestedEinsum<L>, WaistReport) {
+    refine_capped_seeded(tree, code, sizes, budget, max_iters, RNG_SEED)
+}
+
+/// Iteration-capped refinement with a caller-selected deterministic RNG stream.
+///
+/// The public standalone API intentionally keeps its historical fixed seed.
+/// Interleaved TreeSA rounds use distinct seeds so repeated calls on an
+/// unchanged incumbent do not replay the identical FM/BFS proposal forever.
+pub(crate) fn refine_capped_seeded<L: Label>(
+    tree: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    sizes: &HashMap<L, usize>,
+    budget: Duration,
+    max_iters: u64,
+    rng_seed: u64,
+) -> (NestedEinsum<L>, WaistReport) {
     let n = code.num_tensors();
     let mut report = WaistReport {
         n_original: n,
@@ -1055,7 +1351,7 @@ pub fn refine_capped<L: Label>(
         start: Instant::now(),
         budget,
         max_iters,
-        rng: SmallRng::seed_from_u64(RNG_SEED),
+        rng: SmallRng::seed_from_u64(rng_seed),
         report,
     };
 
@@ -1917,5 +2213,113 @@ mod tests {
         let sizes: HashMap<usize, usize> = [(0, 2), (1, 2), (2, 2), (3, 2)].into();
         let cc = contraction_complexity(&nested, &sizes, &ixs);
         assert!(cc.tc.is_finite());
+    }
+
+    #[test]
+    fn test_single_cut_move_flips_exactly_one_feasible_boundary_tensor() {
+        let code = EinCode::new(
+            vec![vec![0usize, 3], vec![0, 1], vec![1, 2], vec![2, 3]],
+            vec![],
+        );
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let hyper = Hyper::build(&code, &label_map, &[1.0; 4], 4);
+        let before = vec![true, true, false, false];
+        let mut rng = SmallRng::seed_from_u64(7);
+        let after = single_cut_move(&hyper, before.clone(), 1, 3, &mut rng)
+            .expect("ring cut has feasible boundary moves");
+
+        let changed: Vec<usize> = before
+            .iter()
+            .zip(&after)
+            .enumerate()
+            .filter_map(|(tensor, (a, b))| (a != b).then_some(tensor))
+            .collect();
+        assert_eq!(changed.len(), 1);
+        let size_a = after.iter().filter(|&&in_a| in_a).count();
+        assert!((1..=3).contains(&size_a));
+
+        let moved = changed[0];
+        let was_boundary = hyper.tlabels[moved].iter().any(|&label| {
+            let members = &hyper.label_tensors[label];
+            members.iter().any(|&tensor| before[tensor])
+                && members.iter().any(|&tensor| !before[tensor])
+        });
+        assert!(was_boundary);
+    }
+
+    #[test]
+    fn test_waist_update_proposal_preserves_leaf_permutation_and_interface() {
+        let code = EinCode::new(
+            vec![vec![0usize, 3], vec![0, 1], vec![1, 2], vec![2, 3]],
+            vec![],
+        );
+        let left = ExprTree::node(
+            ExprTree::leaf(code.ixs[0].clone(), 0),
+            ExprTree::leaf(code.ixs[2].clone(), 2),
+            vec![0, 1, 2, 3],
+        );
+        let right = ExprTree::node(
+            ExprTree::leaf(code.ixs[1].clone(), 1),
+            ExprTree::leaf(code.ixs[3].clone(), 3),
+            vec![0, 1, 2, 3],
+        );
+        let incumbent = ExprTree::node(left, right, vec![]);
+        let update = WaistUpdate::new(&code.ixs, &code.iy, &[1.0; 4]);
+        let mut rng = SmallRng::seed_from_u64(7);
+        let candidate = update
+            .propose(&incumbent, &mut rng)
+            .expect("alternating ring waist has a boundary move");
+
+        let mut leaves = candidate.leaf_ids();
+        leaves.sort_unstable();
+        assert_eq!(leaves, vec![0, 1, 2, 3]);
+        assert_eq!(candidate.labels(), code.iy);
+        let (tc, sc, rw) = tree_complexity(&candidate, &[1.0; 4]);
+        assert!(tc.is_finite() && sc.is_finite() && rw.is_finite());
+    }
+
+    #[test]
+    fn test_leaf_spr_preserves_subtrees_off_the_two_edit_paths() {
+        fn pair(a: usize, b: usize) -> ExprTree {
+            ExprTree::node(
+                ExprTree::leaf(vec![a], a),
+                ExprTree::leaf(vec![b], b),
+                vec![a, b],
+            )
+        }
+        fn subtree_at<'a>(tree: &'a ExprTree, path: &[bool]) -> &'a ExprTree {
+            if path.is_empty() {
+                return tree;
+            }
+            let ExprTree::Node { left, right, .. } = tree else {
+                panic!("path entered a leaf");
+            };
+            subtree_at(if path[0] { right } else { left }, &path[1..])
+        }
+
+        let before = ExprTree::node(
+            ExprTree::node(pair(0, 1), pair(2, 3), vec![0, 1, 2, 3]),
+            ExprTree::node(pair(4, 5), pair(6, 7), vec![4, 5, 6, 7]),
+            vec![],
+        );
+        let untouched_23 = format!("{:?}", subtree_at(&before, &[false, true]));
+        let untouched_67 = format!("{:?}", subtree_at(&before, &[true, true]));
+
+        let (pruned, leaf) = detach_leaf(&before, 0).expect("leaf 0 exists");
+        // After suppressing (0,1), leaf 4 remains at R-L-L.
+        let after =
+            graft_leaf(pruned, &[true, false, false], leaf).expect("target attachment path exists");
+
+        assert_eq!(
+            format!("{:?}", subtree_at(&after, &[false, true])),
+            untouched_23
+        );
+        assert_eq!(
+            format!("{:?}", subtree_at(&after, &[true, true])),
+            untouched_67
+        );
+        let mut leaves = after.leaf_ids();
+        leaves.sort_unstable();
+        assert_eq!(leaves, (0..8).collect::<Vec<_>>());
     }
 }

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "set": "full",
   "results": [
     {
@@ -19,41 +19,73 @@
     {
       "instance": "dbn_13",
       "arm": "treesa_rounds",
-      "tc": 31.626773,
-      "sc": 27.0,
-      "rwc": 29.98394,
+      "tc": 30.602745,
+      "sc": 25.0,
+      "rwc": 27.989262,
       "curve": [
         {
           "round": 0,
-          "score": 3620306748202.0137
+          "tc_before": 39.508881,
+          "tc_after_surgery": 36.14333,
+          "tc_after_anneal": 36.952964,
+          "tc_retained": 36.14333,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 5525217500107.966
+          "tc_before": 36.14333,
+          "tc_after_surgery": 31.110717,
+          "tc_after_anneal": 31.265409,
+          "tc_retained": 30.744297,
+          "surgery_accepted": true
         },
         {
           "round": 2,
-          "score": 6724778164522.047
+          "tc_before": 30.744297,
+          "tc_after_surgery": 30.744297,
+          "tc_after_anneal": 30.720022,
+          "tc_retained": 30.606706,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 2293312584679.999
+          "tc_before": 30.606706,
+          "tc_after_surgery": 30.606706,
+          "tc_after_anneal": 31.515637,
+          "tc_retained": 30.606706,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 5899952127222.0625
+          "tc_before": 30.606706,
+          "tc_after_surgery": 30.606706,
+          "tc_after_anneal": 30.773194,
+          "tc_retained": 30.602745,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 7185213670945.991
+          "tc_before": 30.602745,
+          "tc_after_surgery": 30.602745,
+          "tc_after_anneal": 30.73799,
+          "tc_retained": 30.602745,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 1097338782805.9968
+          "tc_before": 30.602745,
+          "tc_after_surgery": 30.602745,
+          "tc_after_anneal": 30.877169,
+          "tc_retained": 30.602745,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 2737974462945.9824
+          "tc_before": 30.602745,
+          "tc_after_surgery": 30.602745,
+          "tc_after_anneal": 31.440019,
+          "tc_retained": 30.602745,
+          "surgery_accepted": false
         }
       ]
     },
@@ -81,41 +113,73 @@
     {
       "instance": "ksg",
       "arm": "treesa_rounds",
-      "tc": 38.29143,
-      "sc": 27.0,
-      "rwc": 31.154449,
+      "tc": 37.015153,
+      "sc": 29.0,
+      "rwc": 34.192211,
       "curve": [
         {
           "round": 0,
-          "score": 863142252796.0095
+          "tc_before": 38.769071,
+          "tc_after_surgery": 38.172066,
+          "tc_after_anneal": 37.625317,
+          "tc_retained": 37.574414,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 852462146564.0146
+          "tc_before": 37.574414,
+          "tc_after_surgery": 37.574414,
+          "tc_after_anneal": 37.50573,
+          "tc_retained": 37.50573,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 37585703662715.76
+          "tc_before": 37.50573,
+          "tc_after_surgery": 37.50573,
+          "tc_after_anneal": 37.462542,
+          "tc_retained": 37.389794,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 1753717561335.9976
+          "tc_before": 37.389794,
+          "tc_after_surgery": 37.389794,
+          "tc_after_anneal": 37.150513,
+          "tc_retained": 37.141121,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 1226077470931.9983
+          "tc_before": 37.141121,
+          "tc_after_surgery": 37.141121,
+          "tc_after_anneal": 37.370707,
+          "tc_retained": 37.110124,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 475956095632.0011
+          "tc_before": 37.110124,
+          "tc_after_surgery": 37.110124,
+          "tc_after_anneal": 37.167811,
+          "tc_retained": 37.101503,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 336543370360.001
+          "tc_before": 37.101503,
+          "tc_after_surgery": 37.101503,
+          "tc_after_anneal": 37.401511,
+          "tc_retained": 37.085884,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 615890430784.0006
+          "tc_before": 37.085884,
+          "tc_after_surgery": 37.085884,
+          "tc_after_anneal": 37.015153,
+          "tc_retained": 37.015153,
+          "surgery_accepted": false
         }
       ]
     },
@@ -136,41 +200,73 @@
     {
       "instance": "nqueens_28",
       "arm": "treesa_rounds",
-      "tc": 128.33985,
-      "sc": 86.0,
-      "rwc": 91.887892,
+      "tc": 124.044394,
+      "sc": 89.0,
+      "rwc": 94.839266,
       "curve": [
         {
           "round": 0,
-          "score": 6.96990009378416e+41
+          "tc_before": 128.33985,
+          "tc_after_surgery": 128.33985,
+          "tc_after_anneal": 124.087463,
+          "tc_retained": 124.087463,
+          "surgery_accepted": false
         },
         {
           "round": 1,
-          "score": 2.4519975421906987e+55
+          "tc_before": 124.087463,
+          "tc_after_surgery": 124.087463,
+          "tc_after_anneal": 125.044394,
+          "tc_retained": 124.087463,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 5.868842534248737e+48
+          "tc_before": 124.087463,
+          "tc_after_surgery": 124.087463,
+          "tc_after_anneal": 124.087463,
+          "tc_retained": 124.087463,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 1.8398115387980034e+44
+          "tc_before": 124.087463,
+          "tc_after_surgery": 124.087463,
+          "tc_after_anneal": 124.087463,
+          "tc_retained": 124.044394,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 2.180040252202551e+41
+          "tc_before": 124.044394,
+          "tc_after_surgery": 124.044394,
+          "tc_after_anneal": 124.044394,
+          "tc_retained": 124.044394,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 3.568555750240457e+44
+          "tc_before": 124.044394,
+          "tc_after_surgery": 124.044394,
+          "tc_after_anneal": 124.044394,
+          "tc_retained": 124.044394,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 3.4913054087372734e+41
+          "tc_before": 124.044394,
+          "tc_after_surgery": 124.044394,
+          "tc_after_anneal": 124.044394,
+          "tc_retained": 124.044394,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 8.166880733819522e+39
+          "tc_before": 124.044394,
+          "tc_after_surgery": 124.044394,
+          "tc_after_anneal": 124.087463,
+          "tc_retained": 124.044394,
+          "surgery_accepted": false
         }
       ]
     },
@@ -191,41 +287,73 @@
     {
       "instance": "qft_27",
       "arm": "treesa_rounds",
-      "tc": 30.198245,
+      "tc": 30.091205,
       "sc": 27.0,
-      "rwc": 29.651725,
+      "rwc": 29.439528,
       "curve": [
         {
           "round": 0,
-          "score": 1849001728.0
+          "tc_before": 30.584279,
+          "tc_after_surgery": 30.267092,
+          "tc_after_anneal": 30.843804,
+          "tc_retained": 30.267092,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 1984019360.000002
+          "tc_before": 30.267092,
+          "tc_after_surgery": 30.267092,
+          "tc_after_anneal": 31.336857,
+          "tc_retained": 30.267092,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 1729847408.000001
+          "tc_before": 30.267092,
+          "tc_after_surgery": 30.091271,
+          "tc_after_anneal": 30.842801,
+          "tc_retained": 30.091271,
+          "surgery_accepted": true
         },
         {
           "round": 3,
-          "score": 2224607287.999998
+          "tc_before": 30.091271,
+          "tc_after_surgery": 30.091271,
+          "tc_after_anneal": 30.879635,
+          "tc_retained": 30.091271,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 2124102632.000001
+          "tc_before": 30.091271,
+          "tc_after_surgery": 30.091271,
+          "tc_after_anneal": 30.628187,
+          "tc_retained": 30.091271,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 2304939840.000002
+          "tc_before": 30.091271,
+          "tc_after_surgery": 30.091271,
+          "tc_after_anneal": 30.682603,
+          "tc_retained": 30.091271,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 2395931063.999998
+          "tc_before": 30.091271,
+          "tc_after_surgery": 30.091271,
+          "tc_after_anneal": 30.393185,
+          "tc_retained": 30.091271,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 1863529184.0
+          "tc_before": 30.091271,
+          "tc_after_surgery": 30.091271,
+          "tc_after_anneal": 30.198464,
+          "tc_retained": 30.091205,
+          "surgery_accepted": false
         }
       ]
     },
@@ -246,41 +374,73 @@
     {
       "instance": "reg3_1000",
       "arm": "treesa_rounds",
-      "tc": 147.506289,
-      "sc": 141.0,
-      "rwc": 145.985226,
+      "tc": 145.414281,
+      "sc": 138.0,
+      "rwc": 143.875169,
       "curve": [
         {
           "round": 0,
-          "score": 1.004336277661876e+59
+          "tc_before": 196.0,
+          "tc_after_surgery": 185.000002,
+          "tc_after_anneal": 161.329725,
+          "tc_retained": 161.329725,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 4.017467710290745e+59
+          "tc_before": 161.329725,
+          "tc_after_surgery": 157.234461,
+          "tc_after_anneal": 150.12978,
+          "tc_retained": 150.12978,
+          "surgery_accepted": true
         },
         {
           "round": 2,
-          "score": 1.5692756209188728e+57
+          "tc_before": 150.12978,
+          "tc_after_surgery": 150.12978,
+          "tc_after_anneal": 147.488775,
+          "tc_retained": 147.488775,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 1.2955937981838166e+61
+          "tc_before": 147.488775,
+          "tc_after_surgery": 147.488775,
+          "tc_after_anneal": 145.940173,
+          "tc_retained": 145.940173,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 1.606939576754545e+60
+          "tc_before": 145.940173,
+          "tc_after_surgery": 145.940173,
+          "tc_after_anneal": 145.763341,
+          "tc_retained": 145.763341,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 3.927019823475655e+56
+          "tc_before": 145.763341,
+          "tc_after_surgery": 145.763341,
+          "tc_after_anneal": 145.491128,
+          "tc_retained": 145.483087,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 4.017348941886363e+59
+          "tc_before": 145.483087,
+          "tc_after_surgery": 145.483087,
+          "tc_after_anneal": 145.444888,
+          "tc_retained": 145.444888,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 7.663413065377595e+53
+          "tc_before": 145.444888,
+          "tc_after_surgery": 145.444888,
+          "tc_after_anneal": 145.414281,
+          "tc_retained": 145.414281,
+          "surgery_accepted": false
         }
       ]
     },
@@ -301,41 +461,73 @@
     {
       "instance": "reg3_250",
       "arm": "treesa_rounds",
-      "tc": 41.097707,
-      "sc": 35.0,
-      "rwc": 39.33346,
+      "tc": 40.586136,
+      "sc": 34.0,
+      "rwc": 38.729941,
       "curve": [
         {
           "round": 0,
-          "score": 563716742396371.0
+          "tc_before": 45.336815,
+          "tc_after_surgery": 41.658727,
+          "tc_after_anneal": 41.02221,
+          "tc_retained": 41.02221,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 1126733376781451.0
+          "tc_before": 41.02221,
+          "tc_after_surgery": 40.716728,
+          "tc_after_anneal": 40.765515,
+          "tc_retained": 40.660791,
+          "surgery_accepted": true
         },
         {
           "round": 2,
-          "score": 2252945307299281.0
+          "tc_before": 40.660791,
+          "tc_after_surgery": 40.660791,
+          "tc_after_anneal": 40.830301,
+          "tc_retained": 40.660791,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 281825683797872.75
+          "tc_before": 40.660791,
+          "tc_after_surgery": 40.660791,
+          "tc_after_anneal": 40.594219,
+          "tc_retained": 40.594219,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 282765926801040.4
+          "tc_before": 40.594219,
+          "tc_after_surgery": 40.594219,
+          "tc_after_anneal": 40.687511,
+          "tc_retained": 40.586136,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 844869743696684.5
+          "tc_before": 40.586136,
+          "tc_after_surgery": 40.586136,
+          "tc_after_anneal": 40.79496,
+          "tc_retained": 40.586136,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 281903460555849.5
+          "tc_before": 40.586136,
+          "tc_after_surgery": 40.586136,
+          "tc_after_anneal": 40.638933,
+          "tc_retained": 40.586136,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 564027983496692.6
+          "tc_before": 40.586136,
+          "tc_after_surgery": 40.586136,
+          "tc_after_anneal": 40.739899,
+          "tc_retained": 40.586136,
+          "surgery_accepted": false
         }
       ]
     },
@@ -356,41 +548,73 @@
     {
       "instance": "rqc_97_m24",
       "arm": "treesa_rounds",
-      "tc": 107.22908,
+      "tc": 107.503109,
       "sc": 97.0,
-      "rwc": 106.074865,
+      "rwc": 106.407588,
       "curve": [
         {
           "round": 0,
-          "score": 1.742259012563107e+41
+          "tc_before": 131.247928,
+          "tc_after_surgery": 131.247928,
+          "tc_after_anneal": 123.584974,
+          "tc_retained": 123.584969,
+          "surgery_accepted": false
         },
         {
           "round": 1,
-          "score": 2.787848361591788e+42
+          "tc_before": 123.584969,
+          "tc_after_surgery": 123.584969,
+          "tc_after_anneal": 123.584981,
+          "tc_retained": 123.584969,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 8.711232752599886e+40
+          "tc_before": 123.584969,
+          "tc_after_surgery": 120.087566,
+          "tc_after_anneal": 119.022621,
+          "tc_retained": 119.022621,
+          "surgery_accepted": true
         },
         {
           "round": 3,
-          "score": 1.1150542741132078e+43
+          "tc_before": 119.022621,
+          "tc_after_surgery": 119.022621,
+          "tc_after_anneal": 117.003051,
+          "tc_retained": 117.002705,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 2.2300830269311753e+43
+          "tc_before": 117.002705,
+          "tc_after_surgery": 108.217839,
+          "tc_after_anneal": 107.578613,
+          "tc_retained": 107.578613,
+          "surgery_accepted": true
         },
         {
           "round": 5,
-          "score": 2.194821272934161e+40
+          "tc_before": 107.578613,
+          "tc_after_surgery": 107.578613,
+          "tc_after_anneal": 107.540393,
+          "tc_retained": 107.540392,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 2.2300830269146563e+43
+          "tc_before": 107.540392,
+          "tc_after_surgery": 107.540392,
+          "tc_after_anneal": 107.50456,
+          "tc_retained": 107.50456,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 2.2300745364719493e+43
+          "tc_before": 107.50456,
+          "tc_after_surgery": 107.50456,
+          "tc_after_anneal": 107.503109,
+          "tc_retained": 107.503109,
+          "surgery_accepted": false
         }
       ]
     },
@@ -411,41 +635,73 @@
     {
       "instance": "surfacecode_d13",
       "arm": "treesa_rounds",
-      "tc": 30.898011,
+      "tc": 30.644298,
       "sc": 24.0,
-      "rwc": 28.612004,
+      "rwc": 28.660212,
       "curve": [
         {
           "round": 0,
-          "score": 35278799370.00019
+          "tc_before": 31.791639,
+          "tc_after_surgery": 31.284857,
+          "tc_after_anneal": 31.281734,
+          "tc_retained": 31.20468,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 35708916169.99954
+          "tc_before": 31.20468,
+          "tc_after_surgery": 31.20468,
+          "tc_after_anneal": 31.37532,
+          "tc_retained": 31.151457,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 35255645205.999954
+          "tc_before": 31.151457,
+          "tc_after_surgery": 30.766924,
+          "tc_after_anneal": 30.766311,
+          "tc_retained": 30.766311,
+          "surgery_accepted": true
         },
         {
           "round": 3,
-          "score": 11632362481.999994
+          "tc_before": 30.766311,
+          "tc_after_surgery": 30.766311,
+          "tc_after_anneal": 30.690407,
+          "tc_retained": 30.690407,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 35658295678.0006
+          "tc_before": 30.690407,
+          "tc_after_surgery": 30.690407,
+          "tc_after_anneal": 30.708168,
+          "tc_retained": 30.687559,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 22724424546.00002
+          "tc_before": 30.687559,
+          "tc_after_surgery": 30.687559,
+          "tc_after_anneal": 30.777632,
+          "tc_retained": 30.671499,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 5722694321.999926
+          "tc_before": 30.671499,
+          "tc_after_surgery": 30.671499,
+          "tc_after_anneal": 30.850138,
+          "tc_retained": 30.671174,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 2016640758.000002
+          "tc_before": 30.671174,
+          "tc_after_surgery": 30.644283,
+          "tc_after_anneal": 30.79662,
+          "tc_retained": 30.644283,
+          "surgery_accepted": true
         }
       ]
     },
@@ -466,41 +722,73 @@
     {
       "instance": "surfacecode_d17",
       "arm": "treesa_rounds",
-      "tc": 39.634811,
+      "tc": 39.178517,
       "sc": 32.0,
-      "rwc": 38.087144,
+      "rwc": 37.686153,
       "curve": [
         {
           "round": 0,
-          "score": 75210050052206.0
+          "tc_before": 42.264702,
+          "tc_after_surgery": 39.742466,
+          "tc_after_anneal": 39.800575,
+          "tc_retained": 39.741571,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 35709971970546.1
+          "tc_before": 39.741571,
+          "tc_after_surgery": 39.741571,
+          "tc_after_anneal": 39.800503,
+          "tc_retained": 39.741571,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 35766116736146.09
+          "tc_before": 39.741571,
+          "tc_after_surgery": 39.684997,
+          "tc_after_anneal": 40.200411,
+          "tc_retained": 39.608125,
+          "surgery_accepted": true
         },
         {
           "round": 3,
-          "score": 72098489496841.98
+          "tc_before": 39.608125,
+          "tc_after_surgery": 39.608125,
+          "tc_after_anneal": 39.59445,
+          "tc_retained": 39.549411,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 20298685374785.727
+          "tc_before": 39.549411,
+          "tc_after_surgery": 39.549411,
+          "tc_after_anneal": 39.605667,
+          "tc_retained": 39.529583,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 35702037793585.914
+          "tc_before": 39.529583,
+          "tc_after_surgery": 39.399806,
+          "tc_after_anneal": 39.286813,
+          "tc_retained": 39.286813,
+          "surgery_accepted": true
         },
         {
           "round": 6,
-          "score": 35719417867646.23
+          "tc_before": 39.286813,
+          "tc_after_surgery": 39.286813,
+          "tc_after_anneal": 39.274426,
+          "tc_retained": 39.258019,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 9697151196373.984
+          "tc_before": 39.258019,
+          "tc_after_surgery": 39.258019,
+          "tc_after_anneal": 39.178517,
+          "tc_retained": 39.178517,
+          "surgery_accepted": false
         }
       ]
     },
@@ -521,41 +809,73 @@
     {
       "instance": "surfacecode_d21",
       "arm": "treesa_rounds",
-      "tc": 49.180267,
+      "tc": 49.062165,
       "sc": 40.0,
-      "rwc": 47.79482,
+      "rwc": 47.890606,
       "curve": [
         {
           "round": 0,
-          "score": 5.813032788970935e+17
+          "tc_before": 57.002219,
+          "tc_after_surgery": 49.393878,
+          "tc_after_anneal": 49.117768,
+          "tc_retained": 49.115981,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 3.065215033183559e+17
+          "tc_before": 49.115981,
+          "tc_after_surgery": 49.115981,
+          "tc_after_anneal": 49.122226,
+          "tc_retained": 49.096415,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 1.4471145045576992e+17
+          "tc_before": 49.096415,
+          "tc_after_surgery": 49.096415,
+          "tc_after_anneal": 49.098734,
+          "tc_retained": 49.09346,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 1.4487216980675024e+17
+          "tc_before": 49.09346,
+          "tc_after_surgery": 49.09346,
+          "tc_after_anneal": 49.093456,
+          "tc_retained": 49.087159,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 1.444930031123393e+17
+          "tc_before": 49.087159,
+          "tc_after_surgery": 49.087159,
+          "tc_after_anneal": 49.11702,
+          "tc_retained": 49.087159,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 7.24887943975884e+16
+          "tc_before": 49.087159,
+          "tc_after_surgery": 49.087159,
+          "tc_after_anneal": 49.099231,
+          "tc_retained": 49.080445,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 5.7784297119029e+17
+          "tc_before": 49.080445,
+          "tc_after_surgery": 49.080445,
+          "tc_after_anneal": 49.090911,
+          "tc_retained": 49.070349,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 5.777904495887715e+17
+          "tc_before": 49.070349,
+          "tc_after_surgery": 49.070349,
+          "tc_after_anneal": 49.076697,
+          "tc_retained": 49.062165,
+          "surgery_accepted": false
         }
       ]
     },
@@ -576,41 +896,73 @@
     {
       "instance": "surfacecode_d9",
       "arm": "treesa_rounds",
-      "tc": 21.743061,
+      "tc": 21.742173,
       "sc": 16.0,
-      "rwc": 19.840927,
+      "rwc": 19.866315,
       "curve": [
         {
           "round": 0,
-          "score": 3568206.0
+          "tc_before": 21.739585,
+          "tc_after_surgery": 21.739585,
+          "tc_after_anneal": 21.805338,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         },
         {
           "round": 1,
-          "score": 3841510.0
+          "tc_before": 21.738694,
+          "tc_after_surgery": 21.738694,
+          "tc_after_anneal": 21.860719,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 3571174.0
+          "tc_before": 21.738694,
+          "tc_after_surgery": 21.738694,
+          "tc_after_anneal": 21.751506,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 3989362.0
+          "tc_before": 21.738694,
+          "tc_after_surgery": 21.738694,
+          "tc_after_anneal": 21.746549,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 3968726.0
+          "tc_before": 21.738694,
+          "tc_after_surgery": 21.738694,
+          "tc_after_anneal": 21.897114,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 3767706.0
+          "tc_before": 21.738694,
+          "tc_after_surgery": 21.738694,
+          "tc_after_anneal": 21.945634,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 3545374.0
+          "tc_before": 21.738694,
+          "tc_after_surgery": 21.738694,
+          "tc_after_anneal": 21.813194,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 3807090.0
+          "tc_before": 21.738694,
+          "tc_after_surgery": 21.738694,
+          "tc_after_anneal": 21.741232,
+          "tc_retained": 21.738694,
+          "surgery_accepted": false
         }
       ]
     },
@@ -631,41 +983,73 @@
     {
       "instance": "sycamore_53_20_0",
       "arm": "treesa_rounds",
-      "tc": 61.483166,
-      "sc": 53.0,
-      "rwc": 60.176556,
+      "tc": 59.906865,
+      "sc": 52.0,
+      "rwc": 58.164362,
       "curve": [
         {
           "round": 0,
-          "score": 7.614967754254335e+22
+          "tc_before": 71.000713,
+          "tc_after_surgery": 71.000713,
+          "tc_after_anneal": 59.913559,
+          "tc_retained": 59.913559,
+          "surgery_accepted": false
         },
         {
           "round": 1,
-          "score": 1.5112139175186644e+23
+          "tc_before": 59.913559,
+          "tc_after_surgery": 59.913559,
+          "tc_after_anneal": 60.026459,
+          "tc_retained": 59.906865,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 3.807528270720592e+22
+          "tc_before": 59.906865,
+          "tc_after_surgery": 59.906865,
+          "tc_after_anneal": 59.994782,
+          "tc_retained": 59.906865,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 1.948172200072805e+22
+          "tc_before": 59.906865,
+          "tc_after_surgery": 59.906865,
+          "tc_after_anneal": 60.087574,
+          "tc_retained": 59.906865,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 2.928291780295957e+19
+          "tc_before": 59.906865,
+          "tc_after_surgery": 59.906865,
+          "tc_after_anneal": 60.040422,
+          "tc_retained": 59.906865,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 1.8891122301116535e+22
+          "tc_before": 59.906865,
+          "tc_after_surgery": 59.906865,
+          "tc_after_anneal": 60.018208,
+          "tc_retained": 59.906865,
+          "surgery_accepted": false
         },
         {
           "round": 6,
-          "score": 6.006867197555079e+20
+          "tc_before": 59.906865,
+          "tc_after_surgery": 59.906865,
+          "tc_after_anneal": 59.926639,
+          "tc_retained": 59.906865,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 2.401525845741655e+21
+          "tc_before": 59.906865,
+          "tc_after_surgery": 59.906865,
+          "tc_after_anneal": 59.945485,
+          "tc_retained": 59.906865,
+          "surgery_accepted": false
         }
       ]
     },
@@ -686,41 +1070,73 @@
     {
       "instance": "sycamore_m20",
       "arm": "treesa_rounds",
-      "tc": 62.124994,
-      "sc": 54.0,
-      "rwc": 60.742296,
+      "tc": 62.058102,
+      "sc": 53.0,
+      "rwc": 60.859515,
       "curve": [
         {
           "round": 0,
-          "score": 1.511908648110875e+23
+          "tc_before": 73.044662,
+          "tc_after_surgery": 62.547344,
+          "tc_after_anneal": 62.170588,
+          "tc_retained": 62.150339,
+          "surgery_accepted": true
         },
         {
           "round": 1,
-          "score": 3.0230670011367106e+23
+          "tc_before": 62.150339,
+          "tc_after_surgery": 62.150339,
+          "tc_after_anneal": 62.14915,
+          "tc_retained": 62.149149,
+          "surgery_accepted": false
         },
         {
           "round": 2,
-          "score": 1.511215924130222e+23
+          "tc_before": 62.149149,
+          "tc_after_surgery": 62.149149,
+          "tc_after_anneal": 62.256833,
+          "tc_retained": 62.149149,
+          "surgery_accepted": false
         },
         {
           "round": 3,
-          "score": 2.1392381974956995e+20
+          "tc_before": 62.149149,
+          "tc_after_surgery": 62.149149,
+          "tc_after_anneal": 62.195667,
+          "tc_retained": 62.149149,
+          "surgery_accepted": false
         },
         {
           "round": 4,
-          "score": 3.023068103094213e+23
+          "tc_before": 62.149149,
+          "tc_after_surgery": 62.149149,
+          "tc_after_anneal": 62.170587,
+          "tc_retained": 62.149149,
+          "surgery_accepted": false
         },
         {
           "round": 5,
-          "score": 3.022423417768877e+23
+          "tc_before": 62.149149,
+          "tc_after_surgery": 62.115813,
+          "tc_after_anneal": 62.086033,
+          "tc_retained": 62.062447,
+          "surgery_accepted": true
         },
         {
           "round": 6,
-          "score": 6.069737769778972e+23
+          "tc_before": 62.062447,
+          "tc_after_surgery": 62.062447,
+          "tc_after_anneal": 62.101522,
+          "tc_retained": 62.062447,
+          "surgery_accepted": false
         },
         {
           "round": 7,
-          "score": 3.02242196753871e+23
+          "tc_before": 62.062447,
+          "tc_after_surgery": 62.062447,
+          "tc_after_anneal": 62.065354,
+          "tc_retained": 62.058102,
+          "surgery_accepted": false
         }
       ]
     }

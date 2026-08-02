@@ -545,15 +545,18 @@ impl PyTreeSA {
     ///     score: Score function for evaluating solutions. If None, uses default.
     ///     preprocess: Simplify the network (splice degree-2/parallel tensors) before
     ///                 annealing, then splice the reduced tree back (default: True).
-    ///     surgery_iters: Number of interleaved anneal-surgery rounds run after
-    ///                    the pipeline (each round is one waist-surgery
-    ///                    iteration plus a warm-started anneal, so it costs
-    ///                    about one full anneal); 0 disables the loop
-    ///                    (default: 0). The best tree seen is returned, so more
-    ///                    rounds are never worse, and the loop is deterministic
-    ///                    and reproducible across machines for any fixed config.
+    ///     surgery_iters: Number of interleaved anneal-surgery rounds run on
+    ///                    the reduced network before splice-back (each round is
+    ///                    one waist-surgery iteration plus cold span-gated fine
+    ///                    tuning); 0 disables the loop (default: 0). After
+    ///                    splice-back, the result is guarded against the
+    ///                    rounds-off baseline and is reproducible for any fixed
+    ///                    config.
+    ///     surgery_probability: Probability that a local TreeSA sweep is
+    ///                          replaced by one waist-surgery update at the
+    ///                          current temperature (default: 0.0).
     #[new]
-    #[pyo3(signature = (ntrials=10, niters=50, betas=None, score=None, preprocess=true, surgery_iters=0))]
+    #[pyo3(signature = (ntrials=10, niters=50, betas=None, score=None, preprocess=true, surgery_iters=0, surgery_probability=0.0))]
     fn new(
         ntrials: usize,
         niters: usize,
@@ -561,22 +564,29 @@ impl PyTreeSA {
         score: Option<PyScoreFunction>,
         preprocess: bool,
         surgery_iters: u64,
-    ) -> Self {
-        let default_betas: Vec<f64> = (1..=300).map(|i| 0.01 + 0.05 * i as f64).collect();
-        let betas = betas.unwrap_or(default_betas);
-        let score = score.map(|s| s.inner).unwrap_or_default();
-
-        Self {
-            inner: TreeSA {
-                betas,
-                ntrials,
-                niters,
-                score,
-                preprocess,
-                surgery_iters,
-                ..Default::default()
-            },
+        surgery_probability: f64,
+    ) -> PyResult<Self> {
+        if !surgery_probability.is_finite() || !(0.0..=1.0).contains(&surgery_probability) {
+            return Err(PyValueError::new_err(
+                "surgery_probability must be finite and in [0, 1]",
+            ));
         }
+        let defaults = TreeSA::default();
+        let betas = betas.unwrap_or_else(|| defaults.betas.clone());
+        let score = score
+            .map(|score| score.inner)
+            .unwrap_or_else(|| defaults.score.clone());
+        let inner = TreeSA {
+            betas,
+            ntrials,
+            niters,
+            score,
+            preprocess,
+            surgery_iters,
+            surgery_probability,
+            ..defaults
+        };
+        Ok(Self { inner })
     }
 
     /// Create a fast TreeSA configuration (fewer iterations).
@@ -625,17 +635,23 @@ impl PyTreeSA {
         self.inner.preprocess
     }
 
-    /// Number of interleaved anneal-surgery rounds run after the pipeline;
-    /// each round is one waist-surgery iteration plus a warm-started anneal,
-    /// so it costs about one full anneal. 0 disables the loop.
+    /// Number of interleaved anneal-surgery rounds run on the reduced network
+    /// before splice-back; each round is one waist-surgery iteration plus cold
+    /// span-gated fine tuning. 0 disables the loop.
     #[getter]
     fn surgery_iters(&self) -> u64 {
         self.inner.surgery_iters
     }
 
+    /// Probability that a local sweep is replaced by a surgery update.
+    #[getter]
+    fn surgery_probability(&self) -> f64 {
+        self.inner.surgery_probability
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "TreeSA(ntrials={}, niters={}, score={}, preprocess={}, surgery_iters={})",
+            "TreeSA(ntrials={}, niters={}, score={}, preprocess={}, surgery_iters={}, surgery_probability={})",
             self.inner.ntrials,
             self.inner.niters,
             PyScoreFunction {
@@ -648,6 +664,7 @@ impl PyTreeSA {
                 "False"
             },
             self.inner.surgery_iters,
+            self.inner.surgery_probability,
         )
     }
 }
@@ -924,7 +941,10 @@ fn optimize_treesa(
     optimizer: Option<PyTreeSA>,
 ) -> PyResult<PyNestedEinsum> {
     let code = EinCode::new(ixs, out);
-    let opt = optimizer.unwrap_or_else(|| PyTreeSA::new(10, 50, None, None, true, 0));
+    let opt = match optimizer {
+        Some(opt) => opt,
+        None => PyTreeSA::new(10, 50, None, None, true, 0, 0.0)?,
+    };
 
     opt.inner
         .optimize(&code, &sizes)

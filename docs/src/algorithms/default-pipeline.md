@@ -8,7 +8,8 @@ pass. This page documents what runs, what it guarantees, and how to opt out.
 ## What `TreeSA::default()` runs
 
 ```
-simplify  ->  anneal trials (on the reduced network)  ->  splice  ->  [k x (surgery -> anneal), if k > 0]
+simplify  ->  anneal trials  ->  [k x (surgery -> cold fine tune)]  ->  splice
+                           (all search runs on the reduced network)
 ```
 
 1. **Simplify** ([`crate::preprocess::simplify`]) deterministically fuses
@@ -17,26 +18,39 @@ simplify  ->  anneal trials (on the reduced network)  ->  splice  ->  [k x (surg
    network.
 2. **Anneal trials** run the normal TreeSA search loop on that reduced
    network instead of the raw one, so the search budget is spent where it
-   matters.
-3. **Splice** ([`crate::preprocess::splice`]) expands each reduced-network
-   leaf back into the binary subtree `simplify` merged it from, so the
-   returned tree's leaves are exactly the original tensors again.
-4. **Interleaved anneal–surgery rounds** (the companion paper's Algorithm 1)
+   matters. With `surgery_probability > 0`, each scheduled sweep independently
+   selects one global waist update with that probability; otherwise it runs the
+   ordinary local sweep. The global proposal moves one boundary tensor across
+   the current waist with a leaf prune-and-regraft edit, preserving every
+   unaffected subtree, and uses the ordinary Metropolis test at the current
+   inverse temperature.
+   It does not change the temperature, consult a clock, or launch another
+   annealing loop. The default probability is `0.0`, so existing runs are
+   byte-identical.
+3. **Interleaved anneal–surgery rounds** (the companion paper's Algorithm 1)
    only run if [`TreeSA::surgery_iters`] is greater than `0` (the default is
    `0`, off). `surgery_iters` counts *rounds*, and each round is one
    waist-surgery iteration ([`crate::waist_surgery::refine_capped`]) on the
-   current tree — improving its most expensive contraction, its *waist* —
-   followed by a full warm-started annealing pass over the surgical result.
-   The loop returns the best tree it saw anywhere, so it can only help.
+   current reduced-network tree — improving its most expensive contraction,
+   its *waist* —
+   followed by a cold specified-tree fine-tuning pass over the surgical result:
+   at most 15 configured levels with `β >= 1`, 30 span-gated sweeps per
+   coarse-to-fine span, and three deterministic serial trials. The loop returns
+   the best tree it saw anywhere, so it can only help.
 
-   Rounds are *chained*: round `r + 1` continues from round `r`'s annealed
-   tree even when that tree was worse than the incumbent best. Letting the
-   trajectory go uphill is the point — it is what lets surgery carry the
-   search out of a basin that local annealing moves cannot leave.
+   Rounds use an *incumbent ratchet*: a worse fine-tuning endpoint is reported
+   but rejected, and round `r + 1` starts from the best tree retained in round
+   `r`. Surgery supplies the nonlocal basin jump; fine tuning need not destroy
+   the incumbent to provide one.
 
-   **Cost: one round ≈ one more full anneal of the network**, so runtime grows
-   roughly linearly in `surgery_iters`. Budget it like extra trials, not like
-   a cheap post-pass.
+   **Cost:** on the 761-tensor simplified surface-code network, fine tuning is
+   450 sweeps per round, versus 15,000 sweeps for a default cold-start trial.
+   Runtime still grows roughly linearly in `surgery_iters`.
+4. **Splice** ([`crate::preprocess::splice`]) expands each reduced-network
+   leaf back into the binary subtree `simplify` merged it from, so the
+   returned tree's leaves are exactly the original tensors again. Splicing
+   happens after the optional rounds: the paper's waist and FM cut are defined
+   on the simplified hypergraph.
 
 This whole pipeline is what `optimize_code(ixs, out, sizes, TreeSA())` /
 `optimize_code(&code, &sizes, &TreeSA::default())` runs by default — no flags
@@ -64,8 +78,10 @@ rather than seconds — the anneal–surgery loop too are all pure functions of
 the input network and config (internal RNG seeds are fixed, and no wall-clock
 deadline binds `optimize_treesa`). Re-running the same configuration
 reproduces the same tree on any machine, with `surgery_iters` at any value:
-`0` (off), or any positive round count. More rounds can only be equal or
-better, never worse.
+`0` (off), or any positive round count. Every positive-round result is guarded
+against the rounds-off baseline after splice-back. The standalone
+`anneal_surgery_rounds` loop is monotone in its round count on the network it
+is given.
 
 Wall-clock budgets still exist, but only on the low-level
 [`crate::waist_surgery::refine`] / [`refine_capped`] APIs (and the Python
@@ -107,7 +123,7 @@ tensor hypergraph with balance-constrained Fiduccia–Mattheyses passes, and
 only keeps the result if it strictly lowers `tc`.
 
 Interleaving matters as much as the surgery itself: a surgical cut is a jump
-to a different basin, and the annealing pass that follows it in the same
+to a different basin, and the cold fine-tuning pass that follows it in the same
 round is what settles the rest of the tree around the new cut. That is why
 `surgery_iters` runs rounds rather than back-to-back surgery iterations.
 
@@ -118,14 +134,14 @@ round is what settles the rest of the tree around the new cut. That is why
   a strictly cheaper comparable-balance cut.
 - **Near-no-op elsewhere.** On instances without a frozen waist, surgery's
   bounded search typically returns early after confirming the incumbent cut
-  is locally minimal — the round then degenerates to an extra warm-started
-  anneal, which costs time but never regresses the returned tree.
+  is locally minimal — the round then degenerates to a cold fine-tuning pass,
+  which costs time but never regresses the returned tree.
 
 If you don't know in advance whether your network has this structure, a small
 positive `surgery_iters` is a safe thing to try: worst case you spend a few
-extra anneals for no improvement, best case you recover a meaningfully
-cheaper tree. Since each round costs about one anneal, start at 2–5 rounds
-and scale up only if the trajectory is still improving.
+extra fine-tuning passes for no improvement, best case you recover a
+meaningfully cheaper tree. Start at 2–5 rounds and scale up only if the
+retained trajectory is still improving.
 
 ## Escape hatches
 
@@ -142,10 +158,11 @@ spliced tree a node with two non-leaf children and break that preset's
 documented linear-contraction-order guarantee, so it opts out unconditionally
 rather than risk it.
 
-For the same reason, a `Path` decomposition also skips the anneal–surgery
-rounds: neither the surgical rebuild nor the warm-started anneal is
-path-preserving. Setting `surgery_iters` on a path config is silently ignored
-rather than allowed to return a non-path tree.
+For the same reason, a `Path` decomposition also skips both forms of surgery:
+the anneal–surgery rounds and the probabilistic surgery update rule. Neither
+the surgical rebuild nor the specified-tree fine tuning is path-preserving.
+Setting `surgery_iters` or `surgery_probability` on a path config is silently
+ignored rather than allowed to return a non-path tree.
 
 ## See also
 

@@ -471,21 +471,44 @@ def test_treesa_getters():
     assert len(opt.betas) > 0
 
 
+def test_treesa_default_beta_schedule_matches_rust():
+    opt = TreeSA()
+    assert len(opt.betas) == 300
+    assert opt.betas[0] == 0.01
+    assert opt.betas[-1] == 14.96
+
+
 def test_treesa_repr():
-    """__repr__ must surface preprocess and surgery_iters, not just ntrials/niters/score."""
-    opt = TreeSA(ntrials=3, niters=15, preprocess=False, surgery_iters=7)
+    """__repr__ must surface every pipeline/update-rule knob."""
+    opt = TreeSA(
+        ntrials=3,
+        niters=15,
+        preprocess=False,
+        surgery_iters=7,
+        surgery_probability=0.001,
+    )
     repr_str = repr(opt)
     assert "TreeSA" in repr_str
     assert "ntrials=3" in repr_str
     assert "niters=15" in repr_str
     assert "preprocess=False" in repr_str
     assert "surgery_iters=7" in repr_str
+    assert "surgery_probability=0.001" in repr_str
 
 
 def test_treesa_surgery_iters_getter_and_default():
     """surgery_iters defaults to 0 and round-trips through the constructor."""
     assert TreeSA().surgery_iters == 0
     assert TreeSA(surgery_iters=7).surgery_iters == 7
+
+
+def test_treesa_surgery_probability_getter_and_validation():
+    """The update-rule probability defaults off and rejects invalid values."""
+    assert TreeSA().surgery_probability == 0.0
+    assert TreeSA(surgery_probability=0.001).surgery_probability == 0.001
+    for probability in (-0.01, 1.01, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="finite and in \\[0, 1\\]"):
+            TreeSA(surgery_probability=probability)
 
 
 # ============== New tests for TreeSASlicer constructor ==============
