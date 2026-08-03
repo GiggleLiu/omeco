@@ -56,6 +56,7 @@ This directory is self-contained — manifest, instances, checker:
 | `test_run_master.py` | Unit tests for revision, cleanliness, tracking, hashing, and atomic-write behavior. |
 | `check.py` | Compares two artifacts and exits nonzero on any disagreement. Standard library only, Python 3.8+. |
 | `verify_figure2b.py` | Verifies the record crossing, incumbent ratchet, and accepted-rebuild mechanism. |
+| `verify_waist_trace.py` | Verifies the `waist_trace` set: ten 128-round trajectories, per-round waist/FM cut invariants, and the rebuild gate/acceptance flags. |
 | `plot_figure2b.py` | Renders the checked JSON as a dependency-free vector figure. |
 | `README.md` | This file. |
 
@@ -267,9 +268,12 @@ Allowed keys:
 - Set: `arms`, `instances`.
 - Arm `greedy`: none; `{}` is the only legal value.
 - Arm `treesa`: `ntrials`, `niters`.
-- Arm `treesa_rounds`: `ntrials`, `niters`, `rounds` (required).
+- Arm `treesa_rounds`: `ntrials`, `niters`, `rounds` (required), `trace_cuts`
+  (optional; emit the per-round `waist` object).
 - Arm `treesa_surgery_rule`: `ntrials`, `niters`, `probability` (required).
-- Instance: `name`, `path` (repo-root-relative), `treewidth` (required).
+- Instance: `name`, `path` (repo-root-relative), `treewidth` (required),
+  `relabel_seed` (optional; deterministic tensor-order permutation applied
+  before optimization, for independent runs of one instance file).
 
 Any other key is a hard error naming the key. Omitted `ntrials`/`niters` mean
 "use `TreeSA::default()`", which is what the `full` set does.
@@ -288,8 +292,9 @@ the directory, so an instance nobody declared is never silently benchmarked.
 
 ## Scope of the artifact
 
-The `full`, `figure2b`, and `ci` sets are the canonical sources for the paper's
-omeco results. Archived development campaigns may be useful for debugging or
-historical comparison, but they cannot supply manuscript numbers. When a paper
+The `full`, `figure2b`, `waist_trace`, and `ci` sets are the canonical sources
+for the paper's omeco results. Archived development campaigns may be useful
+for debugging or historical comparison, but they cannot supply manuscript
+numbers. When a paper
 table and a fresh current-`master` run disagree, the fresh run wins and the
 paper must be updated.

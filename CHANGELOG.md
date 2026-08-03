@@ -35,5 +35,12 @@ cost). Restore the old behavior with `preprocess: false`.
   instances, deterministic runner, checker), plus a CI job that re-derives the
   small `ci` set on every PR and fails on a single changed field. A dedicated
   `figure2b` set checks the paper mechanism and renders a static SVG.
+- New opt-in waist-call trace: `RoundTrace.waist`
+  (`waist_surgery::WaistCallTrace`) records each round's exactly rescored
+  incumbent and best FM waist cuts. Off in ordinary runs and behavior-neutral —
+  no change to the proposal rule, RNG, acceptance, or `WaistReport`. A
+  `waist_trace` benchmark set (five deterministic relabelings each of
+  `surfacecode_d21` and `ksg`, 128 rounds each) regenerates the paper's dense
+  mechanism evidence via `make paper-waist-trace`.
 - `Label` now requires `Ord` (all built-in label types already qualify).
 - The Julia behavioral-alignment rule is retired; JSON interop is unchanged.
