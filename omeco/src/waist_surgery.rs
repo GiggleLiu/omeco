@@ -106,6 +106,21 @@ const MAX_STALE_ITERS: u64 = 4;
 /// Deterministic RNG seed for the surgery FM/anneal streams.
 const RNG_SEED: u64 = 0x0000_0054_c0ff_ee00;
 
+/// One completed like-for-like waist-cut comparison.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WaistCallTrace {
+    /// Exact cut weight of the incumbent waist bipartition.
+    pub incumbent_cut_cost: f64,
+    /// Exact cut weight of the best comparable-balance FM candidate.
+    pub best_alt_cut_cost: f64,
+    /// Cost of the incumbent tree's highest-cost contraction node.
+    pub waist_node_cost: f64,
+    /// Whether the candidate passed the no-new-bottleneck gate.
+    pub rebuild_attempted: bool,
+    /// Whether rebuilding strictly reduced the independently rescored total cost.
+    pub rebuild_accepted: bool,
+}
+
 /// Diagnostics from a [`refine`] run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WaistReport {
@@ -977,6 +992,11 @@ struct Refiner<'a> {
     max_iters: u64,
     rng: SmallRng,
     report: WaistReport,
+    /// Opt-in paper diagnostic. Keeping it outside `WaistReport` preserves the
+    /// public report's historical `Copy + Eq` API and avoids collecting trace
+    /// data during ordinary timed refinement.
+    capture_trace: bool,
+    last_call_trace: Option<WaistCallTrace>,
 }
 
 impl Refiner<'_> {
@@ -1045,6 +1065,15 @@ impl Refiner<'_> {
             }
             return None;
         };
+        if self.capture_trace {
+            self.last_call_trace = Some(WaistCallTrace {
+                incumbent_cut_cost,
+                best_alt_cut_cost: best_alt_cost,
+                waist_node_cost,
+                rebuild_attempted: false,
+                rebuild_accepted: false,
+            });
+        }
         if best_alt_cost < incumbent_cut_cost - 1e-9 {
             self.report.cheaper_cuts += 1;
         } else {
@@ -1057,6 +1086,9 @@ impl Refiner<'_> {
             return None;
         }
         self.report.rebuild_attempts += 1;
+        if let Some(trace) = &mut self.last_call_trace {
+            trace.rebuild_attempted = true;
+        }
 
         // Rebuild both sides from the improved cut.
         if self.out_of_time() {
@@ -1069,6 +1101,9 @@ impl Refiner<'_> {
         let new_tc = contraction_complexity(&rebuilt, self.sizes, &self.code.ixs).tc;
         if new_tc < work_tc - 1e-9 {
             self.report.rebuild_accepts += 1;
+            if let Some(trace) = &mut self.last_call_trace {
+                trace.rebuild_accepted = true;
+            }
             Some((rebuilt, new_tc))
         } else {
             None
@@ -1288,6 +1323,32 @@ pub(crate) fn refine_capped_seeded<L: Label>(
     max_iters: u64,
     rng_seed: u64,
 ) -> (NestedEinsum<L>, WaistReport) {
+    let (tree, report, _) =
+        refine_capped_seeded_impl(tree, code, sizes, budget, max_iters, rng_seed, false);
+    (tree, report)
+}
+
+/// One-call fixed-work refinement with an exact waist-cut diagnostic.
+pub(crate) fn refine_capped_seeded_with_trace<L: Label>(
+    tree: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    sizes: &HashMap<L, usize>,
+    budget: Duration,
+    max_iters: u64,
+    rng_seed: u64,
+) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
+    refine_capped_seeded_impl(tree, code, sizes, budget, max_iters, rng_seed, true)
+}
+
+fn refine_capped_seeded_impl<L: Label>(
+    tree: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    sizes: &HashMap<L, usize>,
+    budget: Duration,
+    max_iters: u64,
+    rng_seed: u64,
+    capture_trace: bool,
+) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
     let n = code.num_tensors();
     let mut report = WaistReport {
         n_original: n,
@@ -1299,7 +1360,7 @@ pub(crate) fn refine_capped_seeded<L: Label>(
     };
     // Nothing to do for trivial networks.
     if n < 3 {
-        return (tree.clone(), report);
+        return (tree.clone(), report, None);
     }
 
     // Build the label-id space shared by the ExprTree, tc, FM, and conversions.
@@ -1353,6 +1414,8 @@ pub(crate) fn refine_capped_seeded<L: Label>(
         max_iters,
         rng: SmallRng::seed_from_u64(rng_seed),
         report,
+        capture_trace,
+        last_call_trace: None,
     };
 
     let mut stale: u64 = 0;
@@ -1373,10 +1436,11 @@ pub(crate) fn refine_capped_seeded<L: Label>(
         }
     }
     report = refiner.report;
+    let call_trace = refiner.last_call_trace;
 
     // Map id-space leaves/eins back to the original label space.
     let best_l = restore_nested(&best, &labels);
-    (best_l, report)
+    (best_l, report, call_trace)
 }
 
 /// Relabel a `NestedEinsum<L>` into id-space (`usize` labels via `label_map`),
@@ -1829,10 +1893,13 @@ mod tests {
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
+            capture_trace: true,
+            last_call_trace: None,
         };
 
         assert!(refiner.waist_surgery(&incumbent, f64::INFINITY).is_none());
         assert_eq!(refiner.report.waist_min_hits, 0);
+        assert!(refiner.last_call_trace.is_none());
     }
 
     #[test]
@@ -1859,6 +1926,8 @@ mod tests {
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
+            capture_trace: false,
+            last_call_trace: None,
         };
 
         let side = refiner.solve_side(&[0], &[0]).unwrap();
@@ -1917,6 +1986,8 @@ mod tests {
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
+            capture_trace: true,
+            last_call_trace: None,
         };
 
         let (rebuilt, rebuilt_tc) = refiner
@@ -1928,6 +1999,10 @@ mod tests {
         assert_eq!(refiner.report.cheaper_cuts, 1);
         assert_eq!(refiner.report.rebuild_attempts, 1);
         assert_eq!(refiner.report.rebuild_accepts, 1);
+        let trace = refiner.last_call_trace.expect("missing call trace");
+        assert!(trace.best_alt_cut_cost < trace.incumbent_cut_cost);
+        assert!(trace.rebuild_attempted);
+        assert!(trace.rebuild_accepted);
         let mut leaves = rebuilt.leaf_indices();
         leaves.sort_unstable();
         assert_eq!(leaves, vec![0, 1, 2, 3]);
@@ -1978,6 +2053,8 @@ mod tests {
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
+            capture_trace: true,
+            last_call_trace: None,
         };
 
         assert!(refiner.waist_surgery(&incumbent, f64::INFINITY).is_some());
@@ -1985,6 +2062,10 @@ mod tests {
         assert_eq!(refiner.report.waist_min_hits, 1);
         assert_eq!(refiner.report.rebuild_attempts, 1);
         assert_eq!(refiner.report.rebuild_accepts, 1);
+        let trace = refiner.last_call_trace.expect("missing call trace");
+        assert_eq!(trace.best_alt_cut_cost, trace.incumbent_cut_cost);
+        assert!(trace.rebuild_attempted);
+        assert!(trace.rebuild_accepted);
     }
 
     #[test]
@@ -2056,6 +2137,8 @@ mod tests {
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
+            capture_trace: false,
+            last_call_trace: None,
         };
 
         assert!(refiner.waist_surgery(&incumbent, 3.0).is_none());
@@ -2113,6 +2196,8 @@ mod tests {
                 rebuild_accepts: 0,
                 waist_min_hits: 0,
             },
+            capture_trace: false,
+            last_call_trace: None,
         };
         assert!(refiner.rebuild(&[true; 65]).is_none());
         assert!(refiner.solve_side(&[], &[]).is_none());

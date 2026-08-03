@@ -34,6 +34,9 @@ use omeco::{
     contraction_complexity, optimize_code, simplify, splice, EinCode, GreedyMethod, NestedEinsum,
     TreeSA, Treewidth,
 };
+use rand::rngs::SmallRng;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -92,6 +95,8 @@ struct RoundsArm {
     /// Required: a rounds arm without a round count is a manifest bug, not a
     /// request for zero rounds.
     rounds: u64,
+    /// Emit exact per-round waist-cut comparisons for mechanism figures.
+    trace_cuts: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -111,6 +116,8 @@ struct InstanceSpec {
     /// Run the `treewidth` arm on this instance. Required (no default) so that
     /// adding an instance forces an explicit decision.
     treewidth: bool,
+    /// Optional deterministic tensor-order permutation for independent runs.
+    relabel_seed: Option<u64>,
 }
 
 /// Instance file schema, shared with `benchmarks/graphs/*.json`. Extra keys
@@ -159,6 +166,19 @@ struct CurvePoint {
     tc_after_anneal: f64,
     tc_retained: f64,
     surgery_accepted: bool,
+    /// Exact like-for-like cut comparison, emitted only when requested by the
+    /// manifest's `trace_cuts` flag.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    waist: Option<WaistPoint>,
+}
+
+#[derive(Debug, Serialize)]
+struct WaistPoint {
+    incumbent_cut_cost: f64,
+    best_alt_cut_cost: f64,
+    waist_node_cost: f64,
+    rebuild_attempted: bool,
+    rebuild_accepted: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -231,7 +251,11 @@ fn read_json<T: serde::de::DeserializeOwned>(path: &Path, what: &str) -> T {
 }
 
 /// Turn an instance file into the `(code, size_dict)` pair the optimizers take.
-fn build_instance(data: InstanceData, path: &Path) -> (EinCode<usize>, HashMap<usize, usize>) {
+fn build_instance(
+    mut data: InstanceData,
+    path: &Path,
+    relabel_seed: Option<u64>,
+) -> (EinCode<usize>, HashMap<usize, usize>) {
     let mut sizes = HashMap::with_capacity(data.sizes.len());
     for (label, dim) in &data.sizes {
         let parsed = label.parse::<usize>().unwrap_or_else(|_| {
@@ -252,7 +276,15 @@ fn build_instance(data: InstanceData, path: &Path) -> (EinCode<usize>, HashMap<u
             ));
         }
     }
+    if let Some(seed) = relabel_seed {
+        permute_tensors(&mut data.ixs, seed);
+    }
     (EinCode::new(data.ixs, data.iy), sizes)
+}
+
+fn permute_tensors(ixs: &mut [Vec<usize>], seed: u64) {
+    let mut rng = SmallRng::seed_from_u64(seed);
+    ixs.shuffle(&mut rng);
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +388,18 @@ fn run_instance(
                 tc_after_anneal: round6(trace.tc_after_anneal),
                 tc_retained: round6(trace.tc_retained),
                 surgery_accepted: trace.surgery_accepted,
+                waist: arm
+                    .trace_cuts
+                    .unwrap_or(false)
+                    .then_some(trace.waist)
+                    .flatten()
+                    .map(|waist| WaistPoint {
+                        incumbent_cut_cost: round6(waist.incumbent_cut_cost),
+                        best_alt_cut_cost: round6(waist.best_alt_cut_cost),
+                        waist_node_cost: round6(waist.waist_node_cost),
+                        rebuild_attempted: waist.rebuild_attempted,
+                        rebuild_accepted: waist.rebuild_accepted,
+                    }),
             })
             .collect();
         rows.push(row(
@@ -432,7 +476,7 @@ fn main() {
     for spec in &set.instances {
         let path = args.repo_root.join(&spec.path);
         let data: InstanceData = read_json(&path, "instance");
-        let (code, sizes) = build_instance(data, &path);
+        let (code, sizes) = build_instance(data, &path, spec.relabel_seed);
         results.extend(run_instance(spec, &set.arms, &code, &sizes));
     }
 
@@ -461,4 +505,25 @@ fn main() {
         output.results.len(),
         started.elapsed().as_secs_f64()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::permute_tensors;
+
+    #[test]
+    fn tensor_relabeling_is_seeded_and_deterministic() {
+        let original: Vec<Vec<usize>> = (0..32).map(|value| vec![value]).collect();
+        let mut first = original.clone();
+        let mut again = original.clone();
+        let mut other = original.clone();
+        permute_tensors(&mut first, 54);
+        permute_tensors(&mut again, 54);
+        permute_tensors(&mut other, 55);
+        assert_eq!(first, again);
+        assert_ne!(first, original);
+        assert_ne!(first, other);
+        first.sort();
+        assert_eq!(first, original);
+    }
 }

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark paper-bench paper-bench-check paper-master-gate-test paper-figure2b-check paper-figure2b-plot version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
+.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark paper-bench paper-bench-check paper-master-gate-test paper-figure2b-check paper-figure2b-plot paper-waist-trace version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
 
 CARGO ?= cargo
 PYTHON ?= python3
@@ -49,6 +49,7 @@ help:
 	@printf "  paper-master-gate-test Test the master revision and provenance gate\n"
 	@printf "  paper-figure2b-check Reproduce the Figure 2(b) surface-code trajectory\n"
 	@printf "  paper-figure2b-plot  Render the committed Figure 2(b) trajectory as SVG\n"
+	@printf "  paper-waist-trace   Generate the gated 1,280-call waist mechanism trace\n"
 	@printf "\nRelease targets:\n"
 	@printf "  version         Show current version\n"
 	@printf "  bump-patch      Bump patch version ($(VERSION) -> $(MAJOR).$(MINOR).$$(($(PATCH)+1)))\n"
@@ -143,6 +144,10 @@ paper-figure2b-plot:
 	$(PYTHON) benchmarks/paper/plot_figure2b.py \
 		benchmarks/paper/expected/figure2b.json \
 		benchmarks/paper/expected/figure2b.svg
+
+paper-waist-trace:
+	$(PAPER_MASTER) --set waist_trace --out benchmarks/paper/expected/waist_trace.json
+	$(PYTHON) benchmarks/paper/verify_waist_trace.py benchmarks/paper/expected/waist_trace.json
 
 # Version management
 version:
