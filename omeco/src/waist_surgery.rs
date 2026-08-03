@@ -1329,6 +1329,10 @@ pub(crate) fn refine_capped_seeded<L: Label>(
 }
 
 /// One-call fixed-work refinement with an exact waist-cut diagnostic.
+///
+/// The returned [`WaistCallTrace`] is last-write-wins across surgery calls, so
+/// it only stays consistent with the round-level [`WaistReport`] flags when at
+/// most one refinement iteration runs; callers must pass `max_iters <= 1`.
 pub(crate) fn refine_capped_seeded_with_trace<L: Label>(
     tree: &NestedEinsum<L>,
     code: &EinCode<L>,
@@ -1337,6 +1341,10 @@ pub(crate) fn refine_capped_seeded_with_trace<L: Label>(
     max_iters: u64,
     rng_seed: u64,
 ) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
+    debug_assert!(
+        max_iters <= 1,
+        "last-call trace semantics require max_iters <= 1, got {max_iters}"
+    );
     refine_capped_seeded_impl(tree, code, sizes, budget, max_iters, rng_seed, true)
 }
 

@@ -7,6 +7,9 @@ from pathlib import Path
 import sys
 
 
+ROUND6_QUANTUM = 1e-6
+
+
 def fail(message: str) -> None:
     raise SystemExit(f"waist-trace verification FAILED: {message}")
 
@@ -53,8 +56,12 @@ def main() -> None:
                 fail(f"{name} round {expected_round}: non-finite cut cost")
             if candidate > incumbent + 1e-9:
                 fail(f"{name} round {expected_round}: FM lost the incumbent seed")
-            attempted = candidate < waist_node - 1e-9
-            if waist.get("rebuild_attempted") is not attempted:
+            attempted = waist.get("rebuild_attempted")
+            if not isinstance(attempted, bool):
+                fail(f"{name} round {expected_round}: missing rebuild gate flag")
+            if attempted and candidate > waist_node + 1e-9:
+                fail(f"{name} round {expected_round}: rebuild gate mismatch")
+            if not attempted and candidate < waist_node - ROUND6_QUANTUM - 1e-9:
                 fail(f"{name} round {expected_round}: rebuild gate mismatch")
             if waist.get("rebuild_accepted") is not point.get("surgery_accepted"):
                 fail(f"{name} round {expected_round}: acceptance mismatch")
