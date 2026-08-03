@@ -14,17 +14,22 @@ a committed number can never quietly drift away from what the code does.
 
 ## Master revision hard gate
 
-**The paper always tracks the current `master` revision.** A result is valid for
-the paper only when it was generated from the exact commit currently at
-`origin/master`. Results from a historical pin, research branch, attempt
-worktree, patched source tree, or stale local `master` are not paper data.
+**The paper always tracks the current `master` revision.** A paper run must be
+made from a clean checkout of the commit currently at `origin/master`, and its
+results remain valid only while the benchmark-relevant content of
+`origin/master` — benchmark code, manifests, and instance data — still matches
+the run's recorded binary and input manifest. Results from a historical pin,
+research branch, attempt worktree, patched source tree, or stale local `master`
+are not paper data.
 
 Before a paper run, fetch and verify the revision:
 
 ```bash
 git fetch origin master
-test "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)"
-test -z "$(git status --porcelain)"
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" \
+    || { echo "HEAD is not at origin/master" >&2; exit 1; }
+test -z "$(git status --porcelain)" \
+    || { echo "working tree is not clean" >&2; exit 1; }
 ```
 
 Record `git rev-parse HEAD`, the benchmark binary hash, the manifest hash, and
