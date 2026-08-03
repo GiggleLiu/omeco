@@ -97,6 +97,21 @@ struct RoundsArm {
     rounds: u64,
     /// Emit exact per-round waist-cut comparisons for mechanism figures.
     trace_cuts: Option<bool>,
+    /// Emit per-round configured-score fields without the full cut trace.
+    trace_scores: Option<bool>,
+}
+
+impl RoundsArm {
+    /// The `waist` object is emitted only for `trace_cuts` sets.
+    fn emit_cuts(&self) -> bool {
+        self.trace_cuts.unwrap_or(false)
+    }
+
+    /// `score_before`/`score_retained` accompany either trace flag: a cut
+    /// trace without the score ratchet would be unverifiable.
+    fn emit_scores(&self) -> bool {
+        self.emit_cuts() || self.trace_scores.unwrap_or(false)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -388,21 +403,14 @@ fn run_instance(
             .map(|trace| CurvePoint {
                 round: trace.round,
                 tc_before: round6(trace.tc_before),
-                score_before: arm
-                    .trace_cuts
-                    .unwrap_or(false)
-                    .then_some(round6(trace.score_before)),
+                score_before: arm.emit_scores().then_some(round6(trace.score_before)),
                 tc_after_surgery: round6(trace.tc_after_surgery),
                 tc_after_anneal: round6(trace.tc_after_anneal),
                 tc_retained: round6(trace.tc_retained),
-                score_retained: arm
-                    .trace_cuts
-                    .unwrap_or(false)
-                    .then_some(round6(trace.score_retained)),
+                score_retained: arm.emit_scores().then_some(round6(trace.score_retained)),
                 surgery_accepted: trace.surgery_accepted,
                 waist: arm
-                    .trace_cuts
-                    .unwrap_or(false)
+                    .emit_cuts()
                     .then_some(trace.waist)
                     .flatten()
                     .map(|waist| WaistPoint {
@@ -521,7 +529,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{permute_tensors, CurvePoint};
+    use super::{permute_tensors, CurvePoint, RoundsArm};
 
     #[test]
     fn tensor_relabeling_is_seeded_and_deterministic() {
@@ -537,6 +545,24 @@ mod tests {
         assert_ne!(first, other);
         first.sort();
         assert_eq!(first, original);
+    }
+
+    #[test]
+    fn score_fields_follow_either_trace_flag() {
+        let arm = |trace_cuts, trace_scores| RoundsArm {
+            ntrials: None,
+            niters: None,
+            rounds: 1,
+            trace_cuts,
+            trace_scores,
+        };
+
+        assert!(!arm(None, None).emit_scores());
+        assert!(arm(Some(true), None).emit_scores());
+        assert!(arm(None, Some(true)).emit_scores());
+        assert!(!arm(Some(false), Some(false)).emit_scores());
+        assert!(arm(Some(true), None).emit_cuts());
+        assert!(!arm(None, Some(true)).emit_cuts());
     }
 
     #[test]

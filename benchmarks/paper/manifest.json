@@ -17,7 +17,7 @@
     "figure2b": {
       "arms": {
         "treesa": {},
-        "treesa_rounds": {"rounds": 32}
+        "treesa_rounds": {"rounds": 32, "trace_scores": true}
       },
       "instances": [
         {"name": "surfacecode_d21", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false}
@@ -25,7 +25,7 @@
     },
     "waist_trace": {
       "arms": {
-        "treesa_rounds": {"rounds": 128, "trace_cuts": true}
+        "treesa_rounds": {"rounds": 128, "trace_cuts": true, "trace_scores": true}
       },
       "instances": [
         {"name": "surfacecode_d21_r0", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5400},
