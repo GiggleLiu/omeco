@@ -23,6 +23,23 @@
         {"name": "surfacecode_d21", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false}
       ]
     },
+    "waist_trace": {
+      "arms": {
+        "treesa_rounds": {"rounds": 128, "trace_cuts": true}
+      },
+      "instances": [
+        {"name": "surfacecode_d21_r0", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5400},
+        {"name": "surfacecode_d21_r1", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5401},
+        {"name": "surfacecode_d21_r2", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5402},
+        {"name": "surfacecode_d21_r3", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5403},
+        {"name": "surfacecode_d21_r4", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5404},
+        {"name": "ksg_r0", "path": "benchmarks/paper/instances/ksg.json", "treewidth": false, "relabel_seed": 5500},
+        {"name": "ksg_r1", "path": "benchmarks/paper/instances/ksg.json", "treewidth": false, "relabel_seed": 5501},
+        {"name": "ksg_r2", "path": "benchmarks/paper/instances/ksg.json", "treewidth": false, "relabel_seed": 5502},
+        {"name": "ksg_r3", "path": "benchmarks/paper/instances/ksg.json", "treewidth": false, "relabel_seed": 5503},
+        {"name": "ksg_r4", "path": "benchmarks/paper/instances/ksg.json", "treewidth": false, "relabel_seed": 5504}
+      ]
+    },
     "full": {
       "arms": {
         "greedy": {},

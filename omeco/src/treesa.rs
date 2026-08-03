@@ -14,7 +14,7 @@ use crate::score::ScoreFunction;
 use crate::utils::fast_log2sumexp2;
 #[cfg(test)]
 use crate::waist_surgery::refine_capped;
-use crate::waist_surgery::{gated_sweep, refine_capped_seeded, WaistUpdate};
+use crate::waist_surgery::{gated_sweep, refine_capped_seeded_with_trace, WaistUpdate};
 use crate::Label;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -1381,6 +1381,8 @@ pub struct RoundTrace {
     pub tc_retained: f64,
     /// Whether waist surgery accepted a rebuilt tree in this round.
     pub surgery_accepted: bool,
+    /// Exact cut-space comparison made by this round's surgery call.
+    pub waist: Option<crate::waist_surgery::WaistCallTrace>,
 }
 
 /// Deterministic interleaved anneal–surgery loop (the paper's Algorithm 1).
@@ -1495,7 +1497,7 @@ pub fn anneal_surgery_rounds<L: Label>(
         let tc_before = crate::contraction_complexity(&trajectory, size_dict, &code.ixs).tc;
         let incumbent_score = score_of(&trajectory);
         let surgery_seed = 0x0000_0054_c0ff_ee00_u64.wrapping_add(r);
-        let (t_surg, wr) = refine_capped_seeded(
+        let (t_surg, wr, waist_trace) = refine_capped_seeded_with_trace(
             &trajectory,
             code,
             size_dict,
@@ -1575,6 +1577,7 @@ pub fn anneal_surgery_rounds<L: Label>(
             tc_after_anneal,
             tc_retained: crate::contraction_complexity(&retained, size_dict, &code.ixs).tc,
             surgery_accepted: wr.rebuild_accepts > 0,
+            waist: waist_trace,
         });
         report.rounds_run = r + 1;
         trajectory = retained;
@@ -3383,6 +3386,7 @@ mod tests {
         assert_eq!(r1.round_scores, r2.round_scores);
         assert_eq!(r1.round_trace, r2.round_trace);
         assert_eq!(r1.surgery_calls_total, r2.surgery_calls_total);
+        assert!(r1.round_trace.iter().all(|trace| trace.waist.is_some()));
         for pair in r1.round_trace.windows(2) {
             assert_eq!(pair[1].tc_before, pair[0].tc_retained);
             assert!(pair[1].tc_retained <= pair[1].tc_before + 1e-9);

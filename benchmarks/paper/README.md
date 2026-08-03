@@ -7,7 +7,10 @@ reproducing that table means running it. The `figure2b` set separately
 reproduces the surface-code mechanism panel with a deterministic 32-round work
 budget: it must cross the panel's pre-surgery record and show an accepted
 rebuild causing a drop. It must also expose at least one uphill fine-tuning
-endpoint separately from the monotone retained incumbent. The outputs under
+endpoint separately from the monotone retained incumbent. `waist_trace` is the
+dense mechanism set: five deterministic relabelings each
+of surfacecode_d21 and ksg, with 128 fixed-work rounds per relabeling and exact
+like-for-like waist/FM cut weights for every completed surgery call. The outputs under
 `expected/` are committed only so that they can be *re-derived* — CI
 regenerates the `ci` one on every push and fails on a single changed field, so
 a committed number can never quietly drift away from what the code does.
@@ -53,6 +56,7 @@ This directory is self-contained — manifest, instances, checker:
 | `test_run_master.py` | Unit tests for revision, cleanliness, tracking, hashing, and atomic-write behavior. |
 | `check.py` | Compares two artifacts and exits nonzero on any disagreement. Standard library only, Python 3.8+. |
 | `verify_figure2b.py` | Verifies the record crossing, incumbent ratchet, and accepted-rebuild mechanism. |
+| `verify_waist_trace.py` | Verifies the `waist_trace` set: ten 128-round trajectories, per-round waist/FM cut invariants, and the rebuild gate/acceptance flags. |
 | `plot_figure2b.py` | Renders the checked JSON as a dependency-free vector figure. |
 | `README.md` | This file. |
 
@@ -103,13 +107,19 @@ python3 benchmarks/paper/run_master.py \
     --out figure2b.json
 python3 benchmarks/paper/verify_figure2b.py figure2b.json
 python3 benchmarks/paper/plot_figure2b.py figure2b.json figure2b.svg
+
+# Dense current-master mechanism trace: 10 trajectories × 128 calls.
+python3 benchmarks/paper/run_master.py \
+    --set waist_trace \
+    --out waist_trace.json
+python3 benchmarks/paper/verify_waist_trace.py waist_trace.json
 ```
 
 The wrapper defaults to `benchmarks/paper/manifest.json` and the repository
 root. Its flags are:
 
 - `--manifest <file>` — tracked manifest to read.
-- `--set <name>` — set within the manifest, `ci`, `figure2b`, or `full` (required).
+- `--set <name>` — set within the manifest: `ci`, `figure2b`, `waist_trace`, or `full` (required).
 - `--out <file>` — where to write the JSON artifact (required).
 - `--repo-root <dir>` — root that instance paths in the manifest resolve
   against; every selected instance must remain inside and tracked by this
@@ -121,13 +131,14 @@ The wrapper writes the artifact to `--out` and the provenance sidecar to
 underlying Rust runner remains directly available for CI regression checks and
 development, but its ungated output is not paper data.
 
-Five Make targets wrap the benchmark workflow:
+Six Make targets wrap the benchmark workflow:
 
 ```bash
 make paper-bench-check  # ci set -> a temporary file -> check.py against expected/ci.json
 make paper-master-gate-test  # unit-test the revision/provenance gate
 make paper-figure2b-check  # 32 rounds -> semantic verifier + exact artifact check
 make paper-figure2b-plot   # committed JSON -> publication-ready static SVG
+make paper-waist-trace     # gated 1,280-call mechanism artifact + semantic check
 make paper-bench        # gated full set -> expected/full.json + provenance
 ```
 
@@ -201,6 +212,11 @@ random circuit costs time and reports nothing anyone wants to read.
   `tc_retained` cannot increase and is the tree used by the next round.
   `surgery_accepted` marks the rebuild events plotted as crosses in the paper's
   Figure 2(b).
+- When the manifest sets `trace_cuts: true`, each curve point also contains a
+  `waist` object with the exactly rescored incumbent partition cut, best
+  comparable-balance FM cut, waist-node cost, and rebuild attempt/accept flags.
+  Ordinary benchmark sets omit this object and remain byte-compatible with
+  their existing artifacts.
 - `results` is sorted by `(instance, arm)`, independent of manifest order.
 - `format` is the schema version; bump it when a field's meaning changes, so
   that `check.py` refuses to compare artifacts across the change.
@@ -252,9 +268,12 @@ Allowed keys:
 - Set: `arms`, `instances`.
 - Arm `greedy`: none; `{}` is the only legal value.
 - Arm `treesa`: `ntrials`, `niters`.
-- Arm `treesa_rounds`: `ntrials`, `niters`, `rounds` (required).
+- Arm `treesa_rounds`: `ntrials`, `niters`, `rounds` (required), `trace_cuts`
+  (optional; emit the per-round `waist` object).
 - Arm `treesa_surgery_rule`: `ntrials`, `niters`, `probability` (required).
-- Instance: `name`, `path` (repo-root-relative), `treewidth` (required).
+- Instance: `name`, `path` (repo-root-relative), `treewidth` (required),
+  `relabel_seed` (optional; deterministic tensor-order permutation applied
+  before optimization, for independent runs of one instance file).
 
 Any other key is a hard error naming the key. Omitted `ntrials`/`niters` mean
 "use `TreeSA::default()`", which is what the `full` set does.
@@ -273,8 +292,9 @@ the directory, so an instance nobody declared is never silently benchmarked.
 
 ## Scope of the artifact
 
-The `full`, `figure2b`, and `ci` sets are the canonical sources for the paper's
-omeco results. Archived development campaigns may be useful for debugging or
-historical comparison, but they cannot supply manuscript numbers. When a paper
+The `full`, `figure2b`, `waist_trace`, and `ci` sets are the canonical sources
+for the paper's omeco results. Archived development campaigns may be useful
+for debugging or historical comparison, but they cannot supply manuscript
+numbers. When a paper
 table and a fresh current-`master` run disagree, the fresh run wins and the
 paper must be updated.
