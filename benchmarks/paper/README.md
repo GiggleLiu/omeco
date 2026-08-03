@@ -24,14 +24,16 @@ Before a paper run, fetch and verify the revision:
 ```bash
 git fetch origin master
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)"
-test -z "$(git status --porcelain --untracked-files=no)"
+test -z "$(git status --porcelain)"
 ```
 
 Record `git rev-parse HEAD`, the benchmark binary hash, the manifest hash, and
-the output alongside every run. If `origin/master` moves, the paper artifacts
-are stale and must be recomputed before manuscript numbers or figures are
-updated. Revision mismatch is a hard failure; there is no fallback to archived
-campaign data.
+the output alongside every run. If benchmark code, manifests, or instance data
+on `origin/master` change, the paper artifacts are stale and must be recomputed
+before manuscript numbers or figures are updated. A later documentation-only
+or artifact-only commit does not invalidate an unchanged recorded binary and
+input manifest. Revision mismatch at run time is a hard failure; there is no
+fallback to archived campaign data.
 
 This directory is self-contained — manifest, instances, checker:
 
@@ -53,12 +55,11 @@ surface.
 
 ### Instance provenance
 
-`instances/*.json` are copied verbatim from `research/benchmark/targets/` on the
-research branch (`jg/autoresearch`), which is where the paper campaign draws its
-inputs from; the campaign and this benchmark therefore run on the same bytes.
-They live here rather than being referenced across branches so that a checkout
-of this branch alone can reproduce the paper — a benchmark that only runs if you
-also happen to have some other branch checked out is not reproducible.
+`instances/*.json` were copied verbatim from `research/benchmark/targets/` when
+the artifact was assembled. The copies committed on `master` are now canonical:
+a paper run never reads an instance from a research branch. They live here so a
+checkout of `master` alone reproduces the paper — a benchmark that also needs
+some other branch is not reproducible.
 
 The one exception is `petersen`, which is read from the library's own
 `benchmarks/graphs/petersen.json`: it is a shared fixture the rest of the test
