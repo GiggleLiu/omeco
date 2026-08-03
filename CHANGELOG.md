@@ -1,5 +1,9 @@
 # Changelog
 
+All notable changes to omeco are documented here. This file is the single
+authoritative changelog; the mdBook appendix page includes it verbatim.
+omeco adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## 0.2.7 — 2026-07-29
 
 **Default behavior change:** `TreeSA` now runs the structural
@@ -44,3 +48,72 @@ cost). Restore the old behavior with `preprocess: false`.
   mechanism evidence via `make paper-waist-trace`.
 - `Label` now requires `Ord` (all built-in label types already qualify).
 - The Julia behavioral-alignment rule is retired; JSON interop is unchanged.
+
+## 0.2.5 — 2026-06-30
+
+### Added
+- Comprehensive mdBook documentation following tropical-gemm standard
+- Pretty printing for Python `NestedEinsum` with ASCII tree visualization
+- PyTorch integration guide and examples
+- GPU optimization guide with `rw_weight` configuration
+- Slicing strategy guide for memory-constrained environments
+- Troubleshooting guide with common issues and solutions
+- API reference for Python and Rust APIs
+- Performance benchmarks comparing Rust vs Julia
+- Algorithm comparison guide (Greedy vs TreeSA)
+
+### Changed
+- Migrated documentation from scattered markdown files to structured mdBook
+- Improved Python bindings with better `__str__` and `__repr__` methods
+
+### Deprecated
+- Legacy `docs/score_function_guide.md` (migrated to mdBook)
+
+## 0.2.1 — 2024-01
+
+### Fixed
+- **Issue #6**: Hyperedge index preservation in contraction operations ([PR #7](https://github.com/GiggleLiu/omeco/pull/7))
+  - Fixed `contract_tree!` macro to correctly preserve tensor indices during contraction
+  - Added regression tests to verify hyperedge handling
+  - Ensures contraction order matches input tensor order specified in `ixs`
+
+### Added
+- Test suite for hyperedge index preservation
+- CI improvements for better test coverage
+
+## 0.2.0 — 2024-01
+
+### Added
+- TreeSA (Tree-based Simulated Annealing) optimizer
+- `TreeSA.fast()` preset for quick high-quality optimization
+- Slicing support with `TreeSASlicer` for memory reduction
+- `ScoreFunction` for configurable optimization objectives
+- `contraction_complexity` and `sliced_complexity` functions
+- Python bindings via PyO3
+- `optimize_code` generic function accepting optimizer instances
+- Read-write complexity (rwc) metric for GPU optimization
+
+### Changed
+- Improved API ergonomics with preset methods
+- Better default parameters for optimizers
+
+### Performance
+- 1.4-1.5x faster than Julia OMEinsumContractionOrders.jl on benchmarks
+- Efficient TreeSA implementation with better exploration
+
+## 0.1.0 — 2023
+
+### Added
+- Initial release
+- GreedyMethod optimizer
+- Basic contraction order optimization
+- Support for tensor networks with arbitrary indices
+- Complexity calculation (time and space)
+- Rust core library
+- Basic documentation
+
+### Features
+- Greedy algorithm with configurable parameters
+- Stochastic variants for improved solutions
+- Efficient index handling with generic types
+- HashMap-based dimension tracking
