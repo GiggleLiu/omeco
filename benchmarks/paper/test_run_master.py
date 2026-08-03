@@ -22,6 +22,22 @@ def run(*args: str, cwd: Path) -> None:
     subprocess.run(list(args), cwd=str(cwd), check=True, capture_output=True)
 
 
+RUNNER_SCRIPT = """#!/usr/bin/env python3
+import json
+from pathlib import Path
+import sys
+
+args = sys.argv[1:]
+out = Path(args[args.index("--out") + 1])
+set_name = args[args.index("--set") + 1]
+out.write_text(json.dumps({"format": 2, "set": set_name, "results": []}) + "\\n")
+"""
+
+MUTATING_RUNNER_SCRIPT = RUNNER_SCRIPT + """
+Path("instance.json").write_text("mutated\\n")
+"""
+
+
 class MasterGateTests(unittest.TestCase):
     def make_repo(self, root: Path) -> Path:
         remote = root / "remote.git"
@@ -100,6 +116,20 @@ class MasterGateTests(unittest.TestCase):
             self.assertEqual(manifest_rel, "manifest.json")
             self.assertEqual([path for path, _ in inputs], ["instance.json"])
 
+    def test_load_inputs_rejects_non_object_set(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            checkout = self.make_repo(Path(directory))
+            manifest = checkout / "manifest.json"
+            manifest.write_text(json.dumps({"sets": {"paper": ["not-an-object"]}}))
+            with self.assertRaisesRegex(run_master.GateError, "not an object"):
+                run_master.load_inputs(checkout, manifest, "paper", checkout)
+
+    def test_input_bundle_rejects_unreadable_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.json"
+            with self.assertRaisesRegex(run_master.GateError, "cannot read paper input"):
+                run_master.input_bundle([("missing.json", missing)])
+
     def test_write_atomic_replaces_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "record.json"
@@ -108,74 +138,67 @@ class MasterGateTests(unittest.TestCase):
             self.assertEqual(output.read_bytes(), b"new\n")
             self.assertEqual(list(output.parent.glob(".record.json.*.tmp")), [])
 
+    def make_cli_fixture(self, root: Path, runner_script: str) -> Path:
+        checkout = self.make_repo(root)
+        paper = checkout / "benchmarks/paper"
+        paper.mkdir(parents=True)
+        shutil.copyfile(MODULE_PATH, paper / "run_master.py")
+        (checkout / ".gitignore").write_text("/target/\n")
+        (checkout / "instance.json").write_text("{}\n")
+        (checkout / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "sets": {
+                        "paper": {
+                            "instances": [{"name": "one", "path": "instance.json"}]
+                        }
+                    }
+                }
+            )
+        )
+        fake_cargo = checkout / "fake_cargo.py"
+        fake_cargo.write_text(
+            "#!/usr/bin/env python3\n"
+            "from pathlib import Path\n"
+            "runner = Path('target/release/examples/paper_bench')\n"
+            "runner.parent.mkdir(parents=True, exist_ok=True)\n"
+            f"runner.write_text({runner_script!r})\n"
+            "runner.chmod(0o755)\n"
+        )
+        fake_cargo.chmod(0o755)
+        run("git", "add", ".", cwd=checkout)
+        run("git", "commit", "-m", "add paper gate fixture", cwd=checkout)
+        run("git", "push", "origin", "master", cwd=checkout)
+        return checkout
+
+    def run_cli(self, checkout: Path, output: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(checkout / "benchmarks/paper/run_master.py"),
+                "--manifest",
+                str(checkout / "manifest.json"),
+                "--set",
+                "paper",
+                "--out",
+                str(output),
+                "--repo-root",
+                str(checkout),
+                "--cargo",
+                str(checkout / "fake_cargo.py"),
+            ],
+            cwd=str(checkout),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
     def test_cli_publishes_artifact_and_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            checkout = self.make_repo(root)
-            paper = checkout / "benchmarks/paper"
-            paper.mkdir(parents=True)
-            shutil.copyfile(MODULE_PATH, paper / "run_master.py")
-            (checkout / ".gitignore").write_text("/target/\n")
-            (checkout / "instance.json").write_text("{}\n")
-            (checkout / "manifest.json").write_text(
-                json.dumps(
-                    {
-                        "sets": {
-                            "paper": {
-                                "instances": [
-                                    {"name": "one", "path": "instance.json"}
-                                ]
-                            }
-                        }
-                    }
-                )
-            )
-            fake_cargo = checkout / "fake_cargo.py"
-            fake_cargo.write_text(
-                """#!/usr/bin/env python3
-from pathlib import Path
-
-runner = Path("target/release/examples/paper_bench")
-runner.parent.mkdir(parents=True, exist_ok=True)
-runner.write_text('''#!/usr/bin/env python3
-import json
-from pathlib import Path
-import sys
-
-args = sys.argv[1:]
-out = Path(args[args.index("--out") + 1])
-set_name = args[args.index("--set") + 1]
-out.write_text(json.dumps({"format": 2, "set": set_name, "results": []}) + "\\\\n")
-''')
-runner.chmod(0o755)
-"""
-            )
-            fake_cargo.chmod(0o755)
-            run("git", "add", ".", cwd=checkout)
-            run("git", "commit", "-m", "add paper gate fixture", cwd=checkout)
-            run("git", "push", "origin", "master", cwd=checkout)
-
+            checkout = self.make_cli_fixture(root, RUNNER_SCRIPT)
             output = root / "paper.json"
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(paper / "run_master.py"),
-                    "--manifest",
-                    str(checkout / "manifest.json"),
-                    "--set",
-                    "paper",
-                    "--out",
-                    str(output),
-                    "--repo-root",
-                    str(checkout),
-                    "--cargo",
-                    str(fake_cargo),
-                ],
-                cwd=str(checkout),
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            result = self.run_cli(checkout, output)
             self.assertEqual(result.returncode, 0, result.stderr)
             provenance = Path(f"{output}.provenance.json")
             record = json.loads(provenance.read_text())
@@ -187,6 +210,17 @@ runner.chmod(0o755)
             self.assertEqual(len(record["binary_sha256"]), 64)
             self.assertEqual(len(record["manifest"]["sha256"]), 64)
             self.assertEqual(len(record["inputs_sha256"]), 64)
+
+    def test_cli_rejects_input_mutation_during_benchmark(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkout = self.make_cli_fixture(root, MUTATING_RUNNER_SCRIPT)
+            output = root / "paper.json"
+            result = self.run_cli(checkout, output)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("changed during the benchmark run", result.stderr)
+            self.assertFalse(output.exists())
+            self.assertFalse(Path(f"{output}.provenance.json").exists())
 
 
 if __name__ == "__main__":

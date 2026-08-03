@@ -102,10 +102,13 @@ def load_inputs(
         manifest = json.loads(manifest_path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         fail(f"cannot read manifest {manifest_path}: {exc}")
-    sets = manifest.get("sets")
+    sets = manifest.get("sets") if isinstance(manifest, dict) else None
     if not isinstance(sets, dict) or set_name not in sets:
         fail(f"manifest has no set {set_name!r}")
-    instances = sets[set_name].get("instances")
+    selected = sets[set_name]
+    if not isinstance(selected, dict):
+        fail(f"set {set_name!r} is not an object")
+    instances = selected.get("instances")
     if not isinstance(instances, list) or not instances:
         fail(f"set {set_name!r} has no instances")
     inputs: List[Tuple[str, Path]] = []
@@ -142,7 +145,10 @@ def input_bundle(inputs: Sequence[Tuple[str, Path]]) -> Tuple[str, List[Dict[str
     digest.update(b"omeco-paper-inputs-v1\0")
     entries = []
     for relative, path in sorted(inputs, key=lambda item: item[0]):
-        data = path.read_bytes()
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            fail(f"cannot read paper input {path}: {exc}")
         path_bytes = relative.encode("utf-8")
         digest.update(len(path_bytes).to_bytes(8, "big"))
         digest.update(path_bytes)
@@ -150,6 +156,26 @@ def input_bundle(inputs: Sequence[Tuple[str, Path]]) -> Tuple[str, List[Dict[str
         digest.update(data)
         entries.append({"path": relative, "sha256": hashlib.sha256(data).hexdigest()})
     return digest.hexdigest(), entries
+
+
+def verify_unchanged(
+    repo: Path,
+    revision: str,
+    manifest_path: Path,
+    inputs: Sequence[Tuple[str, Path]],
+    manifest_hash: str,
+    inputs_hash: str,
+) -> None:
+    head = git(repo, "rev-parse", "HEAD")
+    if head != revision:
+        fail(f"HEAD moved during the benchmark run: {head} is not {revision}")
+    dirty = git(repo, "status", "--porcelain", "--untracked-files=all")
+    if dirty:
+        fail(f"checkout changed during the benchmark run:\n{dirty}")
+    if sha256_file(manifest_path) != manifest_hash:
+        fail(f"manifest changed during the benchmark run: {manifest_path}")
+    if input_bundle(inputs)[0] != inputs_hash:
+        fail("paper inputs changed during the benchmark run")
 
 
 def write_atomic(path: Path, data: bytes) -> None:
@@ -188,7 +214,6 @@ def main() -> None:
     repo_root = args.repo_root.resolve()
     output = args.out.resolve()
     provenance = Path(f"{output}.provenance.json")
-    temporary_output = None
     try:
         revision = verify_master(REPO)
         manifest_rel, inputs = load_inputs(REPO, manifest, args.set, repo_root)
@@ -208,52 +233,49 @@ def main() -> None:
             binary = binary.with_suffix(".exe")
         binary_hash = sha256_file(binary)
 
-        output.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary_name = tempfile.mkstemp(
-            prefix=f".{output.name}.", suffix=".tmp", dir=str(output.parent)
-        )
-        os.close(descriptor)
-        os.unlink(temporary_name)
-        temporary_output = Path(temporary_name)
-        command(
-            [
-                str(binary),
-                "--manifest",
-                str(manifest),
-                "--set",
-                args.set,
-                "--out",
-                str(temporary_output),
-                "--repo-root",
-                str(repo_root),
-            ],
-            REPO,
-        )
-        output_hash = sha256_file(temporary_output)
-        record = {
-            "format": FORMAT,
-            "revision": revision,
-            "set": args.set,
-            "binary_sha256": binary_hash,
-            "manifest": {"path": manifest_rel, "sha256": manifest_hash},
-            "inputs_sha256": inputs_hash,
-            "inputs": input_entries,
-            "output": {"path": output.name, "sha256": output_hash},
-        }
-        provenance_bytes = (json.dumps(record, indent=2, sort_keys=True) + "\n").encode()
-        os.replace(temporary_output, output)
-        temporary_output = None
-        write_atomic(provenance, provenance_bytes)
+        with tempfile.TemporaryDirectory(prefix="omeco-paper-run.") as scratch:
+            temporary_output = Path(scratch) / output.name
+            command(
+                [
+                    str(binary),
+                    "--manifest",
+                    str(manifest),
+                    "--set",
+                    args.set,
+                    "--out",
+                    str(temporary_output),
+                    "--repo-root",
+                    str(repo_root),
+                ],
+                REPO,
+            )
+            verify_unchanged(
+                REPO, revision, manifest, inputs, manifest_hash, inputs_hash
+            )
+            try:
+                output_bytes = temporary_output.read_bytes()
+            except OSError as exc:
+                fail(f"cannot read benchmark output {temporary_output}: {exc}")
+            output_hash = hashlib.sha256(output_bytes).hexdigest()
+            record = {
+                "format": FORMAT,
+                "revision": revision,
+                "set": args.set,
+                "binary_sha256": binary_hash,
+                "manifest": {"path": manifest_rel, "sha256": manifest_hash},
+                "inputs_sha256": inputs_hash,
+                "inputs": input_entries,
+                "output": {"path": output.name, "sha256": output_hash},
+            }
+            provenance_bytes = (
+                json.dumps(record, indent=2, sort_keys=True) + "\n"
+            ).encode()
+            write_atomic(output, output_bytes)
+            write_atomic(provenance, provenance_bytes)
         print(f"wrote {output}")
         print(f"wrote {provenance}")
     except GateError as exc:
         raise SystemExit(f"run_master.py: FAIL: {exc}") from exc
-    finally:
-        if temporary_output is not None:
-            try:
-                temporary_output.unlink()
-            except FileNotFoundError:
-                pass
 
 
 if __name__ == "__main__":
