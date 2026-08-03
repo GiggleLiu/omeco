@@ -209,7 +209,10 @@ random circuit costs time and reports nothing anyone wants to read.
   trace from `RoundsReport::round_trace`: the retained incumbent before the
   round, the surgery candidate, the fine-tuning endpoint, and the retained
   incumbent afterward. `tc_after_anneal` may be worse after fine tuning, but
-  `tc_retained` cannot increase and is the tree used by the next round.
+  `score_retained` cannot exceed `score_before` and identifies the tree used by
+  the next round. `tc_retained` is the time complexity of that tree; it can
+  rise when the configured multi-objective score instead improves its space or
+  read-write term. Trace-enabled sets emit both score fields explicitly.
   `surgery_accepted` marks the rebuild events plotted as crosses in the paper's
   Figure 2(b).
 - When the manifest sets `trace_cuts: true`, each curve point also contains a
