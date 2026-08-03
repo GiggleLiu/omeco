@@ -8,7 +8,6 @@ from pathlib import Path
 
 
 PRE_SURGERY_RECORD = 47.824
-OFFICIAL_MEDIAN = 47.377
 
 
 def fail(message: str) -> None:
@@ -33,7 +32,7 @@ def main() -> None:
     left, right, top, bottom = 92, 28, 76, 78
     plot_width = width - left - right
     plot_height = height - top - bottom
-    y_values = [rows["treesa"]["tc"], PRE_SURGERY_RECORD, OFFICIAL_MEDIAN]
+    y_values = [rows["treesa"]["tc"], PRE_SURGERY_RECORD]
     for point in curve:
         y_values.extend(
             [
@@ -92,14 +91,10 @@ def main() -> None:
         ]
     )
 
-    for value, color, dash in [
-        (PRE_SURGERY_RECORD, "#222", "3 5"),
-        (OFFICIAL_MEDIAN, "#cc3311", "9 4 2 4"),
-    ]:
-        yy = y(value)
-        svg.append(
-            f'<line x1="{left}" y1="{yy:.2f}" x2="{width-right}" y2="{yy:.2f}" stroke="{color}" stroke-width="1.5" stroke-dasharray="{dash}"/>'
-        )
+    record_y = y(PRE_SURGERY_RECORD)
+    svg.append(
+        f'<line x1="{left}" y1="{record_y:.2f}" x2="{width-right}" y2="{record_y:.2f}" stroke="#222" stroke-width="1.5" stroke-dasharray="3 5"/>'
+    )
 
     retained = [(0.0, rows["treesa"]["tc"])]
     retained.extend((point["round"] + 1.0, point["tc_retained"]) for point in curve)
@@ -131,7 +126,6 @@ def main() -> None:
             f'<circle cx="{legend_x+14}" cy="{legend_y+22}" r="3.1" fill="white" stroke="#777" stroke-width="1.3"/><text x="{legend_x+38}" y="{legend_y+26}" font-size="12">raw fine-tuning endpoint</text>',
             f'<path d="M {legend_x+9} {legend_y+39} l 10 10 m -10 0 l 10 -10" stroke="#cc3311" stroke-width="2.2"/><text x="{legend_x+38}" y="{legend_y+48}" font-size="12">accepted waist rebuild</text>',
             f'<line x1="{legend_x}" y1="{legend_y+66}" x2="{legend_x+28}" y2="{legend_y+66}" stroke="#222" stroke-width="1.5" stroke-dasharray="3 5"/><text x="{legend_x+38}" y="{legend_y+70}" font-size="12">pre-surgery record 47.824</text>',
-            f'<line x1="{legend_x+190}" y1="{legend_y+66}" x2="{legend_x+218}" y2="{legend_y+66}" stroke="#cc3311" stroke-width="1.5" stroke-dasharray="9 4 2 4"/><text x="{legend_x+228}" y="{legend_y+70}" font-size="12">official median 47.377</text>',
             f'<text x="{left}" y="{height-5}" font-size="10" fill="#555">Source: {esc(source.name)}; final retained tc = {rows["treesa_rounds"]["tc"]:.6f}</text>',
             "</g></svg>",
         ]

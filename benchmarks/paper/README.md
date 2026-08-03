@@ -1,19 +1,44 @@
 # Paper benchmark artifact
 
 Every number in the paper's released-artifact table is produced here, by the
-released library, on the reader's own machine. There is no reference host and no
-recorded oracle: the artifact is a *program plus a manifest*, and reproducing
-that table means running it. The `figure2b` set separately reproduces the
-surface-code mechanism panel with a deterministic 32-round work budget: it
-must cross the panel's pre-surgery record and show an accepted rebuild causing
-a drop. It must also expose at least one uphill fine-tuning endpoint separately
-from the monotone retained incumbent. The broader headline campaign remains a
-wall-clock-budgeted measurement on one fixed host; see
-[Calibration vs the frozen campaign](#calibration-vs-the-frozen-campaign) for
-the size of the gap and why it is there. The outputs under `expected/` are committed only so that
-they can be *re-derived* — CI regenerates the `ci` one on every push and fails on
-a single changed field, so a committed number can never quietly drift away from
-what the code does.
+current `master` library, on the reader's own machine. There is no reference
+host and no recorded oracle: the artifact is a *program plus a manifest*, and
+reproducing that table means running it. The `figure2b` set separately
+reproduces the surface-code mechanism panel with a deterministic 32-round work
+budget: it must cross the panel's pre-surgery record and show an accepted
+rebuild causing a drop. It must also expose at least one uphill fine-tuning
+endpoint separately from the monotone retained incumbent. The outputs under
+`expected/` are committed only so that they can be *re-derived* — CI
+regenerates the `ci` one on every push and fails on a single changed field, so
+a committed number can never quietly drift away from what the code does.
+
+## Master revision hard gate
+
+**The paper always tracks the current `master` revision.** A paper run must be
+made from a clean checkout of the commit currently at `origin/master`, and its
+results remain valid only while the benchmark-relevant content of
+`origin/master` — benchmark code, manifests, and instance data — still matches
+the run's recorded binary and input manifest. Results from a historical pin,
+research branch, attempt worktree, patched source tree, or stale local `master`
+are not paper data.
+
+`run_master.py` enforces this gate. Its checks are equivalent to:
+
+```bash
+git fetch origin master
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)" \
+    || { echo "HEAD is not at origin/master" >&2; exit 1; }
+test -z "$(git status --porcelain)" \
+    || { echo "working tree is not clean" >&2; exit 1; }
+```
+
+The wrapper builds the runner and records the revision plus binary, manifest,
+selected-input, and output hashes in `<output>.provenance.json`. If benchmark
+code, manifests, or instance data on `origin/master` change, the paper artifacts
+are stale and must be recomputed before manuscript numbers or figures are
+updated. A later documentation-only or artifact-only commit does not invalidate
+an unchanged recorded binary and input manifest. Revision mismatch at run time
+is a hard failure; there is no fallback to archived campaign data.
 
 This directory is self-contained — manifest, instances, checker:
 
@@ -24,6 +49,8 @@ This directory is self-contained — manifest, instances, checker:
 | `expected/ci.json` | The `ci` set's output, re-derived and compared by `make paper-bench-check` (and by CI). `expected/full.json` is what `make paper-bench` writes. |
 | `expected/figure2b.json` | The 32-round surface-code reproduction, checked numerically and by the Figure 2(b) semantic contract. |
 | `expected/figure2b.svg` | Static fixed-work rendering of that JSON: retained incumbent, raw fine-tuning endpoints, and accepted rebuilds. |
+| `run_master.py` | Enforces current clean `origin/master`, builds the runner, and emits deterministic provenance. |
+| `test_run_master.py` | Unit tests for revision, cleanliness, tracking, hashing, and atomic-write behavior. |
 | `check.py` | Compares two artifacts and exits nonzero on any disagreement. Standard library only, Python 3.8+. |
 | `verify_figure2b.py` | Verifies the record crossing, incumbent ratchet, and accepted-rebuild mechanism. |
 | `plot_figure2b.py` | Renders the checked JSON as a dependency-free vector figure. |
@@ -35,12 +62,11 @@ surface.
 
 ### Instance provenance
 
-`instances/*.json` are copied verbatim from `research/benchmark/targets/` on the
-research branch (`jg/autoresearch`), which is where the paper campaign draws its
-inputs from; the campaign and this benchmark therefore run on the same bytes.
-They live here rather than being referenced across branches so that a checkout
-of this branch alone can reproduce the paper — a benchmark that only runs if you
-also happen to have some other branch checked out is not reproducible.
+`instances/*.json` were copied verbatim from `research/benchmark/targets/` when
+the artifact was assembled. The copies committed on `master` are now canonical:
+a paper run never reads an instance from a research branch. They live here so a
+checkout of `master` alone reproduces the paper — a benchmark that also needs
+some other branch is not reproducible.
 
 The one exception is `petersen`, which is read from the library's own
 `benchmarks/graphs/petersen.json`: it is a shared fixture the rest of the test
@@ -61,48 +87,48 @@ with integer labels. `description` records where each network came from.
 From the repository root:
 
 ```bash
-# Small set: the one CI runs on every push (under a minute on a modern laptop).
-cargo run --release --example paper_bench -p omeco -- \
-    --manifest benchmarks/paper/manifest.json \
+# Small master set.
+python3 benchmarks/paper/run_master.py \
     --set ci \
     --out ci.json
 
-# The paper's set. ~21 min on an Apple-silicon laptop; the large instances dominate.
-cargo run --release --example paper_bench -p omeco -- \
-    --manifest benchmarks/paper/manifest.json \
+# The paper's full set; the large instances dominate.
+python3 benchmarks/paper/run_master.py \
     --set full \
     --out full.json
 
 # Figure 2(b): deterministic surfacecode_d21 trajectory (32 rounds).
-cargo run --release --example paper_bench -p omeco -- \
-    --manifest benchmarks/paper/manifest.json \
+python3 benchmarks/paper/run_master.py \
     --set figure2b \
     --out figure2b.json
 python3 benchmarks/paper/verify_figure2b.py figure2b.json
 python3 benchmarks/paper/plot_figure2b.py figure2b.json figure2b.svg
 ```
 
-Flags:
+The wrapper defaults to `benchmarks/paper/manifest.json` and the repository
+root. Its flags are:
 
-- `--manifest <file>` — manifest to read (required).
+- `--manifest <file>` — tracked manifest to read.
 - `--set <name>` — set within the manifest, `ci`, `figure2b`, or `full` (required).
 - `--out <file>` — where to write the JSON artifact (required).
 - `--repo-root <dir>` — root that instance paths in the manifest resolve
-  against. Defaults to `.`, so the commands above must be run from the
-  repository root; pass it explicitly to run from elsewhere.
+  against; every selected instance must remain inside and tracked by this
+  checkout.
+- `--cargo <path>` — Cargo executable; defaults to `$CARGO`, then `cargo`.
 
-Progress goes to stderr, the artifact to `--out`. Anything the user can get
-wrong — an unknown flag, a missing instance file, malformed JSON, a mistyped
-manifest key — prints a message naming the problem and exits with status **2**.
-The runner never reports a typo by silently falling back to a default.
+The wrapper writes the artifact to `--out` and the provenance sidecar to
+`<out>.provenance.json`. It publishes neither file from a failed run. The
+underlying Rust runner remains directly available for CI regression checks and
+development, but its ungated output is not paper data.
 
-Four Make targets wrap the same commands:
+Five Make targets wrap the benchmark workflow:
 
 ```bash
 make paper-bench-check  # ci set -> a temporary file -> check.py against expected/ci.json
+make paper-master-gate-test  # unit-test the revision/provenance gate
 make paper-figure2b-check  # 32 rounds -> semantic verifier + exact artifact check
 make paper-figure2b-plot   # committed JSON -> publication-ready static SVG
-make paper-bench        # full set -> expected/full.json (~21 min, see below)
+make paper-bench        # gated full set -> expected/full.json + provenance
 ```
 
 To compare two artifacts:
@@ -245,51 +271,10 @@ Adding an instance means adding a file to `instances/` and a row to the
 manifest — the runner has no instance list of its own and no discovery pass over
 the directory, so an instance nobody declared is never silently benchmarked.
 
-## Calibration vs the frozen campaign
+## Scope of the artifact
 
-The current format-2 full set took 1289.1 s (21.5 minutes) for 40 results on
-the Huawei benchmark host; the slowest single instance × arm was
-`nqueens_28`'s `treesa_rounds` at 220.7 s.
-
-The paper's headline numbers come from a wall-clock-budgeted campaign on a
-fixed host, not from this artifact. It is worth knowing how far apart the two
-are, so here are three instances side by side. Campaign values are the *best*
-`tc` recorded anywhere in the paper repository's `data/huawei_campaign.json`
-for that instance; `treesa_rounds` values are the committed `expected/full.json`
-rows produced by the `full` set (`TreeSA::default()`, `rounds: 8`).
-
-| Instance | Campaign best tc (huawei, wall-clock budget) | `treesa_rounds` tc (rounds = 8, deterministic) | Gap |
-|---|---|---|---|
-| `surfacecode_d13` | 30.485 — `p4_family["13"]`, the surface-code family sweep: 5 reps at the 90 s budget, both methods tie | 30.557 | +0.072 |
-| `surfacecode_d21` | 47.364 — `p2_budget_scaling`, our TreeSA baseline (`ref`) at the 900 s budget | 48.395 | +1.031 |
-| `ksg` | 36.356 — `p3_distributions`, best of 15 reps at the 90 s budget | 37.016 | +0.660 |
-
-(The campaign file records `tc` only, so there is no `sc` column to compare;
-this artifact's `sc` for the three rows is 24, 40 and 30 respectively.)
-
-The gaps are expected and they are not a defect. The two sides are budgeted by
-different quantities: `rounds` is a *schedule* budget — eight rounds is eight
-rounds on any machine, forever — while the campaign gave each attempt a fixed
-number of seconds on one 2-core x86 VM and took the best of many repetitions.
-A wall-clock budget buys more search on a faster host and less on a slower one,
-which is exactly the property this artifact is built to *not* have. What
-`expected/full.json` claims is bit-reproducibility: run the same commit on the
-same machine and you get the same file. Across machines the claim is weaker and
-partly untested — agreement to `1e-9` is *confirmed* across the Huawei host and
-Apple silicon for both the `ci` and `figure2b` sets. `full.json` was generated
-on Huawei and is expected to agree by the same mechanism, but its complete
-cross-platform rerun remains unchecked. The eight-round `full` set does not
-claim to reproduce a record. The 32-round `figure2b` set does cross the panel's
-47.824 pre-surgery record at 47.813971 while preserving a fixed work budget;
-it does not claim the campaign's 47.377 median.
-
-## Frozen campaign data
-
-This directory reproduces the numbers. It does not archive them. The frozen
-per-run campaign data behind the published figures — every trial's score, timing
-and provenance, far more than the summary tables show — lives with the
-manuscript, in the paper repository
-(<https://github.com/GiggleLiu/contraction-order-frontiers>, private). When a
-paper table and a fresh `paper_bench` run disagree, the paper repository says
-which library revision produced the table; this directory says what the current
-one does.
+The `full`, `figure2b`, and `ci` sets are the canonical sources for the paper's
+omeco results. Archived development campaigns may be useful for debugging or
+historical comparison, but they cannot supply manuscript numbers. When a paper
+table and a fresh current-`master` run disagree, the fresh run wins and the
+paper must be updated.

@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark paper-bench paper-bench-check paper-figure2b-check paper-figure2b-plot version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
+.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark paper-bench paper-bench-check paper-master-gate-test paper-figure2b-check paper-figure2b-plot version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
 
 CARGO ?= cargo
 PYTHON ?= python3
@@ -10,6 +10,8 @@ DOC_CRATE ?= omeco
 # Paper benchmark runner (see benchmarks/paper/README.md); run from the repo root
 PAPER_BENCH = $(CARGO) run --release --example paper_bench -p omeco -- \
 	--manifest benchmarks/paper/manifest.json
+PAPER_MASTER = $(PYTHON) benchmarks/paper/run_master.py \
+	--manifest benchmarks/paper/manifest.json --cargo $(CARGO)
 
 # Extract current version from omeco/Cargo.toml
 VERSION := $(shell grep -m1 '^version' omeco/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
@@ -44,6 +46,7 @@ help:
 	@printf "  benchmark         Run Python vs Julia benchmark\n"
 	@printf "  paper-bench       Regenerate the committed full paper benchmark artifact\n"
 	@printf "  paper-bench-check Re-run the ci set and verify it against the committed artifact\n"
+	@printf "  paper-master-gate-test Test the master revision and provenance gate\n"
 	@printf "  paper-figure2b-check Reproduce the Figure 2(b) surface-code trajectory\n"
 	@printf "  paper-figure2b-plot  Render the committed Figure 2(b) trajectory as SVG\n"
 	@printf "\nRelease targets:\n"
@@ -120,12 +123,15 @@ benchmark: python-dev
 # `paper-bench-check` re-runs the small ci set and compares it against the
 # committed artifact. The temporary artifact goes to $TMPDIR, never a fixed path.
 paper-bench:
-	$(PAPER_BENCH) --set full --out benchmarks/paper/expected/full.json
+	$(PAPER_MASTER) --set full --out benchmarks/paper/expected/full.json
 
 paper-bench-check:
 	@tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
 	$(PAPER_BENCH) --set ci --out "$$tmp" && \
 	$(PYTHON) benchmarks/paper/check.py "$$tmp" benchmarks/paper/expected/ci.json
+
+paper-master-gate-test:
+	$(PYTHON) -m unittest discover -s benchmarks/paper -p 'test_*.py' -v
 
 paper-figure2b-check:
 	@tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
