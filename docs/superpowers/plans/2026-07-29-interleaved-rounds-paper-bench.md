@@ -1,6 +1,7 @@
 # Interleaved Rounds + Paper Bench Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Historical implementation record. OMECO no longer owns the benchmark
+> workflow below; see the [Unreleased changelog](../../../CHANGELOG.md#unreleased).
 
 **Goal:** Upgrade `TreeSA::surgery_iters` to the paper's interleaved Algorithm-1 rounds (surgery step + warm-started outer anneal, fully deterministic), and add a committed, CI-verified paper-benchmark artifact.
 

@@ -1,5 +1,8 @@
 # Interleaved anneal–surgery rounds + reproducible paper benchmark
 
+> Historical design record. OMECO no longer owns the benchmark workflow below;
+> see the [Unreleased changelog](../../../CHANGELOG.md#unreleased).
+
 Date: 2026-07-29. Approved by the maintainer in-session ("implement this plan
 directly"). Builds on the usability spec
 (`2026-07-29-usability-post-alignment-design.md`) and stacks on branch
