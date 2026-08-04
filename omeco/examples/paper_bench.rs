@@ -60,6 +60,9 @@ struct Manifest {
 struct SetSpec {
     arms: ArmsSpec,
     instances: Vec<InstanceSpec>,
+    /// Record per-arm algorithm wall time. This is publication metadata, not
+    /// an optimizer budget or stopping rule.
+    record_time: Option<bool>,
 }
 
 /// The arms a set may request. Modelled as a struct rather than a map so that
@@ -168,6 +171,9 @@ struct ResultRow {
     tc: f64,
     sc: f64,
     rwc: f64,
+    /// Algorithm wall time, emitted only by timing-enabled benchmark sets.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    elapsed_s: Option<f64>,
     /// Per-round retained-incumbent trace, emitted by `treesa_rounds` only.
     #[serde(skip_serializing_if = "Option::is_none")]
     curve: Option<Vec<CurvePoint>>,
@@ -335,6 +341,7 @@ fn row(
     tree: &NestedEinsum<usize>,
     code: &EinCode<usize>,
     sizes: &HashMap<usize, usize>,
+    elapsed_s: Option<f64>,
     curve: Option<Vec<CurvePoint>>,
 ) -> ResultRow {
     let cc = contraction_complexity(tree, sizes, &code.ixs);
@@ -344,8 +351,13 @@ fn row(
         tc: round6(cc.tc),
         sc: round6(cc.sc),
         rwc: round6(cc.rwc),
+        elapsed_s,
         curve,
     }
+}
+
+fn measured_elapsed(record_time: bool, started: &Instant) -> Option<f64> {
+    record_time.then(|| round6(started.elapsed().as_secs_f64()))
 }
 
 /// Run every arm the set requests on one instance.
@@ -354,6 +366,7 @@ fn run_instance(
     arms: &ArmsSpec,
     code: &EinCode<usize>,
     sizes: &HashMap<usize, usize>,
+    record_time: bool,
 ) -> Vec<ResultRow> {
     let mut rows = Vec::new();
     let optimized = |tree: Option<NestedEinsum<usize>>, arm: &str| match tree {
@@ -370,7 +383,15 @@ fn run_instance(
             optimize_code(code, sizes, &GreedyMethod::default()),
             "greedy",
         );
-        rows.push(row(&spec.name, "greedy", &tree, code, sizes, None));
+        rows.push(row(
+            &spec.name,
+            "greedy",
+            &tree,
+            code,
+            sizes,
+            measured_elapsed(record_time, &started),
+            None,
+        ));
         report_progress(&spec.name, "greedy", started);
     }
 
@@ -378,7 +399,15 @@ fn run_instance(
         let started = Instant::now();
         let config = treesa_config(arm.ntrials, arm.niters);
         let tree = optimized(optimize_code(code, sizes, &config), "treesa");
-        rows.push(row(&spec.name, "treesa", &tree, code, sizes, None));
+        rows.push(row(
+            &spec.name,
+            "treesa",
+            &tree,
+            code,
+            sizes,
+            measured_elapsed(record_time, &started),
+            None,
+        ));
         report_progress(&spec.name, "treesa", started);
     }
 
@@ -428,6 +457,7 @@ fn run_instance(
             &tree,
             code,
             sizes,
+            measured_elapsed(record_time, &started),
             Some(curve),
         ));
         report_progress(&spec.name, "treesa_rounds", started);
@@ -450,6 +480,7 @@ fn run_instance(
             &tree,
             code,
             sizes,
+            measured_elapsed(record_time, &started),
             None,
         ));
         report_progress(&spec.name, "treesa_surgery_rule", started);
@@ -461,7 +492,15 @@ fn run_instance(
             optimize_code(code, sizes, &Treewidth::default()),
             "treewidth",
         );
-        rows.push(row(&spec.name, "treewidth", &tree, code, sizes, None));
+        rows.push(row(
+            &spec.name,
+            "treewidth",
+            &tree,
+            code,
+            sizes,
+            measured_elapsed(record_time, &started),
+            None,
+        ));
         report_progress(&spec.name, "treewidth", started);
     }
 
@@ -497,7 +536,13 @@ fn main() {
         let path = args.repo_root.join(&spec.path);
         let data: InstanceData = read_json(&path, "instance");
         let (code, sizes) = build_instance(data, &path, spec.relabel_seed);
-        results.extend(run_instance(spec, &set.arms, &code, &sizes));
+        results.extend(run_instance(
+            spec,
+            &set.arms,
+            &code,
+            &sizes,
+            set.record_time.unwrap_or(false),
+        ));
     }
 
     // Row order must not depend on manifest order or on iteration order
@@ -529,7 +574,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{permute_tensors, CurvePoint, RoundsArm};
+    use super::{permute_tensors, CurvePoint, ResultRow, RoundsArm};
 
     #[test]
     fn tensor_relabeling_is_seeded_and_deterministic() {
@@ -586,5 +631,23 @@ mod tests {
         let traced = serde_json::to_value(point(Some(2.0), Some(1.5))).unwrap();
         assert_eq!(traced["score_before"], 2.0);
         assert_eq!(traced["score_retained"], 1.5);
+    }
+
+    #[test]
+    fn elapsed_time_is_an_opt_in_artifact_field() {
+        let result = |elapsed_s| ResultRow {
+            instance: "test".to_string(),
+            arm: "treesa".to_string(),
+            tc: 1.0,
+            sc: 1.0,
+            rwc: 1.0,
+            elapsed_s,
+            curve: None,
+        };
+
+        let ordinary = serde_json::to_value(result(None)).unwrap();
+        assert!(ordinary.get("elapsed_s").is_none());
+        let timed = serde_json::to_value(result(Some(2.5))).unwrap();
+        assert_eq!(timed["elapsed_s"], 2.5);
     }
 }

@@ -58,6 +58,7 @@ This directory is self-contained — manifest, instances, checker:
 | `check.py` | Compares two artifacts and exits nonzero on any disagreement. Standard library only, Python 3.8+. |
 | `verify_figure2b.py` | Verifies the record crossing, configured-score ratchet, and accepted-rebuild mechanism. |
 | `verify_waist_trace.py` | Verifies the `waist_trace` set: ten 128-round trajectories, per-round waist/FM cut invariants, and the rebuild gate/acceptance flags. |
+| `verify_pareto.py` | Verifies the six fixed-work Pareto sets, their measured wall times, and the configured-score ordering across round counts. |
 | `plot_figure2b.py` | Renders the checked JSON as a dependency-free vector figure. |
 | `README.md` | This file. |
 
@@ -114,13 +115,26 @@ python3 benchmarks/paper/run_master.py \
     --set waist_trace \
     --out waist_trace.json
 python3 benchmarks/paper/verify_waist_trace.py waist_trace.json
+
+# Time-versus-quality Pareto inputs. Work is fixed at 0/1/2/4/8/24
+# rounds; elapsed time is measured, never used as an optimizer deadline.
+pareto_dir=$(mktemp -d)
+for rounds in 0 1 2 4 8 24; do
+  python3 benchmarks/paper/run_master.py \
+    --set "pareto_r${rounds}" \
+    --out "${pareto_dir}/pareto_r${rounds}.json"
+done
+python3 benchmarks/paper/verify_pareto.py \
+  "${pareto_dir}"/pareto_r{0,1,2,4,8,24}.json
 ```
 
 The wrapper defaults to `benchmarks/paper/manifest.json` and the repository
 root. Its flags are:
 
 - `--manifest <file>` — tracked manifest to read.
-- `--set <name>` — set within the manifest: `ci`, `figure2b`, `waist_trace`, or `full` (required).
+- `--set <name>` — set within the manifest: `ci`, `figure2b`, `waist_trace`,
+  `pareto_r0`, `pareto_r1`, `pareto_r2`, `pareto_r4`, `pareto_r8`,
+  `pareto_r24`, or `full` (required).
 - `--out <file>` — where to write the JSON artifact (required).
 - `--repo-root <dir>` — root that instance paths in the manifest resolve
   against; every selected instance must remain inside and tracked by this
@@ -206,6 +220,9 @@ random circuit costs time and reports nothing anyone wants to read.
 ```
 
 - `tc`, `sc`, `rwc` are `contraction_complexity` in log2 scale.
+- `elapsed_s` appears only when a set enables `record_time`. It measures the
+  arm's algorithm wall time. The Pareto sets use fixed work and merely observe
+  this duration; it is not a timer, deadline, or stopping rule inside TreeSA.
 - `curve` appears on `treesa_rounds` rows only. It is the log2 time-complexity
   trace from `RoundsReport::round_trace`: the retained incumbent before the
   round, the surgery candidate, the fine-tuning endpoint, and the retained
@@ -272,7 +289,8 @@ runner — if it changes a number, it is in `manifest.json` and it shows up in
 
 Allowed keys:
 
-- Set: `arms`, `instances`.
+- Set: `arms`, `instances`, `record_time` (optional; emit per-arm measured
+  `elapsed_s`).
 - Arm `greedy`: none; `{}` is the only legal value.
 - Arm `treesa`: `ntrials`, `niters`.
 - Arm `treesa_rounds`: `ntrials`, `niters`, `rounds` (required), `trace_cuts`
@@ -301,8 +319,11 @@ the directory, so an instance nobody declared is never silently benchmarked.
 
 ## Scope of the artifact
 
-The `full`, `figure2b`, `waist_trace`, and `ci` sets are the canonical sources
-for the paper's omeco results. Archived development campaigns may be useful
+The `full`, `figure2b`, `waist_trace`, `pareto_r0`, `pareto_r1`, `pareto_r2`,
+`pareto_r4`, `pareto_r8`, `pareto_r24`, and `ci` sets are the canonical sources
+for the paper's omeco results. The Pareto sets run three deterministic tensor
+relabelings each of `surfacecode_d21` and `sycamore_53_20_0`; each point is a
+fixed-work configuration whose wall time is measured afterward. Archived development campaigns may be useful
 for debugging or historical comparison, but they cannot supply manuscript
 numbers. When a paper
 table and a fresh current-`master` run disagree, the fresh run wins and the

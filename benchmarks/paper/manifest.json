@@ -40,6 +40,78 @@
         {"name": "ksg_r4", "path": "benchmarks/paper/instances/ksg.json", "treewidth": false, "relabel_seed": 5504}
       ]
     },
+    "pareto_r0": {
+      "record_time": true,
+      "arms": {"treesa": {}},
+      "instances": [
+        {"name": "surfacecode_d21_r0", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5600},
+        {"name": "surfacecode_d21_r1", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5601},
+        {"name": "surfacecode_d21_r2", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5602},
+        {"name": "sycamore_53_20_0_r0", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5700},
+        {"name": "sycamore_53_20_0_r1", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5701},
+        {"name": "sycamore_53_20_0_r2", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5702}
+      ]
+    },
+    "pareto_r1": {
+      "record_time": true,
+      "arms": {"treesa_rounds": {"rounds": 1}},
+      "instances": [
+        {"name": "surfacecode_d21_r0", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5600},
+        {"name": "surfacecode_d21_r1", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5601},
+        {"name": "surfacecode_d21_r2", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5602},
+        {"name": "sycamore_53_20_0_r0", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5700},
+        {"name": "sycamore_53_20_0_r1", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5701},
+        {"name": "sycamore_53_20_0_r2", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5702}
+      ]
+    },
+    "pareto_r2": {
+      "record_time": true,
+      "arms": {"treesa_rounds": {"rounds": 2}},
+      "instances": [
+        {"name": "surfacecode_d21_r0", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5600},
+        {"name": "surfacecode_d21_r1", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5601},
+        {"name": "surfacecode_d21_r2", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5602},
+        {"name": "sycamore_53_20_0_r0", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5700},
+        {"name": "sycamore_53_20_0_r1", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5701},
+        {"name": "sycamore_53_20_0_r2", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5702}
+      ]
+    },
+    "pareto_r4": {
+      "record_time": true,
+      "arms": {"treesa_rounds": {"rounds": 4}},
+      "instances": [
+        {"name": "surfacecode_d21_r0", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5600},
+        {"name": "surfacecode_d21_r1", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5601},
+        {"name": "surfacecode_d21_r2", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5602},
+        {"name": "sycamore_53_20_0_r0", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5700},
+        {"name": "sycamore_53_20_0_r1", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5701},
+        {"name": "sycamore_53_20_0_r2", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5702}
+      ]
+    },
+    "pareto_r8": {
+      "record_time": true,
+      "arms": {"treesa_rounds": {"rounds": 8}},
+      "instances": [
+        {"name": "surfacecode_d21_r0", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5600},
+        {"name": "surfacecode_d21_r1", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5601},
+        {"name": "surfacecode_d21_r2", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5602},
+        {"name": "sycamore_53_20_0_r0", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5700},
+        {"name": "sycamore_53_20_0_r1", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5701},
+        {"name": "sycamore_53_20_0_r2", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5702}
+      ]
+    },
+    "pareto_r24": {
+      "record_time": true,
+      "arms": {"treesa_rounds": {"rounds": 24}},
+      "instances": [
+        {"name": "surfacecode_d21_r0", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5600},
+        {"name": "surfacecode_d21_r1", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5601},
+        {"name": "surfacecode_d21_r2", "path": "benchmarks/paper/instances/surfacecode_d21.json", "treewidth": false, "relabel_seed": 5602},
+        {"name": "sycamore_53_20_0_r0", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5700},
+        {"name": "sycamore_53_20_0_r1", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5701},
+        {"name": "sycamore_53_20_0_r2", "path": "benchmarks/paper/instances/sycamore_53_20_0.json", "treewidth": false, "relabel_seed": 5702}
+      ]
+    },
     "full": {
       "arms": {
         "greedy": {},
