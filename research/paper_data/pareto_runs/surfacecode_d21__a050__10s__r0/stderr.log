@@ -1,9 +1,0 @@
-simplify: n_orig=2203 n_reduced=761 shrink=0.6546 t_simp=12ms
-t_seed=541ms tc_seed=62.3722 seed_trials=7
-t_dp=541ms tc_greedy=62.3722
-t=1981ms mcts_tc=61.2764
-t=5227ms mcts_tc=60.3319
-t=6063ms mcts_tc=57.6971
-t_mcts=13212ms mcts: backup=min rollouts=64 rate=5/s depth=2 nodes=65 improves=3 tc_mcts=57.6971
-ATTRIBUTION tc_greedy=62.3722 tc_mcts_prepolish=57.6971 mcts_beats_greedy=true
-t_final=13218ms tc_greedy=62.3722 tc_mcts=57.6971 tc_final=57.6971 tc_full=57.6971 leaves=2203

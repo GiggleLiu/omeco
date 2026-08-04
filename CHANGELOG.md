@@ -4,6 +4,13 @@ All notable changes to omeco are documented here. This file is the single
 authoritative changelog; the mdBook appendix page includes it verbatim.
 omeco adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Moved the companion paper's benchmark manifests, canonical instances,
+  provenance gate, semantic verifiers, runners, generated artifacts, and CI
+  checks to the `contraction-order-frontiers` repository. OMECO retains its
+  reusable waist-surgery, `RoundTrace`, and opt-in waist-trace APIs and tests.
+
 ## 0.2.7 — 2026-07-29
 
 **Default behavior change:** `TreeSA` now runs the structural
