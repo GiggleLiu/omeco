@@ -58,7 +58,7 @@ This directory is self-contained — manifest, instances, checker:
 | `check.py` | Compares two artifacts and exits nonzero on any disagreement. Standard library only, Python 3.8+. |
 | `verify_figure2b.py` | Verifies the record crossing, configured-score ratchet, and accepted-rebuild mechanism. |
 | `verify_waist_trace.py` | Verifies the `waist_trace` set: ten 128-round trajectories, per-round waist/FM cut invariants, and the rebuild gate/acceptance flags. |
-| `verify_pareto.py` | Verifies the six fixed-work Pareto sets, their measured wall times, and the configured-score ordering across round counts. |
+| `verify_pareto.py` | Verifies the six fixed-work Pareto sets, their measured wall times, and the configured-score ordering across round counts. Requires each artifact's `.provenance.json` sidecar and fails unless all six record one revision, manifest hash, and runner binary hash. |
 | `plot_figure2b.py` | Renders the checked JSON as a dependency-free vector figure. |
 | `README.md` | This file. |
 
@@ -127,6 +127,12 @@ done
 python3 benchmarks/paper/verify_pareto.py \
   "${pareto_dir}"/pareto_r{0,1,2,4,8,24}.json
 ```
+
+`verify_pareto.py` also reads the `<out>.provenance.json` sidecar that
+`run_master.py` writes next to each artifact. All six sidecars must be present,
+match their artifact's bytes, and record the same revision, manifest hash, and
+runner binary hash — a sweep mixing revisions or binaries (for example, after
+rerunning only some sets across an upstream `master` advance) cannot verify.
 
 The wrapper defaults to `benchmarks/paper/manifest.json` and the repository
 root. Its flags are:
@@ -247,11 +253,14 @@ random circuit costs time and reports nothing anyone wants to read.
 
 ## Determinism contract
 
-**On one machine, the artifact is byte-identical across runs.** Not "equal
-within tolerance" — the same bytes, and `diff` is the honest check there. CI
-compares with `check.py` instead, because the committed `expected/ci.json` and
-the CI runner need not share a platform. The guarantees behind byte-equality on
-one machine:
+**On one machine, an artifact from a set without `record_time` is
+byte-identical across runs.** Not "equal within tolerance" — the same bytes,
+and `diff` is the honest check there. CI compares with `check.py` instead,
+because the committed `expected/ci.json` and the CI runner need not share a
+platform. The `record_time` sets — the six Pareto sets — are the deliberate
+exception: their measured `elapsed_s` differs on every run, so neither `diff`
+nor `check.py`'s tolerance can pass on them; `verify_pareto.py` checks them
+semantically instead. The guarantees behind byte-equality on one machine:
 
 - Every RNG is seeded from a fixed constant plus a loop index. Trials are run in
   parallel with rayon but collected in index order, and the best is chosen by a
@@ -259,8 +268,9 @@ one machine:
 - The rounds loop counts rounds; it never watches the clock. Nothing in the
   pipeline is budgeted by wall time, so a slow machine and a fast machine take
   the same path.
-- The artifact carries no timestamp, hostname, thread count, or library
-  version — nothing that would make two correct runs differ.
+- Outside `record_time` sets, the artifact carries no timestamp, hostname,
+  thread count, or library version — nothing that would make two correct runs
+  differ.
 - Floats are rounded to six decimals before serialization, and every container
   in the output path is an ordered struct or an explicitly sorted `Vec`. No
   `HashMap` iteration order reaches the file.
@@ -271,9 +281,9 @@ Metropolis test calls them millions of times; a last-bit difference there can
 tip an accept/reject decision and change the whole trajectory. In practice the
 complexity metrics land in the same place, which is what `check.py`'s tolerance
 checks. So `check.py` is what CI runs, since the committed artifact and the
-runner need not share a platform; `diff` is the stricter check available when
-they do — regenerating locally and diffing against the committed file tells you
-whether *anything at all* moved.
+runner need not share a platform; for sets without `record_time`, `diff` is the
+stricter check available when they do — regenerating locally and diffing
+against the committed file tells you whether *anything at all* moved.
 
 The tolerance is relative — `abs(a - b) <= max(1e-9, 1e-9 * max(abs(a), abs(b)))`
 — because the fields being compared span twelve orders of magnitude. `tc`, `sc`
