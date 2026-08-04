@@ -1,17 +1,11 @@
 .DEFAULT_GOAL := help
-.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark paper-bench paper-bench-check paper-master-gate-test paper-figure2b-check paper-figure2b-plot paper-waist-trace version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
+.PHONY: help build build-release check fmt fmt-check clippy test check-all clean doc doc-private serve-docs python-dev python-dev-debug python-build python-test benchmark version bump-patch bump-minor bump-major release publish publish-crates publish-all github-release install-mdbook build-book serve-book clean-book
 
 CARGO ?= cargo
 PYTHON ?= python3
 DOC_PORT ?= 8000
 DOC_HOST ?= 127.0.0.1
 DOC_CRATE ?= omeco
-
-# Paper benchmark runner (see benchmarks/paper/README.md); run from the repo root
-PAPER_BENCH = $(CARGO) run --release --example paper_bench -p omeco -- \
-	--manifest benchmarks/paper/manifest.json
-PAPER_MASTER = $(PYTHON) benchmarks/paper/run_master.py \
-	--manifest benchmarks/paper/manifest.json --cargo $(CARGO)
 
 # Extract current version from omeco/Cargo.toml
 VERSION := $(shell grep -m1 '^version' omeco/Cargo.toml | sed 's/.*"\(.*\)"/\1/')
@@ -44,12 +38,6 @@ help:
 	@printf "  clean-book     Remove generated mdBook files\n"
 	@printf "\nBenchmarks:\n"
 	@printf "  benchmark         Run Python vs Julia benchmark\n"
-	@printf "  paper-bench       Regenerate the committed full paper benchmark artifact\n"
-	@printf "  paper-bench-check Re-run the ci set and verify it against the committed artifact\n"
-	@printf "  paper-master-gate-test Test the master revision and provenance gate\n"
-	@printf "  paper-figure2b-check Reproduce the Figure 2(b) surface-code trajectory\n"
-	@printf "  paper-figure2b-plot  Render the committed Figure 2(b) trajectory as SVG\n"
-	@printf "  paper-waist-trace   Generate the gated 1,280-call waist mechanism trace\n"
 	@printf "\nRelease targets:\n"
 	@printf "  version         Show current version\n"
 	@printf "  bump-patch      Bump patch version ($(VERSION) -> $(MAJOR).$(MINOR).$$(($(PATCH)+1)))\n"
@@ -119,35 +107,6 @@ python-test: python-dev
 benchmark: python-dev
 	$(PYTHON) benchmarks/benchmark_python.py
 	cd benchmarks && julia --project=. benchmark_julia.jl
-
-# Paper benchmark: `paper-bench` regenerates the paper's own (~21 min) set,
-# `paper-bench-check` re-runs the small ci set and compares it against the
-# committed artifact. The temporary artifact goes to $TMPDIR, never a fixed path.
-paper-bench:
-	$(PAPER_MASTER) --set full --out benchmarks/paper/expected/full.json
-
-paper-bench-check:
-	@tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
-	$(PAPER_BENCH) --set ci --out "$$tmp" && \
-	$(PYTHON) benchmarks/paper/check.py "$$tmp" benchmarks/paper/expected/ci.json
-
-paper-master-gate-test:
-	$(PYTHON) -m unittest discover -s benchmarks/paper -p 'test_*.py' -v
-
-paper-figure2b-check:
-	@tmp=$$(mktemp) && trap 'rm -f "$$tmp"' EXIT && \
-	$(PAPER_BENCH) --set figure2b --out "$$tmp" && \
-	$(PYTHON) benchmarks/paper/verify_figure2b.py "$$tmp" && \
-	$(PYTHON) benchmarks/paper/check.py "$$tmp" benchmarks/paper/expected/figure2b.json
-
-paper-figure2b-plot:
-	$(PYTHON) benchmarks/paper/plot_figure2b.py \
-		benchmarks/paper/expected/figure2b.json \
-		benchmarks/paper/expected/figure2b.svg
-
-paper-waist-trace:
-	$(PAPER_MASTER) --set waist_trace --out benchmarks/paper/expected/waist_trace.json
-	$(PYTHON) benchmarks/paper/verify_waist_trace.py benchmarks/paper/expected/waist_trace.json
 
 # Version management
 version:
