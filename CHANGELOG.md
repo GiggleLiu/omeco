@@ -46,6 +46,13 @@ cost). Restore the old behavior with `preprocess: false`.
   `waist_trace` benchmark set (five deterministic relabelings each of
   `surfacecode_d21` and `ksg`, 128 rounds each) regenerates the paper's dense
   mechanism evidence via `make paper-waist-trace`.
+- `RoundTrace` gains `score_before`/`score_retained`: the configured
+  multi-objective TreeSA score of the retained incumbent, which is the
+  quantity the rounds ratchet actually guarantees is monotone (`tc_retained`
+  can rise when another weighted term improves). Paper-benchmark artifacts
+  emit the fields when the manifest sets `trace_scores: true` (implied by
+  `trace_cuts`), and the `figure2b`/`waist_trace` verifiers now check the
+  configured-score ratchet instead of raw `tc`.
 - `Label` now requires `Ord` (all built-in label types already qualify).
 - The Julia behavioral-alignment rule is retired; JSON interop is unchanged.
 

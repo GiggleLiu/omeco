@@ -57,10 +57,11 @@ pub struct TreeSA {
     /// The best reduced-network tree seen in the loop is returned. After
     /// splice-back, [`optimize_treesa`] compares it with the rounds-off result
     /// on the original network, so enabling any positive round count is never
-    /// worse than leaving the loop off. The standalone
+    /// worse than leaving the loop off under the configured [`TreeSA::score`]
+    /// (`tc` alone carries no such guarantee). The standalone
     /// [`anneal_surgery_rounds`] loop is additionally monotone in its round
-    /// count on the network it is given. See [`crate::waist_surgery`] for the
-    /// surgery step itself.
+    /// count, under that same score, on the network it is given. See
+    /// [`crate::waist_surgery`] for the surgery step itself.
     ///
     /// # Path decomposition
     ///
@@ -989,8 +990,8 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 /// search and side rebuilds operate on the simplified tensor hypergraph, not on
 /// the restored full graph. After splice-back, the candidate is compared with
 /// the rounds-off tree on the original network, so the result is never worse
-/// than with `surgery_iters = 0`. The whole pipeline is fully deterministic
-/// (rounds are counted, never timed).
+/// than with `surgery_iters = 0` under the configured [`TreeSA::score`]. The
+/// whole pipeline is fully deterministic (rounds are counted, never timed).
 ///
 /// [`TreeSA::preprocess`] is automatically treated as disabled whenever
 /// [`TreeSA::decomposition_type`] is [`DecompositionType::Path`], even if the
