@@ -97,6 +97,21 @@ struct RoundsArm {
     rounds: u64,
     /// Emit exact per-round waist-cut comparisons for mechanism figures.
     trace_cuts: Option<bool>,
+    /// Emit per-round configured-score fields without the full cut trace.
+    trace_scores: Option<bool>,
+}
+
+impl RoundsArm {
+    /// The `waist` object is emitted only for `trace_cuts` sets.
+    fn emit_cuts(&self) -> bool {
+        self.trace_cuts.unwrap_or(false)
+    }
+
+    /// `score_before`/`score_retained` accompany either trace flag: a cut
+    /// trace without the score ratchet would be unverifiable.
+    fn emit_scores(&self) -> bool {
+        self.emit_cuts() || self.trace_scores.unwrap_or(false)
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -162,9 +177,13 @@ struct ResultRow {
 struct CurvePoint {
     round: u64,
     tc_before: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    score_before: Option<f64>,
     tc_after_surgery: f64,
     tc_after_anneal: f64,
     tc_retained: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    score_retained: Option<f64>,
     surgery_accepted: bool,
     /// Exact like-for-like cut comparison, emitted only when requested by the
     /// manifest's `trace_cuts` flag.
@@ -384,13 +403,14 @@ fn run_instance(
             .map(|trace| CurvePoint {
                 round: trace.round,
                 tc_before: round6(trace.tc_before),
+                score_before: arm.emit_scores().then_some(round6(trace.score_before)),
                 tc_after_surgery: round6(trace.tc_after_surgery),
                 tc_after_anneal: round6(trace.tc_after_anneal),
                 tc_retained: round6(trace.tc_retained),
+                score_retained: arm.emit_scores().then_some(round6(trace.score_retained)),
                 surgery_accepted: trace.surgery_accepted,
                 waist: arm
-                    .trace_cuts
-                    .unwrap_or(false)
+                    .emit_cuts()
                     .then_some(trace.waist)
                     .flatten()
                     .map(|waist| WaistPoint {
@@ -509,7 +529,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::permute_tensors;
+    use super::{permute_tensors, CurvePoint, RoundsArm};
 
     #[test]
     fn tensor_relabeling_is_seeded_and_deterministic() {
@@ -525,5 +545,46 @@ mod tests {
         assert_ne!(first, other);
         first.sort();
         assert_eq!(first, original);
+    }
+
+    #[test]
+    fn score_fields_follow_either_trace_flag() {
+        let arm = |trace_cuts, trace_scores| RoundsArm {
+            ntrials: None,
+            niters: None,
+            rounds: 1,
+            trace_cuts,
+            trace_scores,
+        };
+
+        assert!(!arm(None, None).emit_scores());
+        assert!(arm(Some(true), None).emit_scores());
+        assert!(arm(None, Some(true)).emit_scores());
+        assert!(!arm(Some(false), Some(false)).emit_scores());
+        assert!(arm(Some(true), None).emit_cuts());
+        assert!(!arm(None, Some(true)).emit_cuts());
+    }
+
+    #[test]
+    fn trace_scores_are_opt_in_artifact_fields() {
+        let point = |score_before, score_retained| CurvePoint {
+            round: 0,
+            tc_before: 1.0,
+            score_before,
+            tc_after_surgery: 1.0,
+            tc_after_anneal: 1.0,
+            tc_retained: 1.0,
+            score_retained,
+            surgery_accepted: false,
+            waist: None,
+        };
+
+        let ordinary = serde_json::to_value(point(None, None)).unwrap();
+        assert!(ordinary.get("score_before").is_none());
+        assert!(ordinary.get("score_retained").is_none());
+
+        let traced = serde_json::to_value(point(Some(2.0), Some(1.5))).unwrap();
+        assert_eq!(traced["score_before"], 2.0);
+        assert_eq!(traced["score_retained"], 1.5);
     }
 }

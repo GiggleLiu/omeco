@@ -65,8 +65,13 @@ def main() -> None:
                 fail(f"{name} round {expected_round}: rebuild gate mismatch")
             if waist.get("rebuild_accepted") is not point.get("surgery_accepted"):
                 fail(f"{name} round {expected_round}: acceptance mismatch")
-            if point["tc_retained"] > point["tc_before"] + 1e-9:
-                fail(f"{name} round {expected_round}: incumbent ratchet rose")
+            score_before = point.get("score_before")
+            score_retained = point.get("score_retained")
+            if not all(isinstance(value, (int, float)) and math.isfinite(value)
+                       for value in (score_before, score_retained)):
+                fail(f"{name} round {expected_round}: missing configured score")
+            if score_retained > score_before:
+                fail(f"{name} round {expected_round}: configured-score ratchet rose")
             comparisons.append((family, incumbent, candidate))
 
     if families != {"surfacecode_d21": 5, "ksg": 5}:

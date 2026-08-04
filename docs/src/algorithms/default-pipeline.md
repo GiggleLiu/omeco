@@ -40,8 +40,11 @@ simplify  ->  anneal trials  ->  [k x (surgery -> cold fine tune)]  ->  splice
 
    Rounds use an *incumbent ratchet*: a worse fine-tuning endpoint is reported
    but rejected, and round `r + 1` starts from the best tree retained in round
-   `r`. Surgery supplies the nonlocal basin jump; fine tuning need not destroy
-   the incumbent to provide one.
+   `r`. "Best" means best under the configured multi-objective `TreeSA` score,
+   so the retained tree's raw time complexity can rise when another weighted
+   term improves — see the [`treesa::anneal_surgery_rounds`] docs for the exact
+   ratchet contract. Surgery supplies the nonlocal basin jump; fine tuning need
+   not destroy the incumbent to provide one.
 
    **Cost:** on the 761-tensor simplified surface-code network, fine tuning is
    450 sweeps per round, versus 15,000 sweeps for a default cold-start trial.
@@ -80,8 +83,8 @@ deadline binds `optimize_treesa`). Re-running the same configuration
 reproduces the same tree on any machine, with `surgery_iters` at any value:
 `0` (off), or any positive round count. Every positive-round result is guarded
 against the rounds-off baseline after splice-back. The standalone
-`anneal_surgery_rounds` loop is monotone in its round count on the network it
-is given.
+`anneal_surgery_rounds` loop is monotone in its round count, under the
+configured `TreeSA` score, on the network it is given.
 
 Wall-clock budgets still exist, but only on the low-level
 [`crate::waist_surgery::refine`] / [`refine_capped`] APIs (and the Python
@@ -179,3 +182,4 @@ ignored rather than allowed to return a non-path tree.
 [`crate::waist_surgery::refine_capped`]: https://docs.rs/omeco/latest/omeco/waist_surgery/fn.refine_capped.html
 [`refine_capped`]: https://docs.rs/omeco/latest/omeco/waist_surgery/fn.refine_capped.html
 [`TreeSA::surgery_iters`]: https://docs.rs/omeco/latest/omeco/treesa/struct.TreeSA.html#structfield.surgery_iters
+[`treesa::anneal_surgery_rounds`]: https://docs.rs/omeco/latest/omeco/treesa/fn.anneal_surgery_rounds.html

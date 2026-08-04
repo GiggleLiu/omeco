@@ -57,10 +57,11 @@ pub struct TreeSA {
     /// The best reduced-network tree seen in the loop is returned. After
     /// splice-back, [`optimize_treesa`] compares it with the rounds-off result
     /// on the original network, so enabling any positive round count is never
-    /// worse than leaving the loop off. The standalone
+    /// worse than leaving the loop off under the configured [`TreeSA::score`]
+    /// (`tc` alone carries no such guarantee). The standalone
     /// [`anneal_surgery_rounds`] loop is additionally monotone in its round
-    /// count on the network it is given. See [`crate::waist_surgery`] for the
-    /// surgery step itself.
+    /// count, under that same score, on the network it is given. See
+    /// [`crate::waist_surgery`] for the surgery step itself.
     ///
     /// # Path decomposition
     ///
@@ -989,8 +990,8 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 /// search and side rebuilds operate on the simplified tensor hypergraph, not on
 /// the restored full graph. After splice-back, the candidate is compared with
 /// the rounds-off tree on the original network, so the result is never worse
-/// than with `surgery_iters = 0`. The whole pipeline is fully deterministic
-/// (rounds are counted, never timed).
+/// than with `surgery_iters = 0` under the configured [`TreeSA::score`]. The
+/// whole pipeline is fully deterministic (rounds are counted, never timed).
 ///
 /// [`TreeSA::preprocess`] is automatically treated as disabled whenever
 /// [`TreeSA::decomposition_type`] is [`DecompositionType::Path`], even if the
@@ -1371,14 +1372,21 @@ pub struct RoundTrace {
     pub round: u64,
     /// Retained incumbent before surgery.
     pub tc_before: f64,
+    /// Configured TreeSA score of the retained incumbent before surgery.
+    pub score_before: f64,
     /// Candidate after the surgery step (equal to `tc_before` if rejected).
     pub tc_after_surgery: f64,
     /// Raw endpoint of the cold fine-tuning pass, whether retained or rejected.
     /// The field keeps its historical `anneal` name for artifact compatibility.
     pub tc_after_anneal: f64,
     /// Best of the round incumbent, surgery candidate, and all sweep
-    /// checkpoints observed during fine tuning.
+    /// checkpoints observed during fine tuning, reported in time-complexity
+    /// units. This can rise when the configured multi-objective score improves
+    /// by reducing its space or read-write term.
     pub tc_retained: f64,
+    /// Configured TreeSA score of the incumbent retained for the next round.
+    /// Unlike `tc_retained`, this is guaranteed not to exceed `score_before`.
+    pub score_retained: f64,
     /// Whether waist surgery accepted a rebuilt tree in this round.
     pub surgery_accepted: bool,
     /// Exact cut-space comparison made by this round's surgery call.
@@ -1399,18 +1407,22 @@ pub struct RoundTrace {
 ///
 /// Even cold fine tuning may finish at a worse tree. That endpoint is recorded in
 /// [`RoundsReport::round_scores`] and [`RoundsReport::round_trace`], but it does
-/// not replace the incumbent. Round `r + 1` starts from the best of round `r`'s
-/// input, surgery result, and best sweep checkpoint observed during fine tuning. This
-/// matches the paper's `Anneal(T, C_outer)` contract: annealing returns its
-/// best retained tree.
+/// not replace the incumbent unless it improves [`TreeSA::score`]. Round `r + 1`
+/// starts from the best configured-score candidate among round `r`'s input,
+/// surgery result, and best sweep checkpoint observed during fine tuning. This
+/// matches the paper's `Anneal(T, C_outer)` contract: annealing returns its best
+/// retained tree. With a multi-objective score, the retained tree's `tc` can
+/// rise when another weighted term improves; [`RoundTrace::score_retained`] is
+/// the monotone ratchet diagnostic.
 ///
 /// # Never worse, monotone in `rounds`
 ///
-/// The *returned* tree is the best tree seen anywhere in the run, including the
-/// `seed` itself and each round's post-surgery, pre-fine-tuning tree. Consequently
-/// the result is never worse than `seed`, and — because rounds are chained
-/// deterministically — running `n + 1` rounds is always equal or better than
-/// running `n`.
+/// The *returned* tree is the best configured-score tree seen anywhere in the
+/// run, including the `seed` itself and each round's post-surgery,
+/// pre-fine-tuning tree. Consequently the result is never worse than `seed`
+/// under [`TreeSA::score`], and — because rounds are chained deterministically —
+/// running `n + 1` rounds is always equal or better than running `n` under that
+/// same score.
 ///
 /// # Configuration used
 ///
@@ -1573,9 +1585,11 @@ pub fn anneal_surgery_rounds<L: Label>(
         report.round_trace.push(RoundTrace {
             round: r,
             tc_before,
+            score_before: incumbent_score,
             tc_after_surgery,
             tc_after_anneal,
             tc_retained: crate::contraction_complexity(&retained, size_dict, &code.ixs).tc,
+            score_retained: retained_score,
             surgery_accepted: wr.rebuild_accepts > 0,
             waist: waist_trace,
         });
@@ -3389,7 +3403,7 @@ mod tests {
         assert!(r1.round_trace.iter().all(|trace| trace.waist.is_some()));
         for pair in r1.round_trace.windows(2) {
             assert_eq!(pair[1].tc_before, pair[0].tc_retained);
-            assert!(pair[1].tc_retained <= pair[1].tc_before + 1e-9);
+            assert!(pair[1].score_retained <= pair[1].score_before);
         }
     }
 

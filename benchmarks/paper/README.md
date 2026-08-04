@@ -7,7 +7,8 @@ reproducing that table means running it. The `figure2b` set separately
 reproduces the surface-code mechanism panel with a deterministic 32-round work
 budget: it must cross the panel's pre-surgery record and show an accepted
 rebuild causing a drop. It must also expose at least one uphill fine-tuning
-endpoint separately from the monotone retained incumbent. `waist_trace` is the
+endpoint separately from the retained incumbent, whose configured score is
+monotone even where its tensor cost is not. `waist_trace` is the
 dense mechanism set: five deterministic relabelings each
 of surfacecode_d21 and ksg, with 128 fixed-work rounds per relabeling and exact
 like-for-like waist/FM cut weights for every completed surgery call. The outputs under
@@ -55,7 +56,7 @@ This directory is self-contained — manifest, instances, checker:
 | `run_master.py` | Enforces current clean `origin/master`, builds the runner, and emits deterministic provenance. |
 | `test_run_master.py` | Unit tests for revision, cleanliness, tracking, hashing, and atomic-write behavior. |
 | `check.py` | Compares two artifacts and exits nonzero on any disagreement. Standard library only, Python 3.8+. |
-| `verify_figure2b.py` | Verifies the record crossing, incumbent ratchet, and accepted-rebuild mechanism. |
+| `verify_figure2b.py` | Verifies the record crossing, configured-score ratchet, and accepted-rebuild mechanism. |
 | `verify_waist_trace.py` | Verifies the `waist_trace` set: ten 128-round trajectories, per-round waist/FM cut invariants, and the rebuild gate/acceptance flags. |
 | `plot_figure2b.py` | Renders the checked JSON as a dependency-free vector figure. |
 | `README.md` | This file. |
@@ -209,7 +210,13 @@ random circuit costs time and reports nothing anyone wants to read.
   trace from `RoundsReport::round_trace`: the retained incumbent before the
   round, the surgery candidate, the fine-tuning endpoint, and the retained
   incumbent afterward. `tc_after_anneal` may be worse after fine tuning, but
-  `tc_retained` cannot increase and is the tree used by the next round.
+  `score_retained` cannot exceed `score_before` and identifies the tree used by
+  the next round. `tc_retained` is the time complexity of that tree; it can
+  rise when the configured multi-objective score instead improves its space or
+  read-write term. When the manifest sets `trace_scores: true` (or
+  `trace_cuts: true`, which implies it), each curve point carries explicit
+  `score_before` and `score_retained` fields; the `figure2b` and `waist_trace`
+  sets enable this.
   `surgery_accepted` marks the rebuild events plotted as crosses in the paper's
   Figure 2(b).
 - When the manifest sets `trace_cuts: true`, each curve point also contains a
@@ -269,7 +276,9 @@ Allowed keys:
 - Arm `greedy`: none; `{}` is the only legal value.
 - Arm `treesa`: `ntrials`, `niters`.
 - Arm `treesa_rounds`: `ntrials`, `niters`, `rounds` (required), `trace_cuts`
-  (optional; emit the per-round `waist` object).
+  (optional; emit the per-round `waist` object and the score fields),
+  `trace_scores` (optional; emit the per-round `score_before`/`score_retained`
+  fields without the cut trace).
 - Arm `treesa_surgery_rule`: `ntrials`, `niters`, `probability` (required).
 - Instance: `name`, `path` (repo-root-relative), `treewidth` (required),
   `relabel_seed` (optional; deterministic tensor-order permutation applied

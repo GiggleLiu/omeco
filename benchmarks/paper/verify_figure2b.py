@@ -2,6 +2,7 @@
 """Verify the semantic contract behind the Figure 2(b) reproduction set."""
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -40,8 +41,13 @@ def main() -> None:
     worse_endpoints = 0
     previous = None
     for point in curve:
-        if point["tc_retained"] > point["tc_before"]:
-            fail(f"retained incumbent rises in round {point['round']}")
+        score_before = point.get("score_before")
+        score_retained = point.get("score_retained")
+        if not all(isinstance(value, (int, float)) and math.isfinite(value)
+                   for value in (score_before, score_retained)):
+            fail(f"round {point['round']}: missing configured score")
+        if score_retained > score_before:
+            fail(f"configured-score ratchet rises in round {point['round']}")
         if previous is not None and point["tc_before"] != previous:
             fail(f"round {point['round']} does not continue from the retained incumbent")
         if point["surgery_accepted"] and point["tc_after_surgery"] < point["tc_before"]:
