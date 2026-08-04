@@ -53,6 +53,15 @@ cost). Restore the old behavior with `preprocess: false`.
   emit the fields when the manifest sets `trace_scores: true` (implied by
   `trace_cuts`), and the `figure2b`/`waist_trace` verifiers now check the
   configured-score ratchet instead of raw `tc`.
+- Fixed-work Pareto sweep for the paper's time-versus-quality plot: six
+  `pareto_r{0,1,2,4,8,24}` benchmark sets run three deterministic tensor
+  relabelings each of `surfacecode_d21` and `sycamore_53_20_0` at 0–24
+  surgery/fine-tuning rounds. A new optional `record_time` manifest key makes
+  the runner emit each arm's measured wall time as `elapsed_s` — observed
+  after the algorithm finishes, never a timer, deadline, or stopping rule
+  inside TreeSA — and `benchmarks/paper/verify_pareto.py` checks the 36 runs
+  semantically, requiring one revision, manifest hash, and runner binary
+  across the sweep's provenance sidecars.
 - `Label` now requires `Ord` (all built-in label types already qualify).
 - The Julia behavioral-alignment rule is retired; JSON interop is unchanged.
 
