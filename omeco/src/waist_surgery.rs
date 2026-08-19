@@ -1133,7 +1133,21 @@ fn expr_to_nested_counted(
             }
         }
     }
-    rec(tree, ixs, &open_set, &global_count).0
+    let (nested, _, derived_output) = rec(tree, ixs, &open_set, &global_count);
+    match nested {
+        NestedEinsum::Node { args, mut eins } => {
+            // Counting determines membership, but the contraction contract also
+            // includes the caller's output-axis order. Internal interfaces stay
+            // canonical; only the emitted root restores that exact order.
+            eins.iy = open.to_vec();
+            NestedEinsum::node(args, eins)
+        }
+        leaf @ NestedEinsum::Leaf { .. } if derived_output == open => leaf,
+        leaf @ NestedEinsum::Leaf { .. } => NestedEinsum::node(
+            vec![leaf],
+            EinCode::new(vec![derived_output], open.to_vec()),
+        ),
+    }
 }
 
 fn side_open_labels(hyper: &Hyper, part: &[bool]) -> (Vec<usize>, Vec<usize>) {
@@ -2472,6 +2486,16 @@ mod tests {
 
     #[test]
     fn test_local_scope_splice_preserves_outside_subtree_byte_for_byte() {
+        let ixs = vec![
+            vec![0, 1, 2],
+            vec![0, 1, 3],
+            vec![2],
+            vec![3],
+            vec![4],
+            vec![5],
+            vec![6],
+            vec![7],
+        ];
         let waist = ExprTree::node(
             ExprTree::leaf(vec![0, 1, 2], 0),
             ExprTree::leaf(vec![0, 1, 3], 1),
@@ -2503,6 +2527,11 @@ mod tests {
         let scope_path = local_scope_path(&tree, &waist_path, waist_leaves.len());
         assert_eq!(scope_path, vec![false]);
         let outside_before = format!("{:?}", subtree_at_path(&tree, &[true]).unwrap());
+        let emitted_before = expr_to_nested_counted(&tree, &ixs, &[]);
+        let emitted_outside_before = match &emitted_before {
+            NestedEinsum::Node { args, .. } => crate::json::to_json_string(&args[1]).unwrap(),
+            NestedEinsum::Leaf { .. } => panic!("fixture root must be a node"),
+        };
         let replacement = ExprTree::node(
             ExprTree::node(
                 ExprTree::leaf(vec![2], 2),
@@ -2518,13 +2547,86 @@ mod tests {
         );
         let spliced = replace_subtree_at_path(&tree, &scope_path, &replacement).unwrap();
         let outside_after = format!("{:?}", subtree_at_path(&spliced, &[true]).unwrap());
+        let emitted_after = expr_to_nested_counted(&spliced, &ixs, &[]);
+        let emitted_outside_after = match &emitted_after {
+            NestedEinsum::Node { args, .. } => crate::json::to_json_string(&args[1]).unwrap(),
+            NestedEinsum::Leaf { .. } => panic!("fixture root must be a node"),
+        };
 
         assert_eq!(outside_after, outside_before);
+        assert_eq!(emitted_outside_after, emitted_outside_before);
         let mut spliced_leaves = spliced.leaf_ids();
         let mut original_leaves = tree.leaf_ids();
         spliced_leaves.sort_unstable();
         original_leaves.sort_unstable();
         assert_eq!(spliced_leaves, original_leaves);
+    }
+
+    #[test]
+    fn test_local_opt_in_rebuilds_preserve_unsorted_root_output_order() {
+        // Two disconnected four-rings. The first subtree contracts alternating
+        // vertices, giving local surgery a deterministic accepted improvement.
+        // Labels 9 and 8 are dimension-one outputs so their deliberately
+        // unsorted order does not change which contraction is the waist.
+        let code = EinCode::new(
+            vec![
+                vec![0usize, 3, 8],
+                vec![0, 1],
+                vec![1, 2],
+                vec![2, 3],
+                vec![4, 7, 9],
+                vec![4, 5],
+                vec![5, 6],
+                vec![6, 7],
+            ],
+            vec![9, 8],
+        );
+        let mut sizes = uniform_sizes(&code, 2);
+        sizes.insert(8, 1);
+        sizes.insert(9, 1);
+        let bad_ring = |offset: usize| {
+            let alternating_a = ExprTree::node(
+                ExprTree::leaf(code.ixs[offset].clone(), offset),
+                ExprTree::leaf(code.ixs[offset + 2].clone(), offset + 2),
+                Vec::new(),
+            );
+            let alternating_b = ExprTree::node(
+                ExprTree::leaf(code.ixs[offset + 1].clone(), offset + 1),
+                ExprTree::leaf(code.ixs[offset + 3].clone(), offset + 3),
+                Vec::new(),
+            );
+            ExprTree::node(alternating_a, alternating_b, Vec::new())
+        };
+        let incumbent = ExprTree::node(bad_ring(0), bad_ring(4), Vec::new());
+        let mut seed = expr_to_nested_counted(&incumbent, &code.ixs, &code.iy);
+        match &mut seed {
+            NestedEinsum::Node { eins, .. } => eins.iy.clone_from(&code.iy),
+            NestedEinsum::Leaf { .. } => panic!("fixture root must be a node"),
+        }
+        assert_eq!(seed.output_labels(&code.ixs), code.iy);
+        let seed_tc = contraction_complexity(&seed, &sizes, &code.ixs).tc;
+
+        for rebuild in [RebuildMode::Greedy, RebuildMode::WarmRestricted] {
+            let (refined, report, _) = refine_capped_seeded_with_trace_opts(
+                &seed,
+                &code,
+                &sizes,
+                Duration::MAX,
+                1,
+                RNG_SEED,
+                SurgeryOptions {
+                    rebuild,
+                    scope: SurgeryScope::Local,
+                },
+            );
+
+            assert_eq!(
+                report.rebuild_accepts, 1,
+                "fixture must accept one {rebuild:?} local rebuild"
+            );
+            assert!(contraction_complexity(&refined, &sizes, &code.ixs).tc < seed_tc - 1e-9);
+            assert_eq!(refined.output_labels(&code.ixs), code.iy, "{rebuild:?}");
+        }
     }
 
     #[test]
