@@ -321,7 +321,7 @@ fn relabel_instance(instance: &Instance, seed: u64) -> Instance {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct Params {
     raw: bool,
     relabel_seed: u64,
@@ -337,7 +337,7 @@ struct Params {
     n_optimized: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct TraceRow {
     round: u64,
     tc_before: f64,
@@ -347,7 +347,7 @@ struct TraceRow {
     surgery_accepted: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct ResultRow {
     key: String,
     instance: String,
@@ -692,26 +692,23 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
             cold_opts,
             format!("cold_only_r{round_count}"),
         );
+        let work_matched = args.set.includes_a().then(|| {
+            let mut row = cold.clone();
+            row.arm = format!("treesa_x1+cold{round_count}");
+            row.key = result_key(
+                &context.prepared.original.name,
+                &context.label,
+                &row.arm,
+                context.raw,
+                context.target_visits,
+            );
+            row
+        });
         if args.set.includes_b() {
             rows.push(cold);
         }
-        if args.set.includes_a() {
-            let mut work_matched = run_round_arm(
-                &context,
-                &baseline,
-                niters,
-                baseline_wall,
-                round_count,
-                RoundsOptions {
-                    surgery: false,
-                    ..RoundsOptions::default()
-                },
-                format!("treesa_x1+cold{round_count}"),
-            );
-            if args.set.includes_b() {
-                work_matched.tc = rows.last().map_or(work_matched.tc, |row| row.tc);
-            }
-            rows.push(work_matched);
+        if let Some(row) = work_matched {
+            rows.push(row);
         }
         if args.set.includes_b() {
             for (name, rebuild, scope) in [
