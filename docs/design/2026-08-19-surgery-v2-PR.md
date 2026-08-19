@@ -78,8 +78,8 @@ more than uncontended timing.
 ## Validation
 
 - `make check-all`
-- 546 library tests passed; one performance test ignored
-- 3 example tests passed
+- 547 library tests passed; one performance test ignored
+- 4 example tests passed
 - 43 doctests passed; one JSON-writing doctest ignored
 - smoke JSONL contains 40/40 unique resumable keys
 - Local Greedy and WarmRestricted accepted-rebuild regressions preserve the
