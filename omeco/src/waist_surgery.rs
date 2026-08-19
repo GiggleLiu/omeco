@@ -27,6 +27,12 @@
 //! records a `waist_min` event. This is a search diagnostic, not a proof of
 //! global cut optimality.
 //!
+//! [`refine`] and [`refine_capped`] always use the historical greedy, root-scoped
+//! rebuild above. The opt-in [`RebuildMode::WarmRestricted`] and
+//! [`SurgeryScope::Local`] variants are selected through
+//! [`crate::treesa::RoundsOptions`] and [`crate::treesa::anneal_refine_rounds`];
+//! every variant keeps the same strict global-`tc` acceptance gate.
+//!
 //! [fm]: https://en.wikipedia.org/wiki/Fiduccia%E2%80%93Mattheyses_algorithm
 //!
 //! # Example
@@ -110,7 +116,9 @@ const RNG_SEED: u64 = 0x0000_0054_c0ff_ee00;
 ///
 /// [`RebuildMode::Greedy`] preserves the historical behavior. The opt-in
 /// [`RebuildMode::WarmRestricted`] variant starts from the incumbent tree
-/// restricted to the tensors assigned to that side.
+/// restricted to the tensors assigned to that side (falling back to greedy if
+/// the restriction fails) before the same cold V-cycle schedule. Select it via
+/// [`crate::treesa::RoundsOptions::rebuild`].
 ///
 /// # Example
 ///
@@ -134,7 +142,9 @@ pub enum RebuildMode {
 ///
 /// [`SurgeryScope::Root`] preserves the historical whole-network rebuild.
 /// [`SurgeryScope::Local`] rebuilds and splices only a bounded ancestor of the
-/// waist node.
+/// waist node: the lowest ancestor with at least `min(n, 2|A|)` leaves. Waists
+/// spanning at least half the network fall back to the root. Select it via
+/// [`crate::treesa::RoundsOptions::scope`].
 ///
 /// # Example
 ///

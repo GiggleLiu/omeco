@@ -572,14 +572,8 @@ fn fine_tune_beta_schedule(betas: &[f64]) -> Vec<f64> {
         .collect()
 }
 
-/// Fine-tune a specified tree and return `(best_seen, final_endpoint)`.
-///
-/// The endpoint remains useful diagnostics for fine-tuning damage, but the
-/// paper's `Anneal` operator returns its best tree. The relaxation uses the
-/// span-gated kernel from attempt-054: each level of the coarse-to-fine span
-/// ladder receives `sweeps_per_span` sweeps across the cold beta schedule. The
-/// tree is rescored after every sweep with the caller's emitted-tree scorer, so
-/// a later uphill sweep cannot erase an earlier, better checkpoint.
+/// Test-only wrapper around [`fine_tune_tree_sa_counted`] that drops the
+/// sweep count and returns `(best_seen, final_endpoint)`.
 #[cfg(test)]
 fn fine_tune_tree_sa<F>(
     tree: ExprTree,
@@ -605,6 +599,17 @@ where
     (best, endpoint)
 }
 
+/// Fine-tune a specified tree and return `(best_seen, final_endpoint, sweeps)`.
+///
+/// The endpoint remains useful diagnostics for fine-tuning damage, but the
+/// paper's `Anneal` operator returns its best tree. The relaxation uses the
+/// span-gated kernel from attempt-054: each level of the coarse-to-fine span
+/// ladder receives `sweeps_per_span` sweeps across the cold beta schedule. The
+/// tree is rescored after every sweep with the caller's emitted-tree scorer, so
+/// a later uphill sweep cannot erase an earlier, better checkpoint. `sweeps`
+/// counts every span-gated sweep executed, which
+/// [`RoundsReport::fine_tune_sweeps_total`] accumulates as a deterministic
+/// work measure.
 fn fine_tune_tree_sa_counted<F>(
     mut tree: ExprTree,
     log2_sizes: &[f64],
@@ -1174,10 +1179,8 @@ fn trial_stack_size(num_tensors: usize) -> usize {
     num_tensors.saturating_mul(PER_TENSOR).clamp(MIN, MAX)
 }
 
-/// Bare TreeSA trial loop, without the structural-simplification front-end.
-///
-/// Used directly by [`optimize_treesa`] when [`TreeSA::preprocess`] is `false`,
-/// and by the preprocessed path to optimize the already-reduced network.
+/// Test-only wrapper around [`optimize_treesa_core_seeded`] with the historical
+/// trial seed base `42`.
 #[cfg(test)]
 fn optimize_treesa_core<L: Label>(
     code: &EinCode<L>,
@@ -1187,6 +1190,11 @@ fn optimize_treesa_core<L: Label>(
     optimize_treesa_core_seeded(code, size_dict, config, 42)
 }
 
+/// Bare TreeSA trial loop, without the structural-simplification front-end.
+///
+/// Used by [`optimize_treesa`] / [`optimize_treesa_seeded`] when
+/// [`TreeSA::preprocess`] is `false`, and by the preprocessed path to optimize
+/// the already-reduced network. Trial `i` seeds its RNG from `seed + i`.
 fn optimize_treesa_core_seeded<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
