@@ -14,7 +14,10 @@ use crate::score::ScoreFunction;
 use crate::utils::fast_log2sumexp2;
 #[cfg(test)]
 use crate::waist_surgery::refine_capped;
-use crate::waist_surgery::{gated_sweep, refine_capped_seeded_with_trace, WaistUpdate};
+use crate::waist_surgery::{
+    gated_sweep, refine_capped_seeded_with_trace, refine_capped_seeded_with_trace_opts,
+    RebuildMode, SurgeryOptions, SurgeryScope, WaistUpdate,
+};
 use crate::Label;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -1365,6 +1368,46 @@ pub struct RoundsReport {
     pub surgery_calls_total: u64,
 }
 
+/// Options for [`anneal_refine_rounds`].
+///
+/// The default exactly reproduces [`anneal_surgery_rounds`]: one historical
+/// greedy, root-scoped waist-surgery call precedes each cold fine-tuning pass.
+/// Set [`RoundsOptions::surgery`] to `false` for the matched cold-only control.
+///
+/// # Example
+///
+/// ```
+/// use omeco::treesa::RoundsOptions;
+/// use omeco::waist_surgery::{RebuildMode, SurgeryScope};
+///
+/// assert_eq!(RoundsOptions::default().rebuild, RebuildMode::Greedy);
+/// let cold_only = RoundsOptions {
+///     surgery: false,
+///     scope: SurgeryScope::Local,
+///     ..RoundsOptions::default()
+/// };
+/// assert!(!cold_only.surgery);
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoundsOptions {
+    /// Run the global waist-surgery call at the start of each round.
+    pub surgery: bool,
+    /// How rebuilt sides are initialized.
+    pub rebuild: RebuildMode,
+    /// Where surgery operates.
+    pub scope: SurgeryScope,
+}
+
+impl Default for RoundsOptions {
+    fn default() -> Self {
+        Self {
+            surgery: true,
+            rebuild: RebuildMode::default(),
+            scope: SurgeryScope::default(),
+        }
+    }
+}
+
 /// One interleaved surgery/fine-tuning round in log2 time-complexity units.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RoundTrace {
@@ -1487,6 +1530,47 @@ pub fn anneal_surgery_rounds<L: Label>(
     config: &TreeSA,
     rounds: u64,
 ) -> (NestedEinsum<L>, RoundsReport) {
+    anneal_refine_rounds(
+        seed,
+        code,
+        size_dict,
+        config,
+        rounds,
+        &RoundsOptions::default(),
+    )
+}
+
+/// Deterministic surgery/fine-tuning rounds with opt-in rebuild controls.
+///
+/// This is the configurable form of [`anneal_surgery_rounds`]. With
+/// [`RoundsOptions::default`] the returned tree and report are byte-identical
+/// to that historical API. With `opts.surgery == false`, every round runs the
+/// same cold fine-tuning trials and ratchet but skips surgery; surgery trace
+/// fields remain empty and [`RoundsReport::surgery_calls_total`] remains zero.
+///
+/// # Example
+///
+/// ```
+/// use omeco::treesa::{anneal_refine_rounds, RoundsOptions};
+/// use omeco::{optimize_code, EinCode, GreedyMethod, TreeSA};
+/// use std::collections::HashMap;
+///
+/// let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+/// let sizes: HashMap<char, usize> = [('i', 2), ('j', 4), ('k', 2)].into();
+/// let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+/// let opts = RoundsOptions { surgery: false, ..RoundsOptions::default() };
+/// let (tree, report) = anneal_refine_rounds(&seed, &code, &sizes, &TreeSA::fast(), 1, &opts);
+/// assert_eq!(tree.leaf_count(), 2);
+/// assert_eq!(report.surgery_calls_total, 0);
+/// ```
+pub fn anneal_refine_rounds<L: Label>(
+    seed: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    rounds: u64,
+    opts: &RoundsOptions,
+) -> (NestedEinsum<L>, RoundsReport) {
     use rand::SeedableRng;
     let score_of = |t: &NestedEinsum<L>| {
         let cc = crate::contraction_complexity(t, size_dict, &code.ixs);
@@ -1508,15 +1592,45 @@ pub fn anneal_surgery_rounds<L: Label>(
     for r in 0..rounds {
         let tc_before = crate::contraction_complexity(&trajectory, size_dict, &code.ixs).tc;
         let incumbent_score = score_of(&trajectory);
-        let surgery_seed = 0x0000_0054_c0ff_ee00_u64.wrapping_add(r);
-        let (t_surg, wr, waist_trace) = refine_capped_seeded_with_trace(
-            &trajectory,
-            code,
-            size_dict,
-            std::time::Duration::MAX,
-            1,
-            surgery_seed,
-        );
+        let (t_surg, wr, waist_trace) = if opts.surgery {
+            let surgery_seed = 0x0000_0054_c0ff_ee00_u64.wrapping_add(r);
+            if opts.rebuild == RebuildMode::default() && opts.scope == SurgeryScope::default() {
+                refine_capped_seeded_with_trace(
+                    &trajectory,
+                    code,
+                    size_dict,
+                    std::time::Duration::MAX,
+                    1,
+                    surgery_seed,
+                )
+            } else {
+                refine_capped_seeded_with_trace_opts(
+                    &trajectory,
+                    code,
+                    size_dict,
+                    std::time::Duration::MAX,
+                    1,
+                    surgery_seed,
+                    SurgeryOptions {
+                        rebuild: opts.rebuild,
+                        scope: opts.scope,
+                    },
+                )
+            }
+        } else {
+            (
+                trajectory.clone(),
+                crate::waist_surgery::WaistReport {
+                    n_original: code.num_tensors(),
+                    surgery_calls: 0,
+                    cheaper_cuts: 0,
+                    rebuild_attempts: 0,
+                    rebuild_accepts: 0,
+                    waist_min_hits: 0,
+                },
+                None,
+            )
+        };
         report.surgery_calls_total += wr.surgery_calls;
         // The fine-tuning arguments are hoisted into single-line bindings so
         // that the call itself is on one line: coverage instrumentation
@@ -3371,6 +3485,74 @@ mod tests {
         let custom_hot = vec![0.0, 0.1, 0.9];
         assert_eq!(fine_tune_beta_schedule(&custom_hot), custom_hot);
         assert!(fine_tune_beta_schedule(&[]).is_empty());
+    }
+
+    #[test]
+    fn test_rounds_options_default_is_byte_identical_to_historical_wrapper() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(&code, &sizes, &config).unwrap();
+
+        let (historical_tree, historical_report) =
+            anneal_surgery_rounds(&seed, &code, &sizes, &config, 2);
+        let (default_tree, default_report) =
+            anneal_refine_rounds(&seed, &code, &sizes, &config, 2, &RoundsOptions::default());
+
+        assert_eq!(
+            crate::json::to_json_string(&default_tree).unwrap(),
+            crate::json::to_json_string(&historical_tree).unwrap()
+        );
+        assert_eq!(default_report, historical_report);
+    }
+
+    #[test]
+    fn test_cold_only_round_matches_fine_tuning_path_alone() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(&code, &sizes, &config).unwrap();
+        let score_of = |tree: &NestedEinsum<usize>| {
+            let cc = crate::contraction_complexity(tree, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+
+        let ctx = prepare_warm_anneal(&code, &sizes, &seed).unwrap();
+        let emitted_score = |candidate: &ExprTree| {
+            let nested = warm_exprtree_to_nested(candidate, &code, &ctx.labels);
+            score_of(&nested)
+        };
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0xA55E);
+        let (fine_tuned, endpoint) = fine_tune_tree_sa(
+            ctx.tree.clone(),
+            &ctx.log2_sizes,
+            &fine_tune_beta_schedule(&config.betas),
+            config.niters.min(30),
+            &emitted_score,
+            &mut rng,
+            ctx.nedge,
+        );
+        let candidate = warm_exprtree_to_nested(&fine_tuned, &code, &ctx.labels);
+        let endpoint = warm_exprtree_to_nested(&endpoint, &code, &ctx.labels);
+        let expected = if score_of(&candidate) < score_of(&seed) {
+            candidate
+        } else {
+            seed.clone()
+        };
+
+        let opts = RoundsOptions {
+            surgery: false,
+            ..RoundsOptions::default()
+        };
+        let (actual, report) = anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &opts);
+
+        assert_eq!(
+            crate::json::to_json_string(&actual).unwrap(),
+            crate::json::to_json_string(&expected).unwrap()
+        );
+        assert_eq!(report.round_scores, vec![score_of(&endpoint)]);
+        assert_eq!(report.surgery_calls_total, 0);
+        assert_eq!(report.round_trace.len(), 1);
+        assert!(!report.round_trace[0].surgery_accepted);
+        assert!(report.round_trace[0].waist.is_none());
     }
 
     #[test]

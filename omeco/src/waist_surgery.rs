@@ -106,6 +106,66 @@ const MAX_STALE_ITERS: u64 = 4;
 /// Deterministic RNG seed for the surgery FM/anneal streams.
 const RNG_SEED: u64 = 0x0000_0054_c0ff_ee00;
 
+/// Initialization strategy for rebuilding each side of a surgery cut.
+///
+/// [`RebuildMode::Greedy`] preserves the historical behavior. The opt-in
+/// [`RebuildMode::WarmRestricted`] variant starts from the incumbent tree
+/// restricted to the tensors assigned to that side.
+///
+/// # Example
+///
+/// ```
+/// use omeco::waist_surgery::RebuildMode;
+///
+/// assert_eq!(RebuildMode::default(), RebuildMode::Greedy);
+/// let mode = RebuildMode::WarmRestricted;
+/// assert_ne!(mode, RebuildMode::default());
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum RebuildMode {
+    /// Initialize each rebuilt side with the greedy optimizer.
+    #[default]
+    Greedy,
+    /// Initialize each rebuilt side from the restricted incumbent tree.
+    WarmRestricted,
+}
+
+/// Region of the incumbent tree replaced by waist surgery.
+///
+/// [`SurgeryScope::Root`] preserves the historical whole-network rebuild.
+/// [`SurgeryScope::Local`] rebuilds and splices only a bounded ancestor of the
+/// waist node.
+///
+/// # Example
+///
+/// ```
+/// use omeco::waist_surgery::SurgeryScope;
+///
+/// assert_eq!(SurgeryScope::default(), SurgeryScope::Root);
+/// let scope = SurgeryScope::Local;
+/// assert_ne!(scope, SurgeryScope::default());
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SurgeryScope {
+    /// Promote the improved bipartition to the root of the full network.
+    #[default]
+    Root,
+    /// Rebuild only a bounded ancestor subtree around the waist.
+    Local,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SurgeryOptions {
+    pub(crate) rebuild: RebuildMode,
+    pub(crate) scope: SurgeryScope,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct RefineOptions {
+    capture_trace: bool,
+    surgery: SurgeryOptions,
+}
+
 /// One completed like-for-like waist-cut comparison.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WaistCallTrace {
@@ -1011,6 +1071,22 @@ impl Refiner<'_> {
         incumbent: &ExprTree,
         work_tc: f64,
     ) -> Option<(NestedEinsum<usize>, f64)> {
+        self.waist_surgery_opts(
+            incumbent,
+            work_tc,
+            RebuildMode::default(),
+            SurgeryScope::default(),
+        )
+    }
+
+    /// Configurable form of [`Self::waist_surgery`].
+    fn waist_surgery_opts(
+        &mut self,
+        incumbent: &ExprTree,
+        work_tc: f64,
+        _rebuild_mode: RebuildMode,
+        _scope: SurgeryScope,
+    ) -> Option<(NestedEinsum<usize>, f64)> {
         self.report.surgery_calls += 1;
         let (waist_node_cost, a_leaves) = extract_waist(incumbent, self.log2_sizes)?;
         let n = self.hyper.n;
@@ -1323,8 +1399,15 @@ pub(crate) fn refine_capped_seeded<L: Label>(
     max_iters: u64,
     rng_seed: u64,
 ) -> (NestedEinsum<L>, WaistReport) {
-    let (tree, report, _) =
-        refine_capped_seeded_impl(tree, code, sizes, budget, max_iters, rng_seed, false);
+    let (tree, report, _) = refine_capped_seeded_impl(
+        tree,
+        code,
+        sizes,
+        budget,
+        max_iters,
+        rng_seed,
+        RefineOptions::default(),
+    );
     (tree, report)
 }
 
@@ -1341,11 +1424,43 @@ pub(crate) fn refine_capped_seeded_with_trace<L: Label>(
     max_iters: u64,
     rng_seed: u64,
 ) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
+    refine_capped_seeded_with_trace_opts(
+        tree,
+        code,
+        sizes,
+        budget,
+        max_iters,
+        rng_seed,
+        SurgeryOptions::default(),
+    )
+}
+
+/// One-call fixed-work refinement with caller-selected opt-in surgery modes.
+pub(crate) fn refine_capped_seeded_with_trace_opts<L: Label>(
+    tree: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    sizes: &HashMap<L, usize>,
+    budget: Duration,
+    max_iters: u64,
+    rng_seed: u64,
+    surgery: SurgeryOptions,
+) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
     debug_assert!(
         max_iters <= 1,
         "last-call trace semantics require max_iters <= 1, got {max_iters}"
     );
-    refine_capped_seeded_impl(tree, code, sizes, budget, max_iters, rng_seed, true)
+    refine_capped_seeded_impl(
+        tree,
+        code,
+        sizes,
+        budget,
+        max_iters,
+        rng_seed,
+        RefineOptions {
+            capture_trace: true,
+            surgery,
+        },
+    )
 }
 
 fn refine_capped_seeded_impl<L: Label>(
@@ -1355,7 +1470,7 @@ fn refine_capped_seeded_impl<L: Label>(
     budget: Duration,
     max_iters: u64,
     rng_seed: u64,
-    capture_trace: bool,
+    options: RefineOptions,
 ) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
     let n = code.num_tensors();
     let mut report = WaistReport {
@@ -1422,7 +1537,7 @@ fn refine_capped_seeded_impl<L: Label>(
         max_iters,
         rng: SmallRng::seed_from_u64(rng_seed),
         report,
-        capture_trace,
+        capture_trace: options.capture_trace,
         last_call_trace: None,
     };
 
@@ -1434,7 +1549,19 @@ fn refine_capped_seeded_impl<L: Label>(
         let Some(incumbent) = nested_to_expr_tree(&best, &id_label_map) else {
             break;
         };
-        match refiner.waist_surgery(&incumbent, best_tc) {
+        let candidate = if options.surgery.rebuild == RebuildMode::default()
+            && options.surgery.scope == SurgeryScope::default()
+        {
+            refiner.waist_surgery(&incumbent, best_tc)
+        } else {
+            refiner.waist_surgery_opts(
+                &incumbent,
+                best_tc,
+                options.surgery.rebuild,
+                options.surgery.scope,
+            )
+        };
+        match candidate {
             Some((new_tree, new_tc)) if new_tc < best_tc - 1e-9 => {
                 best = new_tree;
                 best_tc = new_tc;
