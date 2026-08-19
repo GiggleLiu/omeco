@@ -7,6 +7,8 @@
 - add opt-in warm-restricted side initialization and local subtree surgery;
 - add deterministic seeded TreeSA repetitions, fine-tune sweep accounting, and
   a resumable JSONL ablation driver with process-level sharding;
+- guard every rounds arm after splice-back against the spliced baseline and
+  record `post_splice_guard_triggered` in each JSONL row;
 - commit a four-instance, two-label R=8 smoke and a Markdown summarizer.
 
 All defaults remain unchanged. `anneal_surgery_rounds` delegates to
@@ -39,6 +41,12 @@ changing the JSONL bytes.
 Paired W/T/L against cold-only: greedy/root 6/2/0, warm/root 5/3/0,
 greedy/local 4/4/0, warm/local 4/4/0. These are smoke checks, not paper
 estimates.
+
+The Local root-output-order defect was representational only: time complexity
+is invariant under permutation of the final output axes, so it does not change
+the numeric results of the campaign already running from the pre-fix binary.
+Rows produced by the updated binary additionally contain the post-splice guard
+flag described above.
 
 ## Full campaign commands
 
@@ -74,6 +82,8 @@ more than uncontended timing.
 - 3 example tests passed
 - 43 doctests passed; one JSON-writing doctest ignored
 - smoke JSONL contains 40/40 unique resumable keys
+- Local Greedy and WarmRestricted accepted-rebuild regressions preserve the
+  exact, deliberately unsorted root output order
 
 ## Known limitations
 

@@ -11,6 +11,11 @@ command skips existing keys, so an interrupted campaign resumes in place.
 machine-independent work coordinate. Surgery/FM work is not represented by the
 node-visit coordinate and must be interpreted alongside wall time.
 
+For every rounds arm, the driver compares the spliced rounds result with the
+spliced baseline using pure time complexity on the original relabeled network.
+The reported tree is never worse than that baseline; the JSONL field
+`post_splice_guard_triggered` records when the guard selected the baseline.
+
 ## Full campaign
 
 ```bash

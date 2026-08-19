@@ -362,6 +362,7 @@ struct ResultRow {
     fine_tune_sweeps: u64,
     total_node_visits: u64,
     accepted_rebuilds: u64,
+    post_splice_guard_triggered: bool,
     round_trace: Vec<TraceRow>,
 }
 
@@ -483,6 +484,23 @@ fn full_tree(prepared: &Prepared, reduced: &NestedEinsum<usize>) -> NestedEinsum
         .map_or_else(|| reduced.clone(), |subtrees| splice(reduced, subtrees))
 }
 
+fn guard_post_splice_rounds(
+    prepared: &Prepared,
+    baseline: &NestedEinsum<usize>,
+    candidate: &NestedEinsum<usize>,
+) -> (NestedEinsum<usize>, bool) {
+    let baseline = full_tree(prepared, baseline);
+    let candidate = full_tree(prepared, candidate);
+    let tc = |tree: &NestedEinsum<usize>| {
+        contraction_complexity(tree, &prepared.original.sizes, &prepared.original.code.ixs).tc
+    };
+    if tc(&candidate) < tc(&baseline) {
+        (candidate, false)
+    } else {
+        (baseline, true)
+    }
+}
+
 struct GroupContext<'a> {
     prepared: &'a Prepared,
     label: String,
@@ -495,21 +513,29 @@ struct GroupContext<'a> {
 fn make_row(
     context: &GroupContext<'_>,
     arm: String,
-    reduced: &NestedEinsum<usize>,
+    full: &NestedEinsum<usize>,
     niters: usize,
     wall_seconds: f64,
     planned: u64,
-    rounds: Option<(u64, &RoundsOptions, &omeco::treesa::RoundsReport)>,
+    rounds: Option<(u64, &RoundsOptions, &omeco::treesa::RoundsReport, bool)>,
 ) -> ResultRow {
-    let full = full_tree(context.prepared, reduced);
     let cc = contraction_complexity(
-        &full,
+        full,
         &context.prepared.original.sizes,
         &context.prepared.original.code.ixs,
     );
-    let (round_count, surgery, rebuild, scope, fine_sweeps, accepted, trace) = rounds.map_or(
-        (None, None, None, None, 0, 0, Vec::new()),
-        |(count, opts, report)| {
+    let (
+        round_count,
+        surgery,
+        rebuild,
+        scope,
+        fine_sweeps,
+        accepted,
+        trace,
+        post_splice_guard_triggered,
+    ) = rounds.map_or(
+        (None, None, None, None, 0, 0, Vec::new(), false),
+        |(count, opts, report, guard_triggered)| {
             let rebuild = match opts.rebuild {
                 RebuildMode::Greedy => "greedy",
                 RebuildMode::WarmRestricted => "warm_restricted",
@@ -542,6 +568,7 @@ fn make_row(
                     .filter(|item| item.surgery_accepted)
                     .count() as u64,
                 trace,
+                guard_triggered,
             )
         },
     );
@@ -580,6 +607,7 @@ fn make_row(
         fine_tune_sweeps: fine_sweeps,
         total_node_visits: planned.saturating_add(fine_visits),
         accepted_rebuilds: accepted,
+        post_splice_guard_triggered,
         round_trace: trace,
     }
 }
@@ -603,14 +631,16 @@ fn run_round_arm(
         rounds,
         &opts,
     );
+    let (reported, post_splice_guard_triggered) =
+        guard_post_splice_rounds(context.prepared, baseline, &tree);
     make_row(
         context,
         arm,
-        &tree,
+        &reported,
         baseline_niters,
         baseline_wall + started.elapsed().as_secs_f64(),
         planned_visits(baseline_niters, context.prepared.code.num_tensors()),
-        Some((rounds, &opts, &report)),
+        Some((rounds, &opts, &report, post_splice_guard_triggered)),
     )
 }
 
@@ -647,10 +677,11 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
     let mut rows = Vec::new();
 
     if args.set.includes_a() {
+        let baseline_full = full_tree(&prepared, &baseline);
         rows.push(make_row(
             &context,
             "treesa_x1".to_owned(),
-            &baseline,
+            &baseline_full,
             niters,
             baseline_wall,
             planned_visits(niters, n),
@@ -666,10 +697,11 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
                 optimizer_seed,
             )
             .ok_or_else(|| AppError::Message("TreeSA returned no tree".to_owned()))?;
+            let full = full_tree(&prepared, &tree);
             rows.push(make_row(
                 &context,
                 format!("treesa_x{scale}"),
-                &tree,
+                &full,
                 scaled_niters,
                 started.elapsed().as_secs_f64(),
                 planned_visits(scaled_niters, n),
@@ -995,6 +1027,61 @@ mod tests {
         assert_ne!(
             result_key("petersen", "r0", "treesa_x1", false, 100),
             result_key("petersen", "r0", "treesa_x1", false, 200)
+        );
+    }
+
+    #[test]
+    fn post_splice_guard_keeps_baseline_when_rounds_candidate_is_worse() {
+        let code = EinCode::new(
+            vec![vec![0usize, 3], vec![0, 1], vec![1, 2], vec![2, 3]],
+            vec![],
+        );
+        let sizes = code
+            .unique_labels()
+            .into_iter()
+            .map(|label| (label, 2))
+            .collect();
+        let pair = |left: usize, right: usize, output: Vec<usize>| {
+            NestedEinsum::node(
+                vec![NestedEinsum::leaf(left), NestedEinsum::leaf(right)],
+                EinCode::new(
+                    vec![code.ixs[left].clone(), code.ixs[right].clone()],
+                    output,
+                ),
+            )
+        };
+        let baseline = NestedEinsum::node(
+            vec![pair(0, 1, vec![1, 3]), pair(2, 3, vec![1, 3])],
+            EinCode::new(vec![vec![1, 3], vec![1, 3]], vec![]),
+        );
+        let worse_candidate = NestedEinsum::node(
+            vec![pair(0, 2, vec![0, 1, 2, 3]), pair(1, 3, vec![0, 1, 2, 3])],
+            EinCode::new(vec![vec![0, 1, 2, 3], vec![0, 1, 2, 3]], vec![]),
+        );
+        let prepared = Prepared {
+            original: Instance {
+                name: "ring".to_owned(),
+                code: code.clone(),
+                sizes,
+            },
+            code,
+            subtrees: Some((0..4).map(NestedEinsum::leaf).collect()),
+        };
+
+        let (selected, triggered) =
+            guard_post_splice_rounds(&prepared, &baseline, &worse_candidate);
+        assert!(triggered);
+        assert_eq!(
+            omeco::json::to_json_string(&selected).unwrap(),
+            omeco::json::to_json_string(&baseline).unwrap()
+        );
+
+        let (selected, triggered) =
+            guard_post_splice_rounds(&prepared, &worse_candidate, &baseline);
+        assert!(!triggered);
+        assert_eq!(
+            omeco::json::to_json_string(&selected).unwrap(),
+            omeco::json::to_json_string(&baseline).unwrap()
         );
     }
 }
