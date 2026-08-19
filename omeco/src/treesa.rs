@@ -580,8 +580,9 @@ fn fine_tune_beta_schedule(betas: &[f64]) -> Vec<f64> {
 /// ladder receives `sweeps_per_span` sweeps across the cold beta schedule. The
 /// tree is rescored after every sweep with the caller's emitted-tree scorer, so
 /// a later uphill sweep cannot erase an earlier, better checkpoint.
+#[cfg(test)]
 fn fine_tune_tree_sa<F>(
-    mut tree: ExprTree,
+    tree: ExprTree,
     log2_sizes: &[f64],
     betas: &[f64],
     sweeps_per_span: usize,
@@ -592,10 +593,35 @@ fn fine_tune_tree_sa<F>(
 where
     F: Fn(&ExprTree) -> f64,
 {
+    let (best, endpoint, _) = fine_tune_tree_sa_counted(
+        tree,
+        log2_sizes,
+        betas,
+        sweeps_per_span,
+        score_tree,
+        rng,
+        nedge,
+    );
+    (best, endpoint)
+}
+
+fn fine_tune_tree_sa_counted<F>(
+    mut tree: ExprTree,
+    log2_sizes: &[f64],
+    betas: &[f64],
+    sweeps_per_span: usize,
+    score_tree: &F,
+    rng: &mut rand::rngs::SmallRng,
+    nedge: usize,
+) -> (ExprTree, ExprTree, u64)
+where
+    F: Fn(&ExprTree) -> f64,
+{
     let mut best = tree.clone();
     let mut best_score = score_tree(&best);
     let mut scratch = ScratchSpace::new(nedge);
     let mut s_lin = f64::exp2(tree_complexity(&tree, log2_sizes).0);
+    let mut sweeps_total = 0_u64;
 
     let n = tree.leaf_count();
     let mut span = ((n + 29) / 30).max(2);
@@ -620,6 +646,7 @@ where
                     &mut scratch,
                     &mut s_lin,
                 );
+                sweeps_total += 1;
                 let candidate_score = score_tree(&tree);
                 if candidate_score < best_score {
                     best_score = candidate_score;
@@ -629,7 +656,7 @@ where
             s_lin = f64::exp2(tree_complexity(&tree, log2_sizes).0);
         }
     }
-    (best, tree)
+    (best, tree, sweeps_total)
 }
 
 /// Run TreeSA with a root-level mixture of local sweeps and global surgery
@@ -1010,10 +1037,48 @@ pub fn optimize_treesa<L: Label>(
     size_dict: &HashMap<L, usize>,
     config: &TreeSA,
 ) -> Option<NestedEinsum<L>> {
+    optimize_treesa_with_seed(code, size_dict, config, 42)
+}
+
+/// Optimize an [`EinCode`] with TreeSA using a caller-selected trial RNG seed.
+///
+/// This is identical to [`optimize_treesa`] except that trial `i` starts from
+/// `seed + i` instead of the historical `42 + i`. It is intended for matched,
+/// reproducible experimental repetitions; [`optimize_treesa`] and all
+/// [`TreeSA`] defaults remain unchanged.
+///
+/// # Example
+///
+/// ```
+/// use omeco::treesa::optimize_treesa_seeded;
+/// use omeco::{EinCode, TreeSA};
+/// use std::collections::HashMap;
+///
+/// let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+/// let sizes: HashMap<char, usize> = [('i', 2), ('j', 4), ('k', 2)].into();
+/// let first = optimize_treesa_seeded(&code, &sizes, &TreeSA::fast(), 7000).unwrap();
+/// let again = optimize_treesa_seeded(&code, &sizes, &TreeSA::fast(), 7000).unwrap();
+/// assert_eq!(first.leaf_indices(), again.leaf_indices());
+/// ```
+pub fn optimize_treesa_seeded<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    seed: u64,
+) -> Option<NestedEinsum<L>> {
+    optimize_treesa_with_seed(code, size_dict, config, seed)
+}
+
+fn optimize_treesa_with_seed<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    seed: u64,
+) -> Option<NestedEinsum<L>> {
     let preprocess = config.preprocess && config.decomposition_type != DecompositionType::Path;
     if preprocess {
         let simplified = simplify(code, size_dict);
-        let reduced = optimize_treesa_core(&simplified.code, size_dict, config)?;
+        let reduced = optimize_treesa_core_seeded(&simplified.code, size_dict, config, seed)?;
         if config.surgery_iters > 0 {
             let candidate = anneal_surgery_rounds(
                 &reduced,
@@ -1038,7 +1103,7 @@ pub fn optimize_treesa<L: Label>(
         return Some(splice(&reduced, &simplified.subtrees));
     }
 
-    let tree = optimize_treesa_core(code, size_dict, config)?;
+    let tree = optimize_treesa_core_seeded(code, size_dict, config, seed)?;
     if config.surgery_iters > 0 && config.decomposition_type != DecompositionType::Path {
         return Some(anneal_surgery_rounds(&tree, code, size_dict, config, config.surgery_iters).0);
     }
@@ -1113,10 +1178,20 @@ fn trial_stack_size(num_tensors: usize) -> usize {
 ///
 /// Used directly by [`optimize_treesa`] when [`TreeSA::preprocess`] is `false`,
 /// and by the preprocessed path to optimize the already-reduced network.
+#[cfg(test)]
 fn optimize_treesa_core<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
     config: &TreeSA,
+) -> Option<NestedEinsum<L>> {
+    optimize_treesa_core_seeded(code, size_dict, config, 42)
+}
+
+fn optimize_treesa_core_seeded<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    seed: u64,
 ) -> Option<NestedEinsum<L>> {
     assert!(
         config.surgery_probability.is_finite() && (0.0..=1.0).contains(&config.surgery_probability),
@@ -1170,7 +1245,8 @@ fn optimize_treesa_core<L: Label>(
             .map(|trial_idx| {
                 // Use thread-local RNG seeded with trial index for reproducibility
                 use rand::SeedableRng;
-                let mut rng = rand::rngs::SmallRng::seed_from_u64(trial_idx as u64 + 42);
+                let mut rng =
+                    rand::rngs::SmallRng::seed_from_u64(seed.wrapping_add(trial_idx as u64));
 
                 // Initialize tree
                 let tree = match config.initializer {
@@ -1366,6 +1442,8 @@ pub struct RoundsReport {
     /// Total number of waist-surgery iterations attempted across all rounds
     /// (sum of [`crate::waist_surgery::WaistReport::surgery_calls`]).
     pub surgery_calls_total: u64,
+    /// Total span-gated sweeps executed by all cold fine-tuning trials.
+    pub fine_tune_sweeps_total: u64,
 }
 
 /// Options for [`anneal_refine_rounds`].
@@ -1585,6 +1663,7 @@ pub fn anneal_refine_rounds<L: Label>(
         round_scores: Vec::new(),
         round_trace: Vec::new(),
         surgery_calls_total: 0,
+        fine_tune_sweeps_total: 0,
     };
     let fine_betas = fine_tune_beta_schedule(&config.betas);
     let fine_niters = config.niters.min(30);
@@ -1653,7 +1732,7 @@ pub fn anneal_refine_rounds<L: Label>(
         for trial in 0..fine_trials {
             let seed = 0xA55E_u64 + r * fine_trials as u64 + trial as u64;
             let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
-            let (fine_tuned, endpoint) = fine_tune_tree_sa(
+            let (fine_tuned, endpoint, sweeps) = fine_tune_tree_sa_counted(
                 start.clone(),
                 &log2,
                 betas,
@@ -1662,6 +1741,7 @@ pub fn anneal_refine_rounds<L: Label>(
                 &mut rng,
                 nedge,
             );
+            report.fine_tune_sweeps_total += sweeps;
             let candidate = warm_exprtree_to_nested(&fine_tuned, code, &ctx.labels);
             let candidate_score = score_of(&candidate);
             let endpoint = warm_exprtree_to_nested(&endpoint, code, &ctx.labels);
@@ -3503,6 +3583,37 @@ mod tests {
             crate::json::to_json_string(&historical_tree).unwrap()
         );
         assert_eq!(default_report, historical_report);
+    }
+
+    #[test]
+    fn test_seeded_optimizer_preserves_historical_seed_42_bytes() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let historical = optimize_treesa(&code, &sizes, &config).unwrap();
+        let seeded = optimize_treesa_seeded(&code, &sizes, &config, 42).unwrap();
+        assert_eq!(
+            crate::json::to_json_string(&seeded).unwrap(),
+            crate::json::to_json_string(&historical).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_rounds_report_counts_fine_tune_sweeps() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(&code, &sizes, &config).unwrap();
+        let (_, report) = anneal_refine_rounds(
+            &seed,
+            &code,
+            &sizes,
+            &config,
+            2,
+            &RoundsOptions {
+                surgery: false,
+                ..RoundsOptions::default()
+            },
+        );
+        assert_eq!(report.fine_tune_sweeps_total, 40);
     }
 
     #[test]
