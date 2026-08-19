@@ -6,6 +6,18 @@ omeco adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+- Added `treesa::RoundsOptions` and `anneal_refine_rounds`, including an
+  exactly work-matched cold-only control (`surgery: false`). The historical
+  `anneal_surgery_rounds` API is now a default-options wrapper and remains
+  byte-identical for fixed inputs.
+- Added opt-in `waist_surgery::RebuildMode::WarmRestricted` and
+  `SurgeryScope::Local`. The former initializes rebuilt sides from the
+  restricted incumbent topology; the latter rebuilds only a bounded ancestor
+  around a deep waist. Defaults remain `Greedy` + `Root`.
+- `RoundsReport::fine_tune_sweeps_total` exposes deterministic fine-tuning work,
+  and `optimize_treesa_seeded` supports matched optimizer repetitions. The
+  resumable `surgery_ablation` example reports quality against both node visits
+  and wall time, with a committed smoke artifact and Markdown summarizer.
 - Moved the companion paper's benchmark manifests, canonical instances,
   provenance gate, semantic verifiers, runners, generated artifacts, and CI
   checks to the `contraction-order-frontiers` repository. OMECO retains its
