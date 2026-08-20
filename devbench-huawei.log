@@ -1,0 +1,22 @@
+budget plan: build<=120s + 12 runs*35s + overhead<=20s = 560s (hard cap 600s)
+    Finished `release` profile [optimized] target(s) in 0.07s
+run instance=surfacecode_d13 arm=continuous max_sweeps=380 wall<=35s
+run instance=surfacecode_d13 arm=parent max_sweeps=380 wall<=35s
+run instance=surfacecode_d13 arm=continuous max_sweeps=620 wall<=35s
+run instance=surfacecode_d13 arm=parent max_sweeps=620 wall<=35s
+run instance=surfacecode_d13 arm=continuous max_sweeps=940 wall<=35s
+run instance=surfacecode_d13 arm=parent max_sweeps=940 wall<=35s
+run instance=ksg arm=continuous max_sweeps=380 wall<=35s
+run instance=ksg arm=parent max_sweeps=380 wall<=35s
+run instance=ksg arm=continuous max_sweeps=620 wall<=35s
+run instance=ksg arm=parent max_sweeps=620 wall<=35s
+run instance=ksg arm=continuous max_sweeps=940 wall<=35s
+run instance=ksg arm=parent max_sweeps=940 wall<=35s
+instance	sweeps	continuous_tc	parent_tc	delta	continuous_yield_rate	parent_yield_rate	complete
+ksg	380	46.289112	48.016357	-1.727246	0.0346407	0.0963445	true
+ksg	620	41.996818	46.702307	-4.705489	0.0197678	0.100801	true
+ksg	940	41.237290	44.045496	-2.808206	0.019331	0.0763355	true
+surfacecode_d13	380	31.799493	31.948066	-0.148573	0.0372584	0.0762745	true
+surfacecode_d13	620	31.275997	31.238411	+0.037586	0.043977	0.0886886	true
+surfacecode_d13	940	31.202151	31.238411	-0.036260	0.0430172	0.0910701	true
+DONE059

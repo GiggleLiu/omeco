@@ -73,3 +73,26 @@ premise, so say so explicitly).
 - Also produce `dev_bench.sh <instances_dir> <out.jsonl>`: a deterministic
   mechanism-diagnostic benchmark, HARD-CAPPED at 600 s wall total (user
   directive), runnable on a 2-core Linux host (huawei).
+
+## Outcome (recorded 2026-08-20)
+
+**Validator (canonical host, v2.4, primaries 90 s):** status=scored,
+score=-0.1333, NO RECORD. reg3_250 tc=39.882 (record 39.8833, delta +0.002
+— tie, below RECORD_EPS), ttf 21.5 s (record 16.1 s). sycamore_m20
+tc=61.790 (delta -0.268), ttf inf.
+
+**Dev bench (huawei ecs-b88b, matched sweeps, 560 s plan):** the
+pre-registered secondary evidence CONFIRMED on ksg — continuous front beats
+the hard ladder by 1.73 / 4.71 / 2.81 bits at 380/620/940 sweeps — and is
+a wash on surfacecode_d13 (-0.15 / +0.04 / n/a). Yield-rate per sweep is
+LOWER for the continuous arm (0.02-0.04 vs 0.08-0.10): the win comes from
+where the moves land (behind the front), not from more acceptances.
+
+**Verdict (honest):** hypothesis SUPPORTED at matched sweeps on the
+separable dev instance, NOT CONVERTED into a record on the primaries
+(reg3_250 tie; sycamore slightly worse; TTF slower than record). The
+freeze-out front is a better matched-work refiner but the 052 kick/ladder
+chassis at 90 s budgets is already at the reg3 plateau. Candidate next
+step (improve): continuous front INSIDE anneal_refine_rounds' cold pass
+(PR #40) where matched-work refinement is exactly the use case.
+Artifacts: dev-results-huawei.jsonl, devbench-huawei.log, report.json.
