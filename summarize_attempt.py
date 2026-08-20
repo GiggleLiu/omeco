@@ -9,9 +9,10 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 
-def die(message: str) -> "NoReturn":
+def die(message: str) -> NoReturn:
     raise SystemExit(message)
 
 
