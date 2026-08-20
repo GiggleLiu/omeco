@@ -1,0 +1,99 @@
+{
+ "schema_version": 1,
+ "project": "omeco beat-existing-optimizers",
+ "cycle": 11,
+ "date_utc": "2026-08-20",
+ "attempts_range": "059-061",
+ "attempts_remaining": 0,
+ "primary_metric": {
+  "name": "median-of-3 tc vs records; confirmed records",
+  "direction": "max"
+ },
+ "bar": {
+  "value": 0.0,
+  "source": "GOAL.md v2.2/v2.3 leaderboard mode"
+ },
+ "guard_metrics": [],
+ "best_prior": "reg3_250 tc 39.883 / TTF 16.1s; sycamore_m20 tc 61.522 / TTF 39.6s",
+ "best_this_cycle": "reg3_250 TTF 7.069s (attempt-061, confirmed); tc unchanged (best +0.002 tie)",
+ "holdout": {
+  "spent": false,
+  "result": null,
+  "note": "single record on the anytime axis; holdout set does not cover TTF"
+ },
+ "attempts": [
+  {
+   "id": 59,
+   "kind": "improve",
+   "parent": "052",
+   "hypothesis": "continuous beta(span,t) freeze-out ladder",
+   "score": -0.1333,
+   "records": [],
+   "status": "no-change",
+   "log_path": ".worktrees/attempt-059/LOG.md",
+   "primary": -0.1333,
+   "causal_note": "supported at matched sweeps (ksg -1.7..-4.7 bits); no record \u2014 primary tc axis saturated"
+  },
+  {
+   "id": 60,
+   "kind": "improve",
+   "parent": "052",
+   "hypothesis": "activity-worklist freezing",
+   "score": -0.4954,
+   "records": [],
+   "status": "no-change",
+   "log_path": ".worktrees/attempt-060/LOG.md",
+   "primary": -0.4954,
+   "causal_note": "falsified on primaries; ksg short-budget anytime gain only"
+  },
+  {
+   "id": 61,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "targeted waist-band reheating",
+   "score": -0.0315,
+   "records": [
+    "reg3_250 TTF 7.069s (confirmed, prev 16.1s)"
+   ],
+   "status": "improved",
+   "log_path": ".worktrees/attempt-061/LOG.md",
+   "primary": -0.0315,
+   "causal_note": "early-descent accelerant, refiner side falsified as pre-registered"
+  }
+ ],
+ "lessons": [
+  {
+   "observation": "061 sets a confirmed 2.3x TTF record on reg3_250 while its matched-sweep final tc is 4-5 bits WORSE on ksg; 059 wins matched-sweep tc but sets no record",
+   "root_cause": "the search has two phases with opposite temperature needs: bottleneck negotiation (early) profits from local heat at the waist band; plateau refinement (late) profits from cold scale-ordered moves \u2014 no homogeneous schedule serves both",
+   "evidence": "061 in-band net gain negative at 2048 sweeps yet TTF 7.1s vs 16.1s (confirmed); 059 yield-rate lower than parent while final tc better (dev-results-huawei.jsonl in both worktrees)",
+   "status": "confirmed",
+   "implication": "promote a phase-switched composite (band reheat -> freeze-out front) as cycle-12 attempt 062"
+  },
+  {
+   "observation": "059's 1.7-4.7-bit dev-bench wins do not move the validator primaries",
+   "root_cause": "reg3_250's 90s frontier is a saturated basin floor (13 mechanisms, 2 toolchains, cycles 1-5); refiner quality is invisible there",
+   "evidence": "059 and 061 both land at tc 39.882 (= record tie) from different chassis",
+   "status": "confirmed",
+   "implication": "matched-work refinement claims go to the PR #40 ablation harness (paper), not the primary tc axis"
+  },
+  {
+   "observation": "060 loses 0.75 bits on reg3_250 despite x1.97 sweep throughput on ksg",
+   "root_cause": "staleness pruning assumes improvements localize; on expanders improvement density is uniform, so the worklist prunes exactly the useful moves",
+   "evidence": "active fraction 0.33-0.41 on ksg with -1.7-bit gain vs wash/loss on d13 and reg3 (devbench-huawei.log)",
+   "status": "suspected",
+   "implication": "blacklist unconditional worklist scheduling; a locality-gated variant stays admissible"
+  }
+ ],
+ "blacklist_new": [
+  "unconditional activity-worklist scheduling",
+  "band reheating as a refiner"
+ ],
+ "insight_promotions": [],
+ "reflection": {
+  "review": "1 of 3 attempts moved a leaderboard axis: attempt-061 set a **confirmed\nanytime record on reg3_250 (TTF 7.1 s vs 16.1 s, 2.3\u00d7)** \u2014 the first TTF\nrecord since 032. 0 of 3 moved a tc record (best delta +0.002 = tie).\n\n- **059** (improve, parent 052-ladder): continuous \u03b2(span,t) freeze-out.\n  Validator \u22120.1333, no record; huawei matched-sweep dev bench: \u22121.7 to\n  \u22124.7 bits on ksg, wash on d13. Causal claim: freeze-out beats the hard\n  gate as a *matched-work refiner*, but the 90 s primary budget is past\n  the reg3 plateau where refinement quality stops mattering.\n- **060** (improve, parent 052-ladder): activity-worklist freezing.\n  Validator \u22120.4954, TTF \u221e \u2014 falsified on the primaries; dev bench split:\n  \u22121.65/\u22121.72 bits on ksg at 30/75 s (throughput \u00d71.97), wash on d13.\n  Causal claim: staleness pruning helps only where improvements localize;\n  on expanders they don't.\n- **061** (draft): targeted waist-band reheating. Validator \u22120.0315 with\n  the confirmed reg3_250 TTF record; sycamore ttf 1.3 s claim unconfirmed\n  (confirmation hit wall limit; recorded, not retried). Dev bench:\n  final-tc side falsified as pre-registered (ksg +4\u20135 bits at matched\n  sweeps; in-band net gain negative). Causal claim: band heating is an\n  early-descent accelerant, not a refiner.\n\nBudget: 3 of 3 authorized attempts used \u2192 soft gate. Overrides this\ncycle: codex implementation; huawei dev benches \u2264600 s; validator scoring\nkept on the canonical local host.",
+  "lessons": "1. **(top-ranked) The three mechanisms separate cleanly by *phase*, not by\n   quality.** Observation: 061 wins the first 10 s (TTF 7.1 s), the\n   cold ladder/059 wins matched-work refinement, plain annealing wins\n   long budgets on expanders. Root cause (*confirmed* by the tc(t) curves\n   and in/out-band gain accounting): early descent is bottleneck-\n   negotiation (helped by local heat), late descent is plateau refinement\n   (helped by cold, scale-ordered moves); a single homogeneous schedule\n   cannot serve both. Evidence: 061 in-band net gain negative at 2048\n   sweeps yet TTF 2.3\u00d7 faster; 059 yield-rate *lower* while final tc\n   better. Implication: the promoted direction is a *phase-switched\n   composite* (band reheat \u2192 freeze-out front), one atomic change on 061.\n2. **059 vs primaries.** Observation: big dev-bench wins, validator tie.\n   Root cause (*confirmed*): reg3_250's 90 s frontier is a basin floor \u2014\n   13 mechanisms and 2 toolchains already saturate it (cycles 1\u20135); a\n   better refiner cannot show there. Implication: matched-work refinement\n   claims belong in the PR #40 ablation harness (paper), not on the\n   saturated primary tc axis.\n3. **060 falsification.** Observation: \u22120.75 on reg3. Root cause\n   (*suspected*; would confirm with an activity-locality trace on reg3):\n   uniform improvement density on expanders makes the worklist prune\n   exactly the moves that matter; the periodic full sweeps then pay the\n   pruning cost without the locality dividend. Implication: blacklist\n   unconditional worklist scheduling; a locality-gated variant remains\n   admissible but is not promoted.\n4. *Off-goal:* the huawei dev benches (\u2264600 s, matched-sweep, parent\n   toggle in-binary) proved a far cheaper falsification instrument than\n   the 90 s validator pair \u2014 worth porting into the validator as a\n   \"mechanism mode\" if cycle 12 is authorized.",
+  "evidence": "- reg3_250: tc floor 39.883 reconfirmed by two independent chassis (059,\n  061 both 39.882 = tie); **TTF record now 7.069 s (061, confirmed)**.\n- Blacklist additions: unconditional activity-worklist scheduling (060);\n  band reheating as a *refiner* (061 matched-sweep result).\n- Standing risk: dev-set overfit \u2014 no holdout adjudication spent this\n  cycle (single-record cycle; the record is an anytime axis the holdout\n  set does not cover).",
+  "literature": ".knowledge/ contraction-order KB (60 refs): no prior work assigns\nper-node scale- or cost-dependent temperatures inside a contraction-tree\nSA; nearest neighbours remain multilevel partitioning (coarsen-refine,\nalready distinguished in attempt-034) and cotengra's reconf (subtree\nre-optimization, no temperature structure). The phase-separation claim\n(heat-for-descent vs cold-for-refinement on this landscape) appears\nnovel and is the publishable nugget of this cycle.",
+  "next": "Hypothesis (falsifiable): a phase-switched composite \u2014 061's band reheat\nfor the first f(n) sweeps, then 059's freeze-out front, on the 052\nchassis \u2014 beats BOTH parents on TTF *and* matched-work tc, and confirms\nthe unconfirmed sycamore_m20 TTF claim. Planned attempts (if authorized):\n- 062 (improve, parent 061): phase switch at fixed sweep fraction; one\n  knob.\n- 063 (improve, parent 059): freeze-out front inside PR #40's\n  anneal_refine_rounds cold pass (library-side, feeds the paper ablation).\n- 064 (draft): schedule-free control \u2014 event-triggered switch (switch when\n  waist cost stops falling) as the principled version of 062.\nAbandon the direction if 062 fails to beat 061's TTF or 059's matched-work\ntc on both dev instances."
+ }
+}

@@ -4,13 +4,15 @@
 - topic: beat-existing-optimizers  # slug of the chosen topic once stage >= db
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
-- authorized_rounds: 0     # exhausted; cycle 10 reflected 2026-07-24. At the
-                           # soft gate: recommendation = write-up (two-pillar
-                           # algorithm story), optional bounds thread + omeco PR.
-                           # (cycle 8-10 HTML renders pending: ~/Documents
-                           # TCC-blocked; md/json canonical)
-- next_attempt: 57
-- next_cycle: 11
+- authorized_attempts: 0   # cycle 11 (059-061) executed 2026-08-20; soft gate:
+                           # 061 set confirmed reg3_250 TTF record 7.069s.
+                           # Was: 3, authorized by user 2026-08-20
+                           # ("continue the autoresearch with these 3 plans"):
+                           # 059 beta(span,t) freeze-out, 060 activity-based
+                           # worklist freezing, 061 targeted waist-band reheat.
+- next_attempt: 62         # 057/058 consumed by the attempt-057/058 campaign;
+                           # counter was stale at 57, corrected 2026-08-20
+- next_cycle: 12
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
   - validator_gate: passed 2026-07-22 (v2)  # pending | passed YYYY-MM-DD
@@ -63,3 +65,11 @@
     ranked DBN/linkage hardest; 200-job batch (10 hard instances x
     {ref,a038,a050,a054} x 5 reps x 90 s) + Julia baselines (incl.
     TensorInference default TreeSA) chained on huawei after the ladder.
+  - 2026-08-20: cycle 11 (attempts 059-061) authorized by user with three
+    deviations: (a) implementation delegated to codex sessions per attempt;
+    (b) dev/mechanism benchmarks run on huawei, hard cap 600 s per benchmark
+    run (user: "each benchmark at most cost 10min"); (c) validator scoring
+    stays on the local canonical host (sandbox-exec env; leaderboard records
+    were measured here — scoring elsewhere would break record comparability).
+    Attempt worktrees base on jg/surgery-v2 (eeaccf5) to reuse the
+    RoundsOptions/warm-rebuild machinery from PR #40.
