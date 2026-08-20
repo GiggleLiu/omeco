@@ -56,3 +56,25 @@ property — record both relabelings' curves; the claim dies cleanly.
 - `dev_bench.sh <instances_dir> <out.jsonl>` hard-capped at 600 s total
   wall, runnable on 2-core Linux; print the budget plan first and abort
   if it would exceed 600 s.
+
+## Outcome (recorded 2026-08-20)
+
+**Validator (canonical host):** score -0.1254, NO RECORD. reg3_250
+tc=39.882 (tie), ttf first-run 2.9 s but confirmation 7.73 s -> claim
+not confirmed (record stays 7.069 s, attempt-061). sycamore_m20
+tc=61.774 (-0.252), **ttf = inf: with robust snapshotting the 1.3 s
+claim vanishes entirely.**
+
+**Dev bench (huawei, 415 s plan):** the modification FAILED its own
+evidence gate — the robust arm's tc(t) is consistently WORSE than pure
+061 (sycamore tc@1 79.98 vs 62.42; reg3 tc@30 40.02 vs 39.88): halving
+the first two band epochs damages early descent rather than making it
+measurement-robust. First-snapshot latency was already ~30 ms in the
+parent, so change (a)/(c) had nothing to fix.
+
+**Verdict (honest, both pre-registered falsifications hit):**
+(1) 061's sycamore_m20 TTF 1.3 s was a relabeling-lottery artifact, not
+a mechanism property — the claim dies. (2) The early epochs are
+load-bearing for descent; shortening them is harmful. Blacklist:
+epoch-shortening as a confirmation-robustness device. The reg3 7.1 s
+record (061) stands as the mechanism's real, confirmed effect.
