@@ -10,6 +10,11 @@ omeco adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   exactly work-matched cold-only control (`surgery: false`). The historical
   `anneal_surgery_rounds` API is now a default-options wrapper and remains
   byte-identical for fixed inputs.
+- Added opt-in `treesa::RoundsSchedule` (`RoundsOptions::schedule`). The
+  default `Cold` variant is the historical span-gated fine-tuning pass;
+  `BandReheatThenFront { switch_fraction }` reheats the waist cost band and then
+  descends a continuous log-span freeze-out front, with the switch clamped
+  between two band epochs and 40% of the planned sweeps.
 - Added opt-in `waist_surgery::RebuildMode::WarmRestricted` and
   `SurgeryScope::Local`. The former initializes rebuilt sides from the
   restricted incumbent topology; the latter rebuilds only a bounded ancestor

@@ -1752,7 +1752,8 @@ pub fn warm_exprtree_to_nested<L: Label>(
     expr_tree_to_nested(tree, &code.ixs, labels, &code.iy)
 }
 
-/// Diagnostics from an [`anneal_surgery_rounds`] run.
+/// Diagnostics from an [`anneal_surgery_rounds`] or [`anneal_refine_rounds`]
+/// run.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RoundsReport {
     /// Number of interleaved rounds actually executed. Smaller than the
@@ -1840,7 +1841,7 @@ pub enum RoundsSchedule {
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct RoundsOptions {
-    /// Run the global waist-surgery call at the start of each round.
+    /// Run the waist-surgery call at the start of each round.
     pub surgery: bool,
     /// How rebuilt sides are initialized.
     pub rebuild: RebuildMode,
@@ -1872,7 +1873,8 @@ pub struct RoundTrace {
     pub score_before: f64,
     /// Candidate after the surgery step (equal to `tc_before` if rejected).
     pub tc_after_surgery: f64,
-    /// Raw endpoint of the cold fine-tuning pass, whether retained or rejected.
+    /// Raw endpoint of the round's fine-tuning pass, whether retained or
+    /// rejected.
     /// The field keeps its historical `anneal` name for artifact compatibility.
     pub tc_after_anneal: f64,
     /// Best of the round incumbent, surgery candidate, and all sweep
