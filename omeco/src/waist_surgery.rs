@@ -805,35 +805,7 @@ fn bfs_seed(hyper: &Hyper, seed: usize, target: usize) -> Vec<bool> {
 /// other input tensor forms side B. A root argmax has an empty complement, so the
 /// caller treats it as a non-actionable waist.
 fn extract_waist(tree: &ExprTree, log2_sizes: &[f64]) -> Option<(f64, Vec<usize>)> {
-    fn walk(
-        tree: &ExprTree,
-        log2_sizes: &[f64],
-        best: &mut f64,
-        best_leaves: &mut Vec<usize>,
-    ) -> Vec<usize> {
-        match tree {
-            ExprTree::Leaf(info) => vec![info.tensor_id.unwrap_or(0)],
-            ExprTree::Node { left, right, info } => {
-                let lleaves = walk(left, log2_sizes, best, best_leaves);
-                let rleaves = walk(right, log2_sizes, best, best_leaves);
-                let cost = node_tc(left.labels(), right.labels(), &info.out_dims, log2_sizes);
-                let mut leaves = lleaves;
-                leaves.extend_from_slice(&rleaves);
-                if cost > *best {
-                    *best = cost;
-                    *best_leaves = leaves.clone();
-                }
-                leaves
-            }
-        }
-    }
-    if matches!(tree, ExprTree::Leaf(_)) {
-        return None;
-    }
-    let mut best = f64::NEG_INFINITY;
-    let mut best_leaves = Vec::new();
-    walk(tree, log2_sizes, &mut best, &mut best_leaves);
-    Some((best, best_leaves))
+    extract_waist_location(tree, log2_sizes).map(|(cost, leaves, _)| (cost, leaves))
 }
 
 /// Return the waist together with its root-relative child path (`false` = left).
@@ -965,7 +937,7 @@ fn restrict_expr_tree(tree: &ExprTree, keep: &HashSet<usize>) -> Option<ExprTree
 }
 
 /// Exact contraction-node cost used by the TreeSA objective.
-fn node_tc(ix1: &[usize], ix2: &[usize], iy: &[usize], log2_sizes: &[f64]) -> f64 {
+pub(crate) fn node_tc(ix1: &[usize], ix2: &[usize], iy: &[usize], log2_sizes: &[f64]) -> f64 {
     let mut tc: f64 = iy.iter().map(|&l| log2_sizes[l]).sum();
     for &l in ix1 {
         if ix2.contains(&l) && !iy.contains(&l) {
@@ -1631,55 +1603,65 @@ impl Refiner<'_> {
             .collect();
 
         let mut sub_best = greedy;
-        if let Some(mut tree) = nested_to_expr_tree(&sub_best, &sub_label_map) {
-            let mut scratch = ScratchSpace::new(sub_labels.len());
-            let m = tree.leaf_count();
-            let s_top = ((m + TARGET_TOP - 1) / TARGET_TOP).max(2);
-            let mut spans: Vec<usize> = Vec::new();
-            let mut s = s_top;
-            while s > 2 {
-                spans.push(s);
-                s /= 2;
-            }
-            spans.push(2);
-            let mut s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-            let mut best_lin = s_lin;
-            let mut best_tree = tree.clone();
-            let mut sweeps: u64 = 0;
-            'anneal: for _vc in 0..REBUILD_VCYCLES.max(1) {
-                for &span in &spans {
-                    let denom = (REBUILD_COLD_SWEEPS.saturating_sub(1)).max(1) as f64;
-                    for k in 0..REBUILD_COLD_SWEEPS {
-                        if self.out_of_time() {
-                            break 'anneal;
-                        }
-                        let beta = B_LO_COLD + (B_HI - B_LO_COLD) * (k as f64 / denom);
-                        gated_sweep(
-                            &mut tree,
-                            beta,
-                            span,
-                            &sub_log2,
-                            &mut self.rng,
-                            &mut scratch,
-                            &mut s_lin,
-                        );
-                        sweeps += 1;
-                        if sweeps % RESYNC_SWEEPS == 0 {
-                            s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-                        }
-                    }
-                    s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-                    if s_lin < best_lin - 1e-9 {
-                        best_lin = s_lin;
-                        best_tree = tree.clone();
-                    }
-                }
-                tree = best_tree.clone();
-                s_lin = best_lin;
-            }
+        if let Some(tree) = nested_to_expr_tree(&sub_best, &sub_label_map) {
+            let best_tree = self.anneal_side(tree, &sub_log2, sub_labels.len());
             sub_best = expr_to_nested_counted(&best_tree, &sub_ixs, open);
         }
         Some(remap_leaves(&sub_best, tensors))
+    }
+
+    /// Cold V-cycle body shared by both side solvers: the coarse-to-fine span
+    /// ladder, `REBUILD_VCYCLES` beta ramps of `REBUILD_COLD_SWEEPS` gated
+    /// sweeps each, periodic `RESYNC_SWEEPS` rescoring, and the best-tree
+    /// ratchet. Only the initial tree differs between callers, so keeping one
+    /// body is what makes the two schedules provably identical.
+    fn anneal_side(&mut self, mut tree: ExprTree, sub_log2: &[f64], nedge: usize) -> ExprTree {
+        let mut scratch = ScratchSpace::new(nedge);
+        let m = tree.leaf_count();
+        let s_top = ((m + TARGET_TOP - 1) / TARGET_TOP).max(2);
+        let mut spans: Vec<usize> = Vec::new();
+        let mut s = s_top;
+        while s > 2 {
+            spans.push(s);
+            s /= 2;
+        }
+        spans.push(2);
+        let mut s_lin = f64::exp2(tree_complexity(&tree, sub_log2).0);
+        let mut best_lin = s_lin;
+        let mut best_tree = tree.clone();
+        let mut sweeps: u64 = 0;
+        'anneal: for _vc in 0..REBUILD_VCYCLES.max(1) {
+            for &span in &spans {
+                let denom = (REBUILD_COLD_SWEEPS.saturating_sub(1)).max(1) as f64;
+                for k in 0..REBUILD_COLD_SWEEPS {
+                    if self.out_of_time() {
+                        break 'anneal;
+                    }
+                    let beta = B_LO_COLD + (B_HI - B_LO_COLD) * (k as f64 / denom);
+                    gated_sweep(
+                        &mut tree,
+                        beta,
+                        span,
+                        sub_log2,
+                        &mut self.rng,
+                        &mut scratch,
+                        &mut s_lin,
+                    );
+                    sweeps += 1;
+                    if sweeps % RESYNC_SWEEPS == 0 {
+                        s_lin = f64::exp2(tree_complexity(&tree, sub_log2).0);
+                    }
+                }
+                s_lin = f64::exp2(tree_complexity(&tree, sub_log2).0);
+                if s_lin < best_lin - 1e-9 {
+                    best_lin = s_lin;
+                    best_tree = tree.clone();
+                }
+            }
+            tree = best_tree.clone();
+            s_lin = best_lin;
+        }
+        best_tree
     }
 
     /// Warm-restricted side solve. Restriction failure falls back to the
@@ -1727,58 +1709,14 @@ impl Refiner<'_> {
             .map(|label| (*self.sizes.get(label).unwrap_or(&1) as f64).log2())
             .collect();
         let normalized = expr_to_nested_counted(&restricted, &self.code.ixs, open);
-        let Some(mut tree) = nested_to_expr_tree(&normalized, &sub_label_map) else {
+        let Some(tree) = nested_to_expr_tree(&normalized, &sub_label_map) else {
             return self.solve_side(tensors, open);
         };
         if self.out_of_time() {
             return None;
         }
 
-        let mut scratch = ScratchSpace::new(sub_labels.len());
-        let m = tree.leaf_count();
-        let s_top = ((m + TARGET_TOP - 1) / TARGET_TOP).max(2);
-        let mut spans = Vec::new();
-        let mut span = s_top;
-        while span > 2 {
-            spans.push(span);
-            span /= 2;
-        }
-        spans.push(2);
-        let mut s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-        let mut best_lin = s_lin;
-        let mut best_tree = tree.clone();
-        let mut sweeps = 0_u64;
-        'anneal: for _ in 0..REBUILD_VCYCLES.max(1) {
-            for &span in &spans {
-                let denominator = (REBUILD_COLD_SWEEPS.saturating_sub(1)).max(1) as f64;
-                for sweep in 0..REBUILD_COLD_SWEEPS {
-                    if self.out_of_time() {
-                        break 'anneal;
-                    }
-                    let beta = B_LO_COLD + (B_HI - B_LO_COLD) * (sweep as f64 / denominator);
-                    gated_sweep(
-                        &mut tree,
-                        beta,
-                        span,
-                        &sub_log2,
-                        &mut self.rng,
-                        &mut scratch,
-                        &mut s_lin,
-                    );
-                    sweeps += 1;
-                    if sweeps % RESYNC_SWEEPS == 0 {
-                        s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-                    }
-                }
-                s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-                if s_lin < best_lin - 1e-9 {
-                    best_lin = s_lin;
-                    best_tree = tree.clone();
-                }
-            }
-            tree = best_tree.clone();
-            s_lin = best_lin;
-        }
+        let best_tree = self.anneal_side(tree, &sub_log2, sub_labels.len());
         Some(expr_to_nested_counted(&best_tree, &self.code.ixs, open))
     }
 }

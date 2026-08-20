@@ -15,7 +15,7 @@ use crate::utils::fast_log2sumexp2;
 #[cfg(test)]
 use crate::waist_surgery::refine_capped;
 use crate::waist_surgery::{
-    gated_sweep, refine_capped_seeded_with_trace, refine_capped_seeded_with_trace_opts,
+    gated_sweep, node_tc, refine_capped_seeded_with_trace, refine_capped_seeded_with_trace_opts,
     RebuildMode, SurgeryOptions, SurgeryScope, WaistUpdate,
 };
 use crate::Label;
@@ -599,6 +599,20 @@ where
     (best, endpoint)
 }
 
+/// Coarse-to-fine span ladder for a tree with `n` leaves: a size-scaled top
+/// span halved down to the finest span of 2. Shared by every rounds fine tuner
+/// so their level structures cannot drift apart.
+fn span_ladder(n: usize) -> Vec<usize> {
+    let mut span = ((n + 29) / 30).max(2);
+    let mut spans = Vec::new();
+    while span > 2 {
+        spans.push(span);
+        span /= 2;
+    }
+    spans.push(2);
+    spans
+}
+
 /// Fine-tune a specified tree and return `(best_seen, final_endpoint, sweeps)`.
 ///
 /// The endpoint remains useful diagnostics for fine-tuning damage, but the
@@ -629,13 +643,7 @@ where
     let mut sweeps_total = 0_u64;
 
     let n = tree.leaf_count();
-    let mut span = ((n + 29) / 30).max(2);
-    let mut spans = Vec::new();
-    while span > 2 {
-        spans.push(span);
-        span /= 2;
-    }
-    spans.push(2);
+    let spans = span_ladder(n);
 
     if !betas.is_empty() {
         let denom = sweeps_per_span.saturating_sub(1).max(1);
@@ -672,21 +680,48 @@ struct FrontSchedule {
     beta_cold: f64,
 }
 
-struct HeatedBand {
-    paths: HashSet<Vec<bool>>,
+/// Immutable band snapshot shaped like the tree it was taken from: a node is in
+/// the band iff its subtree contains a contraction within the band width of the
+/// current waist, which is exactly "the node is, or is an ancestor of, a
+/// qualifying node". Walking this in lockstep with the tree costs `O(1)` per
+/// node instead of hashing a root-relative path.
+enum HeatedBand {
+    Leaf,
+    Node {
+        in_band: bool,
+        left: Box<HeatedBand>,
+        right: Box<HeatedBand>,
+    },
+}
+
+static BAND_LEAF: HeatedBand = HeatedBand::Leaf;
+
+impl HeatedBand {
+    fn in_band(&self) -> bool {
+        matches!(self, HeatedBand::Node { in_band: true, .. })
+    }
+
+    /// Children of this band node. A `Leaf` yields leaves, so a tree that has
+    /// been rewritten since the snapshot simply reads as "outside the band",
+    /// matching the miss a stale path lookup would produce.
+    fn children(&self) -> (&HeatedBand, &HeatedBand) {
+        match self {
+            HeatedBand::Leaf => (&BAND_LEAF, &BAND_LEAF),
+            HeatedBand::Node { left, right, .. } => (left, right),
+        }
+    }
 }
 
 fn round_node_tc(tree: &ExprTree, log2_sizes: &[f64]) -> Option<f64> {
     let ExprTree::Node { left, right, info } = tree else {
         return None;
     };
-    let mut tc: f64 = info.out_dims.iter().map(|&label| log2_sizes[label]).sum();
-    for &label in left.labels() {
-        if right.labels().contains(&label) && !info.out_dims.contains(&label) {
-            tc += log2_sizes[label];
-        }
-    }
-    Some(tc)
+    Some(node_tc(
+        left.labels(),
+        right.labels(),
+        &info.out_dims,
+        log2_sizes,
+    ))
 }
 
 fn max_round_node_tc(tree: &ExprTree, log2_sizes: &[f64]) -> f64 {
@@ -702,33 +737,24 @@ fn max_round_node_tc(tree: &ExprTree, log2_sizes: &[f64]) -> f64 {
 /// Snapshot all nodes within `width_bits` of the highest-cost contraction and
 /// every ancestor on their paths to the root.
 fn heated_round_band(tree: &ExprTree, log2_sizes: &[f64], width_bits: f64) -> HeatedBand {
-    fn collect(
-        tree: &ExprTree,
-        log2_sizes: &[f64],
-        threshold: f64,
-        path: &mut Vec<bool>,
-        paths: &mut HashSet<Vec<bool>>,
-    ) {
+    fn build(tree: &ExprTree, log2_sizes: &[f64], threshold: f64) -> HeatedBand {
         let ExprTree::Node { left, right, .. } = tree else {
-            return;
+            return HeatedBand::Leaf;
         };
-        if round_node_tc(tree, log2_sizes).is_some_and(|tc| tc >= threshold - 1e-12) {
-            for end in 0..=path.len() {
-                paths.insert(path[..end].to_vec());
-            }
+        let left_band = build(left, log2_sizes, threshold);
+        let right_band = build(right, log2_sizes, threshold);
+        let in_band = left_band.in_band()
+            || right_band.in_band()
+            || round_node_tc(tree, log2_sizes).is_some_and(|tc| tc >= threshold - 1e-12);
+        HeatedBand::Node {
+            in_band,
+            left: Box::new(left_band),
+            right: Box::new(right_band),
         }
-        path.push(false);
-        collect(left, log2_sizes, threshold, path, paths);
-        path.pop();
-        path.push(true);
-        collect(right, log2_sizes, threshold, path, paths);
-        path.pop();
     }
 
     let threshold = max_round_node_tc(tree, log2_sizes) - width_bits;
-    let mut paths = HashSet::new();
-    collect(tree, log2_sizes, threshold, &mut Vec::new(), &mut paths);
-    HeatedBand { paths }
+    build(tree, log2_sizes, threshold)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -736,8 +762,7 @@ fn band_reheat_sweep(
     tree: &mut ExprTree,
     beta: f64,
     band_beta: f64,
-    band: &HashSet<Vec<bool>>,
-    path: &mut Vec<bool>,
+    band: &HeatedBand,
     min_span: usize,
     log2_sizes: &[f64],
     rng: &mut rand::rngs::SmallRng,
@@ -747,16 +772,13 @@ fn band_reheat_sweep(
     match tree {
         ExprTree::Leaf(_) => 1,
         ExprTree::Node { left, right, .. } => {
-            path.push(false);
+            let (band_left, band_right) = band.children();
             let left_span = band_reheat_sweep(
-                left, beta, band_beta, band, path, min_span, log2_sizes, rng, scratch, s_lin,
+                left, beta, band_beta, band_left, min_span, log2_sizes, rng, scratch, s_lin,
             );
-            path.pop();
-            path.push(true);
             let right_span = band_reheat_sweep(
-                right, beta, band_beta, band, path, min_span, log2_sizes, rng, scratch, s_lin,
+                right, beta, band_beta, band_right, min_span, log2_sizes, rng, scratch, s_lin,
             );
-            path.pop();
             let span = left_span + right_span;
             if span >= min_span {
                 let rules = Rule::applicable_rules(tree, DecompositionType::Tree);
@@ -764,7 +786,7 @@ fn band_reheat_sweep(
                     let rule = rules[rng.random_range(0..rules.len())];
                     if let Some(diff) = scratch.rule_diff(tree, rule, log2_sizes, false) {
                         let dtc = diff.tc1 - diff.tc0;
-                        let effective_beta = if band.contains(path) {
+                        let effective_beta = if band.in_band() {
                             beta.min(band_beta)
                         } else {
                             beta
@@ -886,13 +908,7 @@ where
     let mut sweeps_total = 0_u64;
 
     let n = tree.leaf_count();
-    let mut span = ((n + 29) / 30).max(2);
-    let mut spans = Vec::new();
-    while span > 2 {
-        spans.push(span);
-        span /= 2;
-    }
-    spans.push(2);
+    let spans = span_ladder(n);
 
     if !betas.is_empty() {
         let epoch_sweeps = default_round_epoch_sweeps(n);
@@ -906,13 +922,17 @@ where
         let mut phase_sweeps = 0_u64;
 
         for (level, &span) in spans.iter().enumerate() {
-            let next_span = spans.get(level + 1).copied();
+            // The finest level freezes out to a span of 1: every level, the
+            // last one included, ends in the continuous front once the switch
+            // has been crossed.
+            let next_span = spans.get(level + 1).copied().unwrap_or(1);
             let mut sweep = 0usize;
             while sweep < sweeps_per_span {
                 let epoch_end = sweep
                     .saturating_add(epoch_sweeps as usize)
                     .min(sweeps_per_span);
-                let band = heated_round_band(&tree, log2_sizes, band_bits);
+                let band = (phase_sweeps < switch)
+                    .then(|| heated_round_band(&tree, log2_sizes, band_bits));
                 let epoch_start = sweep;
                 let epoch_denominator = epoch_end.saturating_sub(epoch_start + 1).max(1);
                 while sweep < epoch_end {
@@ -920,41 +940,41 @@ where
                     let beta = betas[beta_index];
                     let band_progress = (sweep - epoch_start) as f64 / epoch_denominator as f64;
                     let band_beta = band_beta_lo + (band_beta_hi - band_beta_lo) * band_progress;
-                    if next_span.is_some() && phase_sweeps >= switch {
-                        let progress = sweep as f64 / denominator as f64;
-                        let start = (span as f64).log2();
-                        let end = (next_span.unwrap_or(1) as f64).log2();
-                        continuous_front_sweep(
-                            &mut tree,
-                            FrontSchedule {
-                                front_log2: start + (end - start) * progress,
-                                width_log2: 1.0,
-                                beta_warm,
-                                beta_cold,
-                            },
-                            log2_sizes,
-                            rng,
-                            &mut scratch,
-                            &mut s_lin,
-                        );
-                    } else {
-                        band_reheat_sweep(
-                            &mut tree,
-                            beta,
-                            band_beta,
-                            &band.paths,
-                            &mut Vec::new(),
-                            span,
-                            log2_sizes,
-                            rng,
-                            &mut scratch,
-                            &mut s_lin,
-                        );
+                    match band.as_ref() {
+                        Some(band) if phase_sweeps < switch => {
+                            band_reheat_sweep(
+                                &mut tree,
+                                beta,
+                                band_beta,
+                                band,
+                                span,
+                                log2_sizes,
+                                rng,
+                                &mut scratch,
+                                &mut s_lin,
+                            );
+                        }
+                        _ => {
+                            let progress = sweep as f64 / denominator as f64;
+                            let start = (span as f64).log2();
+                            let end = (next_span as f64).log2();
+                            continuous_front_sweep(
+                                &mut tree,
+                                FrontSchedule {
+                                    front_log2: start + (end - start) * progress,
+                                    width_log2: 1.0,
+                                    beta_warm,
+                                    beta_cold,
+                                },
+                                log2_sizes,
+                                rng,
+                                &mut scratch,
+                                &mut s_lin,
+                            );
+                        }
                     }
                     sweeps_total += 1;
-                    if next_span.is_some() {
-                        phase_sweeps += 1;
-                    }
+                    phase_sweeps += 1;
                     let candidate_score = score_tree(&tree);
                     if candidate_score < best_score {
                         best_score = candidate_score;
@@ -4309,11 +4329,73 @@ mod tests {
         let tree = ExprTree::node(waist, cold, vec![]);
 
         let band = heated_round_band(&tree, &[5.0, 1.0], 1.0);
+        let (left, right) = band.children();
 
-        assert_eq!(band.paths.len(), 2);
-        assert!(band.paths.contains(&vec![]));
-        assert!(band.paths.contains(&vec![false]));
-        assert!(!band.paths.contains(&vec![true]));
+        assert!(band.in_band());
+        assert!(left.in_band());
+        assert!(!right.in_band());
+        assert!(!left.children().0.in_band());
+        assert!(!left.children().1.in_band());
+    }
+
+    #[test]
+    fn test_heated_band_children_of_a_leaf_read_as_outside_the_band() {
+        let band = heated_round_band(&ExprTree::leaf(vec![0], 0), &[1.0], 1.0);
+        let (left, right) = band.children();
+
+        assert!(!band.in_band());
+        assert!(!left.in_band());
+        assert!(!right.in_band());
+    }
+
+    #[test]
+    fn test_span_ladder_halves_to_the_finest_span() {
+        assert_eq!(span_ladder(10), vec![2]);
+        assert_eq!(span_ladder(60), vec![2]);
+        assert_eq!(span_ladder(64), vec![3, 2]);
+        assert_eq!(span_ladder(250), vec![9, 4, 2]);
+    }
+
+    /// A single-level span ladder (`n <= 60`) still reaches the continuous
+    /// front: switching earlier must change the annealed tree, which it cannot
+    /// do while every level falls back to band reheating.
+    #[test]
+    fn test_composite_front_phase_runs_on_a_single_level_span_ladder() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let seed = crate::optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let config = TreeSA::fast();
+        let ctx = prepare_warm_anneal(&code, &sizes, &seed).unwrap();
+        let emitted_score = |candidate: &ExprTree| {
+            let nested = warm_exprtree_to_nested(candidate, &code, &ctx.labels);
+            let cc = crate::contraction_complexity(&nested, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+        let betas = fine_tune_beta_schedule(&config.betas);
+
+        assert_eq!(span_ladder(ctx.tree.leaf_count()), vec![2]);
+
+        let run = |switch_fraction: f64| {
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(0xA55E);
+            let (_, endpoint, sweeps) = fine_tune_tree_sa_composite_counted(
+                ctx.tree.clone(),
+                &ctx.log2_sizes,
+                &betas,
+                200,
+                switch_fraction,
+                &emitted_score,
+                &mut rng,
+                ctx.nedge,
+            );
+            let nested = warm_exprtree_to_nested(&endpoint, &code, &ctx.labels);
+            (crate::json::to_json_string(&nested).unwrap(), sweeps)
+        };
+
+        let (early, early_sweeps) = run(0.0);
+        let (late, late_sweeps) = run(0.40);
+
+        assert_eq!(early_sweeps, 200);
+        assert_eq!(late_sweeps, 200);
+        assert_ne!(early, late);
     }
 
     #[test]
