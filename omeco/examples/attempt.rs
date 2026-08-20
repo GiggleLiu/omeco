@@ -1,4 +1,4 @@
-//! Attempt entry point for the autoresearch validator (attempt-061).
+//! Attempt entry point for the autoresearch validator (attempt-064).
 //!
 //! Contract: `attempt <graph.json> <budget_ms> <out.json>` — read an einsum
 //! graph, search for a contraction order within the wall-clock budget, and
@@ -6,15 +6,16 @@
 //! `out.json` in omeco `writejson` format. Every improvement is written
 //! EAGERLY and ATOMICALLY (tmp file + rename) the instant it is found.
 //!
-//! # Targeted waist-band reheating on the attempt-052 chassis
+//! # Waist-stall-triggered band reheat then continuous freeze-out front
 //!
-//! The pipeline remains simplify -> fixed-seed greedy portfolio -> warm kick ->
-//! cold span-gated ladder with incumbent ratcheting. Proposal visitation and
-//! rule selection remain uniform. The sole search-mechanism change is local
-//! temperature: once per epoch, find every contraction node within `c` bits of
-//! the current maximum node cost, add every ancestor on its root path, and use
-//! a warmer linear beta ramp only at those paths. `ATT_PARENT=1` bypasses that
-//! beta substitution and recovers the parent sweep behavior.
+//! The attempt-061 pipeline remains simplify -> fixed-seed greedy portfolio ->
+//! warm kick -> cold ladder with incumbent ratcheting. Cold passes initially
+//! use 061's targeted waist-band reheating verbatim. When the maximum node cost
+//! fails to improve by more than 0.25 bits over W(n) cold sweeps, where
+//! W(n)=clamp(ceil(sqrt(n)),8,32), the schedule switches permanently to 059's
+//! continuous log-span freeze-out front. The first eligible window may stall.
+//! `ATT_PARENT=1` restores pure attempt-061 behavior; `ATT_FIXED_SWITCH=q`
+//! restores attempt-062's fixed-fraction switch arm.
 //!
 //!   1. SIMPLIFY and SEED. Deterministic + fixed-seed Boltzmann-randomized
 //!      greedy portfolio;
@@ -74,6 +75,9 @@ const TARGET_TOP: usize = 30;
 /// Check the wall clock only every this many sweeps (keeps overhead low).
 const CLOCK_EVERY: u64 = 8;
 
+/// Sweep interval for the matched-work tc(t) diagnostic.
+const DIAG_EVERY_SWEEPS: u64 = 40;
+
 /// Minimum wall-clock gap between atomic disk writes. The validator polls
 /// `out.json` on its own 0.2 s clock, so writing more often is pure waste; on
 /// large-boundary trees an unthrottled write-per-improvement during descent
@@ -85,6 +89,31 @@ struct GraphData {
     ixs: Vec<Vec<usize>>,
     iy: Vec<usize>,
     sizes: HashMap<String, usize>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AttemptMode {
+    Event,
+    Fixed,
+    Parent061,
+}
+
+impl AttemptMode {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Event => "event",
+            Self::Fixed => "fixed",
+            Self::Parent061 => "parent061",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct FrontSchedule {
+    front_log2: f64,
+    width_log2: f64,
+    beta_warm: f64,
+    beta_cold: f64,
 }
 
 /// Read an `f64` tuning knob from the environment, falling back to `default`.
@@ -128,6 +157,50 @@ fn default_epoch_sweeps(n: usize) -> u64 {
 fn default_band_betas(n: usize) -> (f64, f64) {
     let log_n = (n.max(2) as f64).log2();
     ((0.5 + log_n / 16.0).min(1.25), (4.0 + log_n / 4.0).min(7.0))
+}
+
+/// Cold-prefix length from the pre-registered fractional switch rule.
+fn switch_cold_sweeps(total_planned: u64, epoch_sweeps: u64, fraction: f64) -> u64 {
+    let maximum = ((0.40 * total_planned as f64).round() as u64).max(1);
+    let minimum = epoch_sweeps.saturating_mul(2).min(maximum);
+    ((fraction * total_planned as f64).round() as u64).clamp(minimum, maximum)
+}
+
+/// The pre-registered waist-stall threshold, in log2 cost bits.
+const STALL_IMPROVEMENT_BITS: f64 = 0.25;
+
+fn waist_stalled(waist_start: f64, waist_end: f64) -> bool {
+    waist_start - waist_end <= STALL_IMPROVEMENT_BITS
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StallWindow {
+    start_sweep: u64,
+    start_waist: f64,
+}
+
+impl StallWindow {
+    fn new(start_sweep: u64, start_waist: f64) -> Self {
+        Self {
+            start_sweep,
+            start_waist,
+        }
+    }
+
+    fn is_due(self, cold_sweeps: u64, window_sweeps: u64) -> bool {
+        cold_sweeps.saturating_sub(self.start_sweep) >= window_sweeps
+    }
+
+    /// Return true on a stall; otherwise advance to the next full window.
+    fn observe_due(&mut self, cold_sweeps: u64, waist_end: f64) -> bool {
+        if waist_stalled(self.start_waist, waist_end) {
+            true
+        } else {
+            self.start_sweep = cold_sweeps;
+            self.start_waist = waist_end;
+            false
+        }
+    }
 }
 
 /// Atomically write `tree` to `out_path` (tmp file + rename) so the polling
@@ -467,26 +540,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // ---- Scale-structured basin-hopping + targeted waist-band heating. -------
-    let parent = env_bool("ATT_PARENT");
+    // ---- Waist-stall-triggered band heating -> continuous freeze-out front. --
+    let parent061 = env_bool("ATT_PARENT");
+    let fixed_switch = match std::env::var("ATT_FIXED_SWITCH") {
+        Ok(value) => {
+            let fraction: f64 = value
+                .parse()
+                .map_err(|_| "ATT_FIXED_SWITCH must be a finite fraction")?;
+            if !fraction.is_finite() {
+                return Err("ATT_FIXED_SWITCH must be a finite fraction".into());
+            }
+            Some(fraction.clamp(0.0, 0.40))
+        }
+        Err(std::env::VarError::NotPresent) => None,
+        Err(error) => return Err(error.into()),
+    };
+    if parent061 && fixed_switch.is_some() {
+        return Err("ATT_PARENT and ATT_FIXED_SWITCH are mutually exclusive".into());
+    }
+    let mode = if parent061 {
+        AttemptMode::Parent061
+    } else if fixed_switch.is_some() {
+        AttemptMode::Fixed
+    } else {
+        AttemptMode::Event
+    };
     let band_bits = env_f64("ATT_BAND_BITS", default_band_bits(n)).max(0.0);
     let epoch_sweeps = env_u64("ATT_EPOCH_SWEEPS", default_epoch_sweeps(n)).max(1);
     let (default_band_beta_lo, default_band_beta_hi) = default_band_betas(n);
     let band_beta_lo = env_f64("ATT_BAND_BLO", default_band_beta_lo);
     let band_beta_hi = env_f64("ATT_BAND_BHI", default_band_beta_hi).max(band_beta_lo);
+    // Local sensitivity override only; the validator-default mechanism uses W.
+    let stall_window_multiplier = env_u64("ATT_STALL_WINDOW_MULT", 1).max(1);
+    let front_width_log2 = env_f64("ATT_FRONT_WIDTH", 1.0).max(f64::EPSILON);
     let max_sweeps = env_u64("ATT_MAX_SWEEPS", u64::MAX);
     let diagnostics = env_bool("ATT_DIAG");
-    eprintln!(
-        "ATT_CONFIG mode={} n={} c={:.3} epoch_sweeps={} band_beta_lo={:.6} \
-         band_beta_hi={:.6} max_sweeps={}",
-        if parent { "parent" } else { "band" },
-        n,
-        band_bits,
-        epoch_sweeps,
-        band_beta_lo,
-        band_beta_hi,
-        max_sweeps
-    );
 
     let mut ann = Annealer {
         original_ixs: &code.ixs,
@@ -505,12 +593,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         best_tc: &mut best_tc,
         subtrees: &subtrees,
         original_labels: &original_labels,
-        parent,
+        mode,
         diagnostics,
         band_bits,
         epoch_sweeps,
         band_beta_lo,
         band_beta_hi,
+        fixed_switch,
+        stall_window_sweeps: epoch_sweeps.saturating_mul(stall_window_multiplier),
+        front_width_log2,
+        planned_cold_sweeps: 0,
+        fixed_switch_cold_sweeps: None,
+        actual_switch_cold_sweeps: None,
+        stall_window: None,
+        diagnostic_cold_points: [0; 3],
+        cold_sweeps: 0,
         max_sweeps,
         sweeps: 0,
         accepts: 0,
@@ -547,12 +644,21 @@ struct Annealer<'a> {
     best_tc: &'a mut f64,
     subtrees: &'a [NestedEinsum<usize>],
     original_labels: &'a [usize],
-    parent: bool,
+    mode: AttemptMode,
     diagnostics: bool,
     band_bits: f64,
     epoch_sweeps: u64,
     band_beta_lo: f64,
     band_beta_hi: f64,
+    fixed_switch: Option<f64>,
+    stall_window_sweeps: u64,
+    front_width_log2: f64,
+    planned_cold_sweeps: u64,
+    fixed_switch_cold_sweeps: Option<u64>,
+    actual_switch_cold_sweeps: Option<u64>,
+    stall_window: Option<StallWindow>,
+    diagnostic_cold_points: [u64; 3],
+    cold_sweeps: u64,
     max_sweeps: u64,
     sweeps: u64,
     accepts: u64,
@@ -605,6 +711,42 @@ impl Annealer<'_> {
         // improvement (size-scaled: small graphs diversify sooner).
         let stag_threshold = env_u64("ATT_STAG", if n <= 400 { 2 } else { 5 }).max(1);
 
+        self.planned_cold_sweeps = cold_sweeps.saturating_mul(span_levels.len() as u64);
+        self.fixed_switch_cold_sweeps = match self.mode {
+            AttemptMode::Fixed => Some(switch_cold_sweeps(
+                self.planned_cold_sweeps,
+                self.epoch_sweeps,
+                self.fixed_switch.unwrap_or(0.25),
+            )),
+            AttemptMode::Event | AttemptMode::Parent061 => None,
+        };
+        self.diagnostic_cold_points = [0.15, 0.25, 0.40].map(|fraction| {
+            switch_cold_sweeps(self.planned_cold_sweeps, self.epoch_sweeps, fraction)
+        });
+        eprintln!(
+            "ATT_CONFIG mode={} n={} c={:.3} epoch_sweeps={} band_beta_lo={:.6} \
+             band_beta_hi={:.6} front_width_log2={:.3} fixed_switch={} \
+             planned_cold_sweeps={} stall_window_sweeps={} stall_bits={:.3} \
+             fixed_switch_cold_sweeps={} max_sweeps={}",
+            self.mode.label(),
+            n,
+            self.band_bits,
+            self.epoch_sweeps,
+            self.band_beta_lo,
+            self.band_beta_hi,
+            self.front_width_log2,
+            self.fixed_switch
+                .map(|fraction| format!("{fraction:.6}"))
+                .unwrap_or_else(|| "-".to_string()),
+            self.planned_cold_sweeps,
+            self.stall_window_sweeps,
+            STALL_IMPROVEMENT_BITS,
+            self.fixed_switch_cold_sweeps
+                .map(|sweeps| sweeps.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            self.max_sweeps,
+        );
+
         // Working incumbent, kept as an ExprTree for cheap restart clones. Its
         // tc (`work_tc`) equals the global best (`*self.best_tc`) here because
         // the seed IS the best; the emitted best is always the global minimum
@@ -653,6 +795,7 @@ impl Annealer<'_> {
                     b_hi,
                     cold_sweeps,
                     "restart",
+                    None,
                 )?;
                 eprintln!(
                     "t={:.0}ms vcycle={vcycle} FLAT-control tc={:.4} improved={improved}",
@@ -680,12 +823,22 @@ impl Annealer<'_> {
                 b_hi,
                 kick_sweeps,
                 "kick",
+                None,
             )?;
             let tc_after_kick = tree_complexity(&tree, self.log2_sizes).0;
 
             // Cold refinement ladder.
+            if self.mode == AttemptMode::Event && self.actual_switch_cold_sweeps.is_none() {
+                // Cold observation windows continue across adjacent span
+                // levels, but never bridge the intervening warm kick.
+                self.stall_window = Some(StallWindow::new(
+                    self.cold_sweeps,
+                    max_node_tc(&tree, self.log2_sizes),
+                ));
+            }
             let mut cycle_improved = false;
-            for &span in span_levels.iter() {
+            for (level, &span) in span_levels.iter().enumerate() {
+                let next_span = span_levels.get(level + 1).copied().unwrap_or(1);
                 let improved = self.run_level(
                     &mut tree,
                     &mut s_lin,
@@ -696,6 +849,7 @@ impl Annealer<'_> {
                     b_hi,
                     cold_sweeps,
                     "cold",
+                    Some(next_span),
                 )?;
                 cycle_improved |= improved;
                 if self.exhausted() {
@@ -739,6 +893,7 @@ impl Annealer<'_> {
         b_hi: f64,
         sweeps: u64,
         phase: &str,
+        next_span: Option<usize>,
     ) -> Result<bool, Box<dyn std::error::Error>> {
         let mut improved = false;
         let denom = (sweeps.saturating_sub(1)).max(1) as f64;
@@ -751,6 +906,8 @@ impl Annealer<'_> {
             let mut stats = EpochStats::default();
             let epoch_start = k;
             let epoch_denom = (epoch_end - epoch_start).saturating_sub(1).max(1) as f64;
+            let mut saw_band = false;
+            let mut saw_front = false;
 
             while k < epoch_end && !self.exhausted() {
                 self.sweeps += 1;
@@ -758,23 +915,106 @@ impl Annealer<'_> {
                 let band_beta = self.band_beta_lo
                     + (self.band_beta_hi - self.band_beta_lo)
                         * ((k - epoch_start) as f64 / epoch_denom);
-                let mut path = Vec::new();
-                gated_sweep(
-                    tree,
-                    beta,
-                    band_beta,
-                    self.parent,
-                    &band.paths,
-                    &mut path,
-                    min_span,
-                    self.log2_sizes,
-                    &mut self.rng,
-                    &mut self.scratch,
-                    s_lin,
-                    &mut self.accepts,
-                    &mut stats,
-                );
+                if next_span.is_some()
+                    && self.mode == AttemptMode::Fixed
+                    && self.actual_switch_cold_sweeps.is_none()
+                    && self
+                        .fixed_switch_cold_sweeps
+                        .is_some_and(|cut| self.cold_sweeps >= cut)
+                {
+                    let now = self.elapsed_ms();
+                    self.actual_switch_cold_sweeps = Some(self.cold_sweeps);
+                    eprintln!(
+                        "ATT_SWITCH mode=fixed reason=fixed_fraction t_ms={now:.3} \
+                         cold_sweeps={} fixed_fraction={:.6}",
+                        self.cold_sweeps,
+                        self.fixed_switch.unwrap_or(0.25),
+                    );
+                }
+                let use_front = next_span.is_some()
+                    && match self.mode {
+                        AttemptMode::Event | AttemptMode::Fixed => {
+                            self.actual_switch_cold_sweeps.is_some()
+                        }
+                        AttemptMode::Parent061 => false,
+                    };
+                if use_front {
+                    saw_front = true;
+                    let progress = k as f64 / denom;
+                    let start = (min_span as f64).log2();
+                    let end = (next_span.unwrap_or(1) as f64).log2();
+                    continuous_front_sweep(
+                        tree,
+                        FrontSchedule {
+                            front_log2: start + (end - start) * progress,
+                            width_log2: self.front_width_log2,
+                            beta_warm: b_lo,
+                            beta_cold: b_hi,
+                        },
+                        self.log2_sizes,
+                        &mut self.rng,
+                        &mut self.scratch,
+                        s_lin,
+                        &mut self.accepts,
+                    );
+                } else {
+                    saw_band = true;
+                    let mut path = Vec::new();
+                    // `false` is attempt-061's mechanism-on default. Keeping
+                    // this call unchanged preserves the ATT_PARENT=1 control's
+                    // proposal/RNG stream byte-for-byte.
+                    gated_sweep(
+                        tree,
+                        beta,
+                        band_beta,
+                        false,
+                        &band.paths,
+                        &mut path,
+                        min_span,
+                        self.log2_sizes,
+                        &mut self.rng,
+                        &mut self.scratch,
+                        s_lin,
+                        &mut self.accepts,
+                        &mut stats,
+                    );
+                }
                 k += 1;
+                if next_span.is_some() {
+                    self.cold_sweeps += 1;
+                }
+
+                if next_span.is_some()
+                    && self.mode == AttemptMode::Event
+                    && !use_front
+                    && self.actual_switch_cold_sweeps.is_none()
+                {
+                    let window = self
+                        .stall_window
+                        .expect("event mode initializes its stall window before the cold ladder");
+                    if window.is_due(self.cold_sweeps, self.stall_window_sweeps) {
+                        let waist_end = max_node_tc(tree, self.log2_sizes);
+                        let waist_start = window.start_waist;
+                        let improvement = waist_start - waist_end;
+                        if self
+                            .stall_window
+                            .as_mut()
+                            .expect("stall window remains initialized")
+                            .observe_due(self.cold_sweeps, waist_end)
+                        {
+                            let now = self.elapsed_ms();
+                            self.actual_switch_cold_sweeps = Some(self.cold_sweeps);
+                            eprintln!(
+                                "ATT_SWITCH mode=event reason=waist_stall t_ms={now:.3} \
+                                 cold_sweeps={} window_start_cold_sweeps={} \
+                                 stall_window_sweeps={} waist_start={waist_start:.9} \
+                                 waist_end={waist_end:.9} improvement={improvement:.9} \
+                                 threshold={STALL_IMPROVEMENT_BITS:.3}",
+                                self.cold_sweeps, window.start_sweep, self.stall_window_sweeps,
+                            );
+                        }
+                    }
+                }
 
                 if self.sweeps % RESYNC_SWEEPS == 0 {
                     *s_lin = f64::exp2(tree_complexity(tree, self.log2_sizes).0);
@@ -784,6 +1024,22 @@ impl Annealer<'_> {
                 // I/O remains rate-limited independently below.
                 if *s_lin < f64::exp2(*self.best_tc) - 1e-9 {
                     improved |= self.capture_current(tree, best_expr, work_tc, s_lin);
+                }
+
+                if self.diagnostics
+                    && (self.sweeps % DIAG_EVERY_SWEEPS == 0
+                        || (next_span.is_some()
+                            && self.diagnostic_cold_points.contains(&self.cold_sweeps)))
+                {
+                    eprintln!(
+                        "ATT_POINT mode={} phase={} schedule={} sweeps={} cold_sweeps={} tc={:.9}",
+                        self.mode.label(),
+                        phase,
+                        if use_front { "front" } else { "band" },
+                        self.sweeps,
+                        self.cold_sweeps,
+                        self.best_tc,
+                    );
                 }
 
                 // Rate-limited eager writes of the newest in-memory best.
@@ -802,13 +1058,18 @@ impl Annealer<'_> {
                 let waist_after = max_node_tc(tree, self.log2_sizes);
                 let tc_after = tree_complexity(tree, self.log2_sizes).0;
                 eprintln!(
-                    "ATT_EPOCH mode={} phase={} span={} sweep={} epoch_sweeps={} c={:.3} \
+                    "ATT_EPOCH mode={} phase={} schedule={} span={} sweep={} epoch_sweeps={} c={:.3} \
                      band_nodes={} internal_nodes={} waist_before={:.9} waist_after={:.9} \
                      tc_before={:.9} tc_after={:.9} in_proposals={} in_accepts={} \
                      in_net_gain={:.9} in_downhill_gain={:.9} out_proposals={} out_accepts={} \
                      out_net_gain={:.9} out_downhill_gain={:.9}",
-                    if self.parent { "parent" } else { "band" },
+                    self.mode.label(),
                     phase,
+                    match (saw_band, saw_front) {
+                        (true, true) => "switch",
+                        (false, true) => "front",
+                        _ => "band",
+                    },
                     min_span,
                     self.sweeps,
                     k - epoch_start,
@@ -1039,6 +1300,55 @@ fn proposal_beta(parent: bool, in_band: bool, beta: f64, band_beta: f64) -> f64 
     }
 }
 
+/// Attempt-059's continuous log-span freeze-out sweep. Every internal node is
+/// visited: nodes ahead of the moving front accept only non-regressing moves,
+/// nodes in its one-octave transition band receive a linear beta ramp, and
+/// nodes behind it are cold. Proposal order and energy are otherwise unchanged.
+#[allow(clippy::too_many_arguments)]
+fn continuous_front_sweep(
+    tree: &mut ExprTree,
+    schedule: FrontSchedule,
+    log2_sizes: &[f64],
+    rng: &mut SmallRng,
+    scratch: &mut ScratchSpace,
+    s_lin: &mut f64,
+    accepts: &mut u64,
+) -> usize {
+    match tree {
+        ExprTree::Leaf(_) => 1,
+        ExprTree::Node { left, right, .. } => {
+            let ls =
+                continuous_front_sweep(left, schedule, log2_sizes, rng, scratch, s_lin, accepts);
+            let rs =
+                continuous_front_sweep(right, schedule, log2_sizes, rng, scratch, s_lin, accepts);
+            let span = ls + rs;
+            let node_log2 = (span as f64).log2();
+            let distance = node_log2 - schedule.front_log2;
+            let beta = if distance < 0.0 {
+                f64::INFINITY
+            } else if distance < schedule.width_log2 {
+                schedule.beta_warm
+                    + (schedule.beta_cold - schedule.beta_warm) * distance / schedule.width_log2
+            } else {
+                schedule.beta_cold
+            };
+            let rules = Rule::applicable_rules(tree, DecompositionType::Tree);
+            if !rules.is_empty() {
+                let rule = rules[rng.random_range(0..rules.len())];
+                if let Some(diff) = scratch.rule_diff(tree, rule, log2_sizes, false) {
+                    let dtc = diff.tc1 - diff.tc0;
+                    if dtc <= 0.0 || rng.random::<f64>() < (-beta * dtc).exp() {
+                        *s_lin += f64::exp2(diff.tc1) - f64::exp2(diff.tc0);
+                        apply_rule_mut(tree, rule, diff.new_labels);
+                        *accepts += 1;
+                    }
+                }
+            }
+            span
+        }
+    }
+}
+
 // ==========================================================================
 // NestedEinsum <-> ExprTree conversions (label-id space).
 // Reimplemented here because the library keeps them private.
@@ -1216,6 +1526,35 @@ mod tests {
         assert_eq!(format!("{left:?}"), format!("{right:?}"));
         assert_eq!(left_s, right_s);
         assert_eq!(left_accepts, right_accepts);
+    }
+
+    #[test]
+    fn switch_rule_uses_fraction_two_epoch_floor_and_forty_percent_cap() {
+        assert_eq!(switch_cold_sweeps(560, 32, 0.15), 84);
+        assert_eq!(switch_cold_sweeps(560, 32, 0.25), 140);
+        assert_eq!(switch_cold_sweeps(560, 32, 0.40), 224);
+        assert_eq!(switch_cold_sweeps(560, 32, 0.01), 64);
+        assert_eq!(switch_cold_sweeps(80, 32, 0.25), 32);
+    }
+
+    #[test]
+    fn waist_stall_allows_first_window_and_uses_strict_quarter_bit_improvement() {
+        assert!(waist_stalled(10.0, 10.0));
+        assert!(waist_stalled(10.0, 9.75));
+        assert!(!waist_stalled(10.0, 9.749));
+    }
+
+    #[test]
+    fn stall_window_counts_contiguous_sweeps_and_advances_only_after_improvement() {
+        let mut window = StallWindow::new(80, 10.0);
+        assert!(!window.is_due(96, 17));
+        assert!(window.is_due(97, 17));
+        assert!(!window.observe_due(97, 9.7));
+        assert_eq!(window.start_sweep, 97);
+        assert_eq!(window.start_waist, 9.7);
+        assert!(!window.is_due(113, 17));
+        assert!(window.is_due(114, 17));
+        assert!(window.observe_due(114, 9.45));
     }
 
     #[test]
