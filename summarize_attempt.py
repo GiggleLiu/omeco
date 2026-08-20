@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Run caps and stdlib-only summaries for attempt 061 diagnostics."""
+"""Hard caps, snapshot curves, and stdlib-only evidence for attempt 063."""
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import os
+import random
 import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+
+CHECKPOINTS_S = (1.0, 3.0, 10.0, 30.0)
+POLL_INTERVAL_S = 0.01
 
 
 def die(message: str) -> "NoReturn":
@@ -16,7 +24,7 @@ def die(message: str) -> "NoReturn":
 
 
 def kill(process: subprocess.Popen, process_group: bool) -> None:
-    """Immediately kill a command and, when requested, its full process group."""
+    """Immediately kill a command and, when requested, its process group."""
     try:
         if process_group:
             os.killpg(process.pid, signal.SIGKILL)
@@ -56,8 +64,6 @@ def supervise(argv: list[str]) -> None:
         kill(process, process_group=True)
         die(f"benchmark exceeded hard {seconds:g}s total wall cap")
     if returncode:
-        # The shell may have exited while a compiler or optimizer descendant
-        # remained. Clear the isolated group before returning failure.
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -65,113 +71,194 @@ def supervise(argv: list[str]) -> None:
     raise SystemExit(returncode)
 
 
-def fields(line: str) -> dict[str, str]:
-    return dict(item.split("=", 1) for item in line.split()[1:] if "=" in item)
+def relabel(argv: list[str]) -> None:
+    if len(argv) != 4:
+        die("usage: summarize_attempt.py relabel <source.json> <out.json> <seed>")
+    source, destination, seed_text = argv[1:]
+    graph = json.loads(Path(source).read_text())
+    labels = sorted(
+        {int(label) for indices in graph["ixs"] for label in indices}
+        | {int(label) for label in graph["iy"]}
+        | {int(label) for label in graph["sizes"]}
+    )
+    shuffled = labels.copy()
+    random.Random(int(seed_text)).shuffle(shuffled)
+    if len(shuffled) > 1 and shuffled == labels:
+        shuffled = shuffled[1:] + shuffled[:1]
+    mapping = dict(zip(labels, shuffled))
+    graph["ixs"] = [[mapping[int(label)] for label in indices] for indices in graph["ixs"]]
+    graph["iy"] = [mapping[int(label)] for label in graph["iy"]]
+    graph["sizes"] = {str(mapping[int(label)]): size for label, size in graph["sizes"].items()}
+    Path(destination).write_text(json.dumps(graph, sort_keys=True, separators=(",", ":")))
 
 
-def make_row(argv: list[str]) -> None:
-    if len(argv) != 7:
-        die("usage: summarize_attempt.py row <instance> <mode> <c> <sweep_cap> <log> <tree>")
-    instance, mode, c_text, sweep_cap, log_path, tree_path = argv[1:]
-    epochs = []
-    final: dict[str, str] = {}
-    config: dict[str, str] = {}
-    for line in Path(log_path).read_text().splitlines():
-        if line.startswith("ATT_CONFIG "):
-            config = fields(line)
-        elif line.startswith("ATT_EPOCH "):
-            epochs.append(fields(line))
-        elif " tc_final=" in line:
-            final = fields(line)
-    with open(tree_path) as stream:
-        tree = json.load(stream)
-    if (
-        not isinstance(tree, dict)
-        or not isinstance(tree.get("inputs"), list)
-        or not isinstance(tree.get("output"), list)
-        or not isinstance(tree.get("tree"), dict)
-        or "isleaf" not in tree["tree"]
-    ):
-        die(f"invalid NestedEinsum JSON in {tree_path}")
+def log2sumexp2(values: list[float]) -> float:
+    if not values:
+        return float("-inf")
+    maximum = max(values)
+    return maximum + math.log2(sum(math.exp2(value - maximum) for value in values))
 
-    def total(key: str, integer: bool = False):
-        values = (int(epoch[key]) if integer else float(epoch[key]) for epoch in epochs)
-        return sum(values)
 
-    in_proposals = total("in_proposals", True)
-    out_proposals = total("out_proposals", True)
-    in_accepts = total("in_accepts", True)
-    out_accepts = total("out_accepts", True)
+def snapshot_tc(snapshot: dict, sizes: dict[str, int]) -> float:
+    log_sizes = {int(label): math.log2(size) for label, size in sizes.items()}
+
+    def walk(tree: dict) -> list[float]:
+        if tree["isleaf"]:
+            return []
+        costs = []
+        for child in tree["args"]:
+            costs.extend(walk(child))
+        labels = {int(label) for indices in tree["eins"]["ixs"] for label in indices}
+        labels.update(int(label) for label in tree["eins"]["iy"])
+        costs.append(sum(log_sizes.get(label, 0.0) for label in labels))
+        return costs
+
+    return log2sumexp2(walk(snapshot["tree"]))
+
+
+def observe_run(argv: list[str]) -> None:
+    if len(argv) < 11 or argv[9] != "--":
+        die(
+            "usage: summarize_attempt.py run <cap_s> <instance> <relabeling> <arm> "
+            "<graph> <stdout> <stderr> <tree> -- <command...>"
+        )
+    cap_s = float(argv[1])
+    instance, relabeling_id, arm = argv[2:5]
+    graph_path, stdout_path, stderr_path, tree_path = argv[5:9]
+    command = argv[10:]
+    graph = json.loads(Path(graph_path).read_text())
+    output = Path(tree_path)
+    output.unlink(missing_ok=True)
+    observations: list[dict] = []
+    last_content: bytes | None = None
+    nested = os.environ.get("ATT_BENCH_GUARDED") == "1"
+
+    def sample(elapsed: float) -> None:
+        nonlocal last_content
+        try:
+            content = output.read_bytes()
+            if content != last_content:
+                snapshot = json.loads(content)
+                observations.append(
+                    {
+                        "time_s": elapsed,
+                        "tc": snapshot_tc(snapshot, graph["sizes"]),
+                        "sha256": hashlib.sha256(content).hexdigest(),
+                    }
+                )
+                last_content = content
+        except (FileNotFoundError, json.JSONDecodeError):
+            pass
+
+    with open(stdout_path, "wb") as stdout, open(stderr_path, "wb") as stderr:
+        start = time.monotonic()
+        process = subprocess.Popen(
+            command, stdout=stdout, stderr=stderr, start_new_session=not nested
+        )
+        while True:
+            elapsed = time.monotonic() - start
+            if elapsed > cap_s:
+                kill(process, process_group=not nested)
+                die(f"command exceeded {cap_s:g}s cap: {' '.join(command)}")
+            sample(elapsed)
+            returncode = process.poll()
+            if returncode is not None:
+                finished_s = time.monotonic() - start
+                # The attempt force-flushes immediately before exit; drain once
+                # after poll() so a rename between the pre-poll read and exit
+                # cannot be omitted from tc@30.
+                sample(finished_s)
+                break
+            time.sleep(POLL_INTERVAL_S)
+
+    if returncode:
+        die(f"command failed ({returncode}); stderr: {stderr_path}")
+    if not observations:
+        die(f"no valid snapshot observed: {tree_path}")
+
+    curve = {}
+    for checkpoint in CHECKPOINTS_S:
+        eligible = [point for point in observations if point["time_s"] <= checkpoint]
+        curve[f"{checkpoint:g}"] = eligible[-1]["tc"] if eligible else None
     row = {
-        "attempt": 61,
+        "attempt": 63,
         "instance": instance,
-        "mode": mode,
-        "band_bits": None if c_text == "parent" else float(c_text),
-        "n_reduced": int(config["n"]),
-        "sweep_cap": int(sweep_cap),
-        "sweeps": int(final["sweeps"]),
-        "tc": float(final["tc_final"]),
-        "epoch_count": len(epochs),
-        "in_band": {
-            "proposals": in_proposals,
-            "accepts": in_accepts,
-            "acceptance_rate": in_accepts / in_proposals if in_proposals else None,
-            "net_gain_bits": total("in_net_gain"),
-            "downhill_gain_bits": total("in_downhill_gain"),
-        },
-        "outside_band": {
-            "proposals": out_proposals,
-            "accepts": out_accepts,
-            "acceptance_rate": out_accepts / out_proposals if out_proposals else None,
-            "net_gain_bits": total("out_net_gain"),
-            "downhill_gain_bits": total("out_downhill_gain"),
-        },
-        "waist_trajectory": [
-            {
-                "sweep": int(epoch["sweep"]),
-                "before": float(epoch["waist_before"]),
-                "after": float(epoch["waist_after"]),
-            }
-            for epoch in epochs
-        ],
-        "band_fraction_mean": (
-            sum(int(epoch["band_nodes"]) / int(epoch["internal_nodes"]) for epoch in epochs)
-            / len(epochs)
-            if epochs
-            else None
-        ),
+        "relabeling": relabeling_id,
+        "arm": arm,
+        "first_snapshot_s": observations[0]["time_s"],
+        "finished_s": finished_s,
+        "tc_at_s": curve,
+        "snapshots": observations,
     }
     print(json.dumps(row, sort_keys=True, separators=(",", ":")))
 
 
+def format_tc(value: float | None) -> str:
+    return "   n/a" if value is None else f"{value:7.3f}"
+
+
 def report(path: str) -> None:
     rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
-    print("instance         mode   c   sweeps       tc  in_accept out_accept in_net_gain out_net_gain")
+    print("instance       relabel arm       first_s    tc@1    tc@3   tc@10   tc@30 snapshots")
     for row in rows:
-        inside, outside = row["in_band"], row["outside_band"]
-        c = "-" if row["band_bits"] is None else f'{row["band_bits"]:g}'
+        curve = row["tc_at_s"]
         print(
-            f'{row["instance"]:<16} {row["mode"]:<6} {c:>2} {row["sweeps"]:>8} '
-            f'{row["tc"]:>8.4f} {inside["acceptance_rate"] or 0:>9.4f} '
-            f'{outside["acceptance_rate"] or 0:>10.4f} {inside["net_gain_bits"]:>11.3f} '
-            f'{outside["net_gain_bits"]:>12.3f}'
+            f'{row["instance"]:<14} {row["relabeling"]:<7} {row["arm"]:<8} '
+            f'{row["first_snapshot_s"]:>7.3f} {format_tc(curve["1"])} '
+            f'{format_tc(curve["3"])} {format_tc(curve["10"])} '
+            f'{format_tc(curve["30"])} {len(row["snapshots"]):>9}'
         )
-    mismatches = [row for row in rows if row["sweeps"] != row["sweep_cap"]]
-    if mismatches:
-        die("one or more runs hit the wall deadline before the matched sweep cap")
+
+    indexed = {(row["instance"], row["relabeling"], row["arm"]): row for row in rows}
+    expected = {
+        (instance, relabeling_id, arm)
+        for instance in ("sycamore_m20", "reg3_250")
+        for relabeling_id in ("r0", "r1")
+        for arm in ("parent", "robust")
+    }
+    missing = sorted(expected - indexed.keys())
+    if missing:
+        die(f"missing evidence rows: {missing}")
+
+    print("\ncomparison     relabel first<=0.5  tc@1 tc@3 tc@10 tc@30 overall")
+    all_pass = True
+    for instance in ("sycamore_m20", "reg3_250"):
+        for relabeling_id in ("r0", "r1"):
+            parent = indexed[(instance, relabeling_id, "parent")]
+            robust = indexed[(instance, relabeling_id, "robust")]
+            first_ok = robust["first_snapshot_s"] <= 0.5
+            curve_ok = []
+            for checkpoint in CHECKPOINTS_S:
+                key = f"{checkpoint:g}"
+                candidate = robust["tc_at_s"][key]
+                control = parent["tc_at_s"][key]
+                curve_ok.append(
+                    candidate is not None and control is not None and candidate <= control + 1e-9
+                )
+            row_ok = first_ok and all(curve_ok)
+            all_pass &= row_ok
+            marks = ["PASS" if value else "FAIL" for value in curve_ok]
+            print(
+                f"{instance:<14} {relabeling_id:<7} {'PASS' if first_ok else 'FAIL':<11} "
+                f"{marks[0]:<4} {marks[1]:<4} {marks[2]:<5} {marks[3]:<5} "
+                f"{'PASS' if row_ok else 'FAIL'}"
+            )
+    print(f"expected evidence: {'PASS' if all_pass else 'FAIL'}")
 
 
 def main() -> None:
     if len(sys.argv) < 2:
-        die("expected subcommand: exec, supervise, row, or report")
+        die("expected subcommand: exec, supervise, relabel, run, or report")
     command = sys.argv[1]
     argv = sys.argv[1:]
     if command == "exec":
         run_capped(argv)
     elif command == "supervise":
         supervise(argv)
-    elif command == "row":
-        make_row(argv)
+    elif command == "relabel":
+        relabel(argv)
+    elif command == "run":
+        observe_run(argv)
     elif command == "report" and len(argv) == 2:
         report(argv[1])
     else:

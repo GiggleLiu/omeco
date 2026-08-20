@@ -1,4 +1,4 @@
-//! Attempt entry point for the autoresearch validator (attempt-061).
+//! Attempt entry point for the autoresearch validator (attempt-063).
 //!
 //! Contract: `attempt <graph.json> <budget_ms> <out.json>` — read an einsum
 //! graph, search for a contraction order within the wall-clock budget, and
@@ -6,15 +6,14 @@
 //! `out.json` in omeco `writejson` format. Every improvement is written
 //! EAGERLY and ATOMICALLY (tmp file + rename) the instant it is found.
 //!
-//! # Targeted waist-band reheating on the attempt-052 chassis
+//! # Confirmation-robust early descent on attempt-061
 //!
-//! The pipeline remains simplify -> fixed-seed greedy portfolio -> warm kick ->
-//! cold span-gated ladder with incumbent ratcheting. Proposal visitation and
-//! rule selection remain uniform. The sole search-mechanism change is local
-//! temperature: once per epoch, find every contraction node within `c` bits of
-//! the current maximum node cost, add every ancestor on its root path, and use
-//! a warmer linear beta ramp only at those paths. `ATT_PARENT=1` bypasses that
-//! beta substitution and recovers the parent sweep behavior.
+//! The attempt-061 pipeline and targeted waist-band temperature are unchanged.
+//! This attempt only makes its early descent easier for an external poller to
+//! observe: force a portfolio-end snapshot before annealing, halve the first
+//! two band-recompute epochs, and bypass the 150 ms write throttle for every
+//! improvement in the first five seconds. `ATT_PARENT=1` bypasses all three
+//! changes and recovers pure attempt-061 behavior.
 //!
 //!   1. SIMPLIFY and SEED. Deterministic + fixed-seed Boltzmann-randomized
 //!      greedy portfolio;
@@ -80,6 +79,11 @@ const CLOCK_EVERY: u64 = 8;
 /// costs seconds of serialize/rename I/O. In-memory best tracking stays exact.
 const WRITE_EVERY_MS: f64 = 150.0;
 
+/// During confirmation-sensitive early descent, every improvement is written
+/// without the normal rate limit for this long. This is a fixed observation
+/// window, not an instance-specific search knob.
+const EARLY_WRITE_MS: f64 = 5_000.0;
+
 #[derive(Debug, Deserialize)]
 struct GraphData {
     ixs: Vec<Vec<usize>>,
@@ -122,6 +126,16 @@ fn default_band_bits(n: usize) -> f64 {
 /// Recompute the band after O(sqrt(n)) sweeps, with bounded bookkeeping cost.
 fn default_epoch_sweeps(n: usize) -> u64 {
     (n as f64).sqrt().ceil().clamp(8.0, 32.0) as u64
+}
+
+/// Attempt 063 shortens only the first two band-recompute epochs. The parent
+/// arm retains attempt 061's epoch length exactly.
+fn band_epoch_sweeps(parent: bool, completed_epochs: u64, normal_sweeps: u64) -> u64 {
+    if !parent && completed_epochs < 2 {
+        normal_sweeps / 2 + normal_sweeps % 2
+    } else {
+        normal_sweeps
+    }
 }
 
 /// Warmer per-epoch ramp. Both endpoints scale logarithmically with reduced n.
@@ -394,6 +408,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let code = simplified.code;
     let subtrees = simplified.subtrees;
     let n = code.num_tensors();
+    let parent = env_bool("ATT_PARENT");
 
     let elapsed_ms = || start.elapsed().as_secs_f64() * 1e3;
     let deadline_ms = budget_ms * 0.97;
@@ -447,6 +462,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+    // Attempt 063 refreshes the portfolio winner immediately before annealing
+    // so a fresh confirmation poll cannot depend on the timing of an earlier
+    // greedy improvement. ATT_PARENT=1 preserves attempt 061's write stream.
+    if !parent {
+        write_atomic(&out_path, &best, &subtrees, &original_labels)?;
+    }
     let tc_greedy = best_tc;
     eprintln!(
         "t={:.0}ms seed_greedy tc={tc_greedy:.4} full_tc={:.4} (n={n}, {} greedy trials)",
@@ -468,7 +489,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // ---- Scale-structured basin-hopping + targeted waist-band heating. -------
-    let parent = env_bool("ATT_PARENT");
     let band_bits = env_f64("ATT_BAND_BITS", default_band_bits(n)).max(0.0);
     let epoch_sweeps = env_u64("ATT_EPOCH_SWEEPS", default_epoch_sweeps(n)).max(1);
     let (default_band_beta_lo, default_band_beta_hi) = default_band_betas(n);
@@ -513,6 +533,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         band_beta_hi,
         max_sweeps,
         sweeps: 0,
+        band_epochs: 0,
         accepts: 0,
         last_write_ms: elapsed_ms(),
         pending_write: false,
@@ -555,6 +576,8 @@ struct Annealer<'a> {
     band_beta_hi: f64,
     max_sweeps: u64,
     sweeps: u64,
+    /// Number of completed band-recompute epochs across all levels.
+    band_epochs: u64,
     accepts: u64,
     /// Wall-clock ms of the last atomic disk write (writes are rate-limited to
     /// the validator's poll resolution so rapid descent does not trigger an
@@ -744,7 +767,8 @@ impl Annealer<'_> {
         let denom = (sweeps.saturating_sub(1)).max(1) as f64;
         let mut k = 0_u64;
         while k < sweeps && !self.exhausted() {
-            let epoch_end = (k + self.epoch_sweeps).min(sweeps);
+            let epoch_sweeps = band_epoch_sweeps(self.parent, self.band_epochs, self.epoch_sweeps);
+            let epoch_end = (k + epoch_sweeps).min(sweeps);
             let band = heated_band(tree, self.log2_sizes, self.band_bits);
             let waist_before = max_node_tc(tree, self.log2_sizes);
             let tc_before = tree_complexity(tree, self.log2_sizes).0;
@@ -783,7 +807,11 @@ impl Annealer<'_> {
                 // Snapshot every transient best immediately in memory. Disk
                 // I/O remains rate-limited independently below.
                 if *s_lin < f64::exp2(*self.best_tc) - 1e-9 {
-                    improved |= self.capture_current(tree, best_expr, work_tc, s_lin);
+                    let captured = self.capture_current(tree, best_expr, work_tc, s_lin);
+                    improved |= captured;
+                    if captured && !self.parent && self.elapsed_ms() <= EARLY_WRITE_MS {
+                        self.write_best()?;
+                    }
                 }
 
                 // Rate-limited eager writes of the newest in-memory best.
@@ -797,6 +825,8 @@ impl Annealer<'_> {
                     }
                 }
             }
+
+            self.band_epochs += 1;
 
             if self.diagnostics {
                 let waist_after = max_node_tc(tree, self.log2_sizes);
@@ -833,7 +863,11 @@ impl Annealer<'_> {
         // Capture the endpoint; only the program-final flush may bypass the
         // write-rate window.
         if *s_lin < f64::exp2(*self.best_tc) - 1e-9 {
-            improved |= self.capture_current(tree, best_expr, work_tc, s_lin);
+            let captured = self.capture_current(tree, best_expr, work_tc, s_lin);
+            improved |= captured;
+            if captured && !self.parent && self.elapsed_ms() <= EARLY_WRITE_MS {
+                self.write_best()?;
+            }
         }
         if self.pending_write && self.elapsed_ms() - self.last_write_ms >= WRITE_EVERY_MS {
             self.write_best()?;
@@ -1224,5 +1258,14 @@ mod tests {
         for invalid in ["0", "-1", "NaN", "inf", "-inf"] {
             assert!(parse_budget_ms(invalid).is_err(), "accepted {invalid}");
         }
+    }
+
+    #[test]
+    fn only_first_two_mechanism_epochs_are_halved() {
+        assert_eq!(band_epoch_sweeps(false, 0, 15), 8);
+        assert_eq!(band_epoch_sweeps(false, 1, 15), 8);
+        assert_eq!(band_epoch_sweeps(false, 2, 15), 15);
+        assert_eq!(band_epoch_sweeps(true, 0, 15), 15);
+        assert_eq!(band_epoch_sweeps(true, 1, 15), 15);
     }
 }
