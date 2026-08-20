@@ -69,3 +69,27 @@ negative that sharpens the surgery-vs-annealing boundary from PR #40.
 - Also produce `dev_bench.sh <instances_dir> <out.jsonl>`: a deterministic
   mechanism-diagnostic benchmark, HARD-CAPPED at 600 s wall total (user
   directive), runnable on a 2-core Linux host (huawei).
+
+## Outcome (recorded 2026-08-20)
+
+**Validator (canonical host, v2.4, primaries 90 s):** status=scored,
+score=-0.0315. **NEW ANYTIME RECORD (confirmed, worse-of-two):
+reg3_250 TTF 7.1 s vs record 16.1 s — 2.3x faster to the frontier**, tc
+tie (39.882, +0.002). sycamore_m20: tc -0.065 (sc 54 vs 53), ttf 1.3 s
+vs record 39.6 s claimed but UNCONFIRMED (confirmation run hit the wall
+limit; recorded as unconfirmed per protocol, no retry).
+
+**Dev bench (huawei, matched 2048 sweeps):** final-tc side of the
+hypothesis FALSIFIED as pre-registered: ksg band arms 4-5 bits WORSE than
+parent (44.2 vs 39.1), in-band net gain NEGATIVE everywhere (in-band
+heating accepts uphill moves whose gains melt back; out-of-band recovers
+them). sycamore_m20 ~tie (61.99-62.17 vs 62.20). No 042-style collapse:
+in-band acceptance stayed 0.50-0.58 for c in {1,2,4}.
+
+**Verdict (honest):** the mechanism is an EARLY-DESCENT accelerant, not a
+refiner — heating the waist band renegotiates the bottleneck fast (2.3x
+confirmed TTF speedup on reg3_250, the first TTF record since 032) but
+retains nothing at long budgets. Composition candidate: band reheat for
+the first ~10 s, then hand off to the cold ladder / 059 front (schedule
+switch, one atomic change).
+Artifacts: dev-results-huawei.jsonl, devbench-huawei.log, report.json.

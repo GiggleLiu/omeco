@@ -1,0 +1,246 @@
+{
+  "status": "scored",
+  "score": -0.0315,
+  "per_instance": [
+    {
+      "instance": "reg3_250",
+      "result": "pass",
+      "seconds": 87.355,
+      "detail": "tc=39.882 sc=34.000 record=39.883325463011175 delta=+0.002 ttf=7.1s/16.1s NEW TTF RECORD 7.1s (confirmed)",
+      "anytime": {
+        "ttf": 7.069,
+        "tc_at": {
+          "1.0": 40.6921,
+          "3.0": 40.0736,
+          "10.0": 39.8882,
+          "30.0": 39.8828
+        },
+        "curve": [
+          {
+            "t": 0.208,
+            "tc": 66.0881,
+            "sc": 49.0
+          },
+          {
+            "t": 0.835,
+            "tc": 40.6921,
+            "sc": 35.0
+          },
+          {
+            "t": 1.256,
+            "tc": 40.108,
+            "sc": 34.0
+          },
+          {
+            "t": 2.506,
+            "tc": 40.0736,
+            "sc": 34.0
+          },
+          {
+            "t": 7.069,
+            "tc": 39.9887,
+            "sc": 34.0
+          },
+          {
+            "t": 7.702,
+            "tc": 39.9273,
+            "sc": 34.0
+          },
+          {
+            "t": 8.745,
+            "tc": 39.9107,
+            "sc": 34.0
+          },
+          {
+            "t": 9.368,
+            "tc": 39.8882,
+            "sc": 34.0
+          },
+          {
+            "t": 14.557,
+            "tc": 39.884,
+            "sc": 34.0
+          },
+          {
+            "t": 17.863,
+            "tc": 39.8828,
+            "sc": 34.0
+          },
+          {
+            "t": 35.298,
+            "tc": 39.8824,
+            "sc": 34.0
+          },
+          {
+            "t": 46.123,
+            "tc": 39.8817,
+            "sc": 34.0
+          }
+        ]
+      }
+    },
+    {
+      "instance": "sycamore_m20",
+      "result": "pass",
+      "seconds": 87.368,
+      "detail": "tc=61.587 sc=54.000 record=61.521961122584145 delta=-0.065 ttf=1.3s/39.6s record claim: unconfirmed (wall limit)",
+      "anytime": {
+        "ttf": 1.274,
+        "tc_at": {
+          "1.0": 61.8609,
+          "3.0": 61.5985,
+          "10.0": 61.5944,
+          "30.0": 61.5892
+        },
+        "curve": [
+          {
+            "t": 0.21,
+            "tc": 83.0128,
+            "sc": 59.0
+          },
+          {
+            "t": 0.636,
+            "tc": 61.8609,
+            "sc": 54.0
+          },
+          {
+            "t": 1.274,
+            "tc": 61.664,
+            "sc": 54.0
+          },
+          {
+            "t": 1.702,
+            "tc": 61.6488,
+            "sc": 53.0
+          },
+          {
+            "t": 2.132,
+            "tc": 61.6405,
+            "sc": 53.0
+          },
+          {
+            "t": 2.758,
+            "tc": 61.6113,
+            "sc": 54.0
+          },
+          {
+            "t": 2.963,
+            "tc": 61.5985,
+            "sc": 54.0
+          },
+          {
+            "t": 4.846,
+            "tc": 61.5944,
+            "sc": 54.0
+          },
+          {
+            "t": 16.09,
+            "tc": 61.59,
+            "sc": 54.0
+          },
+          {
+            "t": 18.162,
+            "tc": 61.5894,
+            "sc": 54.0
+          },
+          {
+            "t": 21.476,
+            "tc": 61.5892,
+            "sc": 54.0
+          },
+          {
+            "t": 77.746,
+            "tc": 61.5866,
+            "sc": 54.0
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "record_updates": [
+    {
+      "instance": "reg3_250",
+      "ttf": 7.069,
+      "by": "attempt-061",
+      "confirmed": true
+    }
+  ],
+  "environment": {
+    "kind": "fallback",
+    "image_or_lock": "sandbox-exec+cargo-lock:26ee90c534230760",
+    "reason": "no Docker on this macOS host; sandbox-exec denies network and research/ writes; harness enforces wall/CPU limits"
+  },
+  "leaderboard": {
+    "reg3_250": {
+      "tc": 39.883325463011175,
+      "sc": 34.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "sycamore_m20": {
+      "tc": 61.521961122584145,
+      "sc": 53.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "reg3_1000": {
+      "tc": 131.06780028804513,
+      "sc": 124.0,
+      "by": "attempt-054",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "rqc_97_m24": {
+      "tc": 106.46849426445668,
+      "sc": 97.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-23",
+      "confirmed": true
+    },
+    "ksg": {
+      "tc": 36.96324247893719,
+      "sc": 30.0,
+      "by": "attempt-054",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "surfacecode_d21": {
+      "tc": 47.40437945230608,
+      "sc": 40.0,
+      "by": "attempt-054",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "sycamore_53_20_0": {
+      "tc": 59.91142035166392,
+      "sc": 52.0,
+      "by": "attempt-050",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "dbn_13": {
+      "tc": 29.000000241850582,
+      "sc": 24.0,
+      "by": "attempt-038",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "nqueens_28": {
+      "tc": 121.36787312533023,
+      "sc": 115.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-24",
+      "confirmed": true
+    },
+    "qft_27": {
+      "tc": 29.609946796233952,
+      "sc": 27.0,
+      "by": "ref:treesa-inf",
+      "date": "2026-07-24",
+      "confirmed": true
+    }
+  }
+}
