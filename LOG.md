@@ -92,3 +92,31 @@ per-instance comparison; keep 062's fixed switch as the mechanism.
 - Offline release build, example unit tests (7/7), rustfmt, clippy `-D
   warnings`, shell syntax, Python syntax, and the >600 s plan refusal path
   pass. Per instruction, the validator was not invoked.
+
+## Outcome (recorded 2026-08-20)
+
+**Validator (canonical host):** score -0.0328. **NEW ANYTIME RECORD
+(confirmed, worse-of-two): sycamore_m20 TTF 5.3 s vs 39.6 s — 7.5x** —
+the record 061 claimed and 063 disproved as a lottery artifact now lands
+legitimately. reg3_250: tc tie, but TTF REGRESSES to 13.1 s (record
+7.069 s, 061): the early switch cuts the band phase that reg3 needs.
+
+**Dev bench (huawei, 565 s plan):** the stall TRIGGER IS DEGENERATE —
+waist gain 0.0000 in the FIRST window on all three instances, so it
+fires ~immediately everywhere (147-149 ms on reg3/d13; 2.6 s on ksg),
+not family-adaptively as hypothesized. Event-W loses to the best fixed
+fraction on final tc everywhere (+0.82 ksg / +0.57 reg3 / +0.05 d13);
+2W beats W on tc everywhere (longer windows = later switch = better),
+confirming the signal carries no per-family switch information at this
+threshold.
+
+**Verdict (honest, pre-registered falsification hit):** the waist-cost
+stall signal is degenerate — the max node cost simply does not improve
+within any sqrt(n) window under band heat, so "stall" is always true.
+Per the LOG's abandonment clause, 062's fixed-fraction switch remains
+the mechanism. The sycamore record is REAL but its attribution is
+"switch-to-front almost immediately is optimal for sycamore's TTF" —
+i.e. per-family switch points matter (sycamore ~0, reg3 late), which is
+an argument FOR a working adaptive signal and AGAINST this particular
+one. Candidate signal for a future attempt: sc-trajectory stall
+(065 showed descent is sc-led), not max-node-cost stall.

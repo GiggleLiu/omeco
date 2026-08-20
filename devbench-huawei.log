@@ -1,12 +1,23 @@
-budget plan: build<=60s + 8 runs*(budget=50000ms+guard=3s) + summarize<=10s = 494s <= 600s
-work match: ATT_MAX_SWEEPS=2048; arms per instance: parent,c=1,c=2,c=4
-instance         mode   c   sweeps       tc  in_accept out_accept in_net_gain out_net_gain
-ksg              parent  -     2048  39.1150    0.3261     0.3195     -14.376       29.631
-ksg              band    1     2048  44.2102    0.5081     0.3205     -27.918       38.288
-ksg              band    2     2048  44.2102    0.5081     0.3205     -27.918       38.288
-ksg              band    4     2048  43.2281    0.4956     0.3197     -34.258       44.946
-sycamore_m20     parent  -     2048  62.2022    0.3424     0.3753     -39.954       66.015
-sycamore_m20     band    1     2048  61.9948    0.5606     0.3769    -126.915      145.277
-sycamore_m20     band    2     2048  62.1671    0.5779     0.3687    -133.761      159.840
-sycamore_m20     band    4     2048  62.0423    0.5729     0.3694    -107.403      125.061
-DONE061
+budget plan: build<=60s + 15 runs*(budget=30000ms+guard=3s) + summarize<=10s = 565s (hard cap 600s)
+work match: ATT_MAX_SWEEPS=1024; serial 1-core runs; 3 instances; arms: event-W,event-2W,fixed-{15,25,40}%
+trigger-time table by family
+family       instance          window  trigger_ms  cold_sweeps  waist_gain       tc
+ksg          ksg                   1W    2579.475           32      0.0000  44.3223
+ksg          ksg                   2W    2602.755           64      0.0000  43.4459
+expander     reg3_250              1W     147.313           32      0.0000  42.2586
+expander     reg3_250              2W     146.362          128      0.0000  41.7523
+separable    surfacecode_d13       1W     148.609           17      0.0000  31.2281
+separable    surfacecode_d13       2W     151.112           34      0.0000  31.1917
+
+final tc: event W versus best fixed-fraction arm
+instance          event_W  best_fixed  fraction   delta
+ksg                44.3223     43.4998      15%   0.8225
+reg3_250           42.2586     41.6845      40%   0.5741
+surfacecode_d13    31.2281     31.1804      25%   0.0477
+
+stall-window sensitivity
+instance             W_ms      2W_ms    delta_ms      W_tc     2W_tc  delta_tc
+ksg                2579.475   2602.755      23.280   44.3223   43.4459   -0.8764
+reg3_250            147.313    146.362      -0.951   42.2586   41.7523   -0.5063
+surfacecode_d13     148.609    151.112       2.503   31.2281   31.1917   -0.0364
+DONE064
