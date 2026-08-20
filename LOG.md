@@ -54,3 +54,34 @@ No leaderboard claim; dev bench IS the deliverable (<= 600 s total).
 - `dev_bench.sh <instances_dir> <out.jsonl>` hard-capped at 600 s total
   wall, runnable on 2-core Linux; print the budget plan first and abort
   if it would exceed 600 s.
+
+## Outcome (recorded 2026-08-20)
+
+**Measurement (huawei, 380 s plan, 3 relabelings x band/parent x
+reg3_250 + surfacecode_d13, per-sweep traces):**
+
+| metric (band - parent) | reg3_250 | surfacecode_d13 |
+|---|---|---|
+| time to shared sc | **-3.82 s** | +6 ms |
+| min sc reached (15 s) | **-1 rank** | 0 |
+| tc at shared sc | +1.36 | +0.05 |
+| in-band gain (descent) | -1614 | -1711 |
+| out-of-band gain (descent) | +2291 | +1928 |
+| band Jaccard / churn | 0.32 / 0.68 | 0.21 / 0.79 |
+
+**Answers to the pre-registered questions:** (1) sc-LED descent on the
+expander — the band arm reaches the shared bottleneck rank 3.8 s earlier
+and one rank lower; on the separable control it changes nothing. (2) The
+in-band heat does destructive work (negative accepted gain) that
+out-of-band recovery converts — heat forces rank drops, cold elsewhere
+banks them. (3) Band persistence is moderate (Jaccard 0.32), above the
+separable control (0.21): closer to persistent-waist negotiation than to
+uniform restart-diversity, but not purely either.
+
+**Verdict (per the pre-committed interpretation guide):** genuine
+bottleneck-rank negotiation that generalizes to expanders — the
+sc-led + above-control-persistence branch — INVERTING 061's original
+separable-network premise: separable ladders already harvest rank drops
+(no headroom), expanders have a sticky sc plateau that local heat
+unsticks. Strengthens 062/064's premise; predicts the event trigger
+should fire ~immediately on separable families and late on expanders.

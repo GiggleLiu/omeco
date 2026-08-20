@@ -1,12 +1,7 @@
-budget plan: build<=60s + 8 runs*(budget=50000ms+guard=3s) + summarize<=10s = 494s <= 600s
-work match: ATT_MAX_SWEEPS=2048; arms per instance: parent,c=1,c=2,c=4
-instance         mode   c   sweeps       tc  in_accept out_accept in_net_gain out_net_gain
-ksg              parent  -     2048  39.1150    0.3261     0.3195     -14.376       29.631
-ksg              band    1     2048  44.2102    0.5081     0.3205     -27.918       38.288
-ksg              band    2     2048  44.2102    0.5081     0.3205     -27.918       38.288
-ksg              band    4     2048  43.2281    0.4956     0.3197     -34.258       44.946
-sycamore_m20     parent  -     2048  62.2022    0.3424     0.3753     -39.954       66.015
-sycamore_m20     band    1     2048  61.9948    0.5606     0.3769    -126.915      145.277
-sycamore_m20     band    2     2048  62.1671    0.5779     0.3687    -133.761      159.840
-sycamore_m20     band    4     2048  62.0423    0.5729     0.3694    -107.403      125.061
-DONE061
+budget plan: build<=120s + 12 serial runs*(budget=15000ms+guard=5s) + summarize<=20s = 380s (hard cap 600s)
+evidence plan: reg3_250,surfacecode_d13 x band,parent x 3 fixed relabelings; per-sweep trace; RAYON_NUM_THREADS=1; CARGO_BUILD_JOBS=2
+instance          reps shared_sc  d_t_sc_ms  d_tc@sc  d_min_sc d_nodecost in_gain_desc in_gain_late out_gain_desc jaccard churn band_size sweeps_b/p
+reg3_250             3    33.000    -3821.8    1.362   -1.000      0.000    -1613.944     -804.437      2290.633   0.317 0.683      29.9 96279/99180
+surfacecode_d13      3    24.000        6.4    0.049    0.000      1.000    -1710.931     -756.600      1927.859   0.206 0.794      49.2 71447/79008
+definitions: deltas=band-parent; descent=through trace tc minimum; epoch persistence=mean descendant-set Jaccard
+DONE065
