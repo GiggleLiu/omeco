@@ -67,3 +67,25 @@ instances, record the activity-localization curve and kill the direction.
 - Also produce `dev_bench.sh <instances_dir> <out.jsonl>`: a deterministic
   mechanism-diagnostic benchmark, HARD-CAPPED at 600 s wall total (user
   directive), runnable on a 2-core Linux host (huawei).
+
+## Outcome (recorded 2026-08-20)
+
+**Validator (canonical host, v2.4, primaries 90 s):** status=scored,
+score=-0.4954, NO RECORD, FALSIFIED on both pre-registered axes for the
+primaries: reg3_250 tc=40.632 (delta -0.749), sycamore_m20 tc=61.764
+(delta -0.242); TTF inf on both (never reached frontier).
+
+**Dev bench (huawei, matched wall 30/75 s):** split verdict — ksg active
+mode is -1.652 / -1.718 bits BETTER at 30/75 s with sweep-throughput
+x1.97 / x0.98 and active fraction 0.33-0.41; surfacecode_d13 is a wash
+(+0.009 / +0.001). Activity DOES localize (fraction ~0.4) and the
+throughput win is real at short budgets on large sparse instances.
+
+**Verdict (honest):** falsified as a record-setter on the primaries —
+reg3_250 (expander) actively punishes staleness pruning (locality
+assumption fails when improvements are spatially uniform), and the
+long-budget advantage evaporates. The ksg short-budget gain suggests the
+mechanism is an ANYTIME accelerant for large separable networks only;
+any follow-up should gate the worklist on a measured activity-locality
+statistic rather than enabling it unconditionally.
+Artifacts: dev-results-huawei.jsonl, devbench-huawei.log, report.json.

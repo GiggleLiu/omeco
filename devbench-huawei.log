@@ -1,0 +1,34 @@
+attempt-060 dev benchmark budget plan:
+  instances: ksg.json surfacecode_d13.json
+  budgets: 30 s, 75 s; modes: active, parent
+  candidate wall: 420 s
+  build allowance: 120 s
+  postprocess allowance: 30 s
+  safety reserve: 30 s
+  planned total: 600 s / hard cap 600 s (outer kill at 594 s)
+    Finished `release` profile [optimized] target(s) in 0.07s
+run instance=ksg.json budget_ms=30000 mode=active limit=38s
+run instance=ksg.json budget_ms=30000 mode=parent limit=38s
+run instance=ksg.json budget_ms=75000 mode=active limit=83s
+run instance=ksg.json budget_ms=75000 mode=parent limit=83s
+run instance=surfacecode_d13.json budget_ms=30000 mode=active limit=38s
+run instance=surfacecode_d13.json budget_ms=30000 mode=parent limit=38s
+run instance=surfacecode_d13.json budget_ms=75000 mode=active limit=83s
+run instance=surfacecode_d13.json budget_ms=75000 mode=parent limit=83s
+instance             budget mode    tc       attempts/s accepts/s active-frac cold(full/active)
+ksg.json                30s active   39.6012    77339.0   26975.9       0.327 119/3057
+ksg.json                30s parent   41.2532    51176.3   15799.2       1.000 1572/0
+ksg.json                75s active   37.4699    88778.8   31413.0       0.342 314/8050
+ksg.json                75s parent   39.1878   117871.5   37447.6       1.000 8408/0
+surfacecode_d13.json    30s active   30.5017  1217641.6  408815.4       0.406 10125/151875
+surfacecode_d13.json    30s parent   30.4928  1306686.0  411899.5       1.000 136328/0
+surfacecode_d13.json    75s active   30.4939  1257138.2  421804.9       0.404 26146/392182
+surfacecode_d13.json    75s parent   30.4928  1321013.9  416904.2       1.000 344112/0
+
+matched active/parent deltas (negative tc delta is better):
+instance             budget tc-delta sweep-x attempt-x accept-x active-frac
+ksg.json                30s  -1.6519   1.965     1.511    1.707       0.327
+ksg.json                75s  -1.7179   0.977     0.753    0.839       0.342
+surfacecode_d13.json    30s   0.0089   1.188     0.932    0.993       0.406
+surfacecode_d13.json    75s   0.0011   1.215     0.952    1.012       0.404
+DONE060
