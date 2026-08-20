@@ -3357,4 +3357,186 @@ mod tests {
         leaves.sort_unstable();
         assert_eq!(leaves, (0..8).collect::<Vec<_>>());
     }
+
+    #[test]
+    fn test_local_tree_helpers_cover_invalid_and_right_paths() {
+        let leaf = ExprTree::leaf(vec![0], 0);
+        assert!(extract_waist_location(&leaf, &[1.0]).is_none());
+
+        let tree = ExprTree::node(
+            leaf.clone(),
+            ExprTree::node(
+                ExprTree::leaf(vec![1], 1),
+                ExprTree::leaf(vec![2], 2),
+                vec![1, 2],
+            ),
+            vec![],
+        );
+        assert!(subtree_at_path(&tree, &[false, true]).is_none());
+        assert!(replace_subtree_at_path(&leaf, &[false], &leaf).is_none());
+
+        let replacement = ExprTree::leaf(vec![3], 3);
+        let replaced = replace_subtree_at_path(&tree, &[true, false], &replacement).unwrap();
+        assert_eq!(
+            subtree_at_path(&replaced, &[true, false])
+                .unwrap()
+                .leaf_ids(),
+            vec![3]
+        );
+        assert_eq!(
+            subtree_at_path(&replaced, &[false]).unwrap().leaf_ids(),
+            vec![0]
+        );
+    }
+
+    #[test]
+    fn test_leaf_emission_covers_identity_and_reduction_fallbacks() {
+        let leaf = ExprTree::leaf(vec![0], 0);
+        let identity = expr_to_nested_counted(&leaf, &[vec![0]], &[0]);
+        assert!(matches!(identity, NestedEinsum::Leaf { tensor_index: 0 }));
+
+        let reduced = expr_to_nested_counted(&leaf, &[vec![0]], &[]);
+        let NestedEinsum::Node { args, eins } = reduced else {
+            panic!("changed leaf interface must materialize a unary reduction");
+        };
+        assert_eq!(args, vec![NestedEinsum::leaf(0)]);
+        assert_eq!(eins, EinCode::new(vec![vec![0]], vec![]));
+    }
+
+    #[test]
+    fn test_local_surgery_defensive_and_rejection_paths() {
+        let code = EinCode::new(
+            vec![vec![0usize, 1], vec![0, 2], vec![1, 3], vec![2, 3]],
+            vec![],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let log2 = vec![1.0; 4];
+        let hyper = Hyper::build(&code, &label_map, &log2, 4);
+        let incumbent = ExprTree::node(
+            ExprTree::node(
+                ExprTree::leaf(code.ixs[0].clone(), 0),
+                ExprTree::leaf(code.ixs[1].clone(), 1),
+                vec![1, 2],
+            ),
+            ExprTree::node(
+                ExprTree::leaf(code.ixs[2].clone(), 2),
+                ExprTree::leaf(code.ixs[3].clone(), 3),
+                vec![1, 2],
+            ),
+            vec![],
+        );
+
+        let mut expired = test_refiner(&code, &sizes, &hyper, &log2);
+        expired.budget = Duration::ZERO;
+        assert!(expired
+            .waist_surgery_local(
+                &incumbent,
+                f64::INFINITY,
+                f64::INFINITY,
+                &[0, 1],
+                &[],
+                RebuildMode::Greedy,
+            )
+            .is_none());
+        assert_eq!(expired.report.surgery_calls, 1);
+        assert_eq!(expired.report.waist_min_hits, 0);
+
+        let mut invalid = test_refiner(&code, &sizes, &hyper, &log2);
+        assert!(invalid
+            .waist_surgery_local(
+                &incumbent,
+                f64::INFINITY,
+                f64::INFINITY,
+                &[],
+                &[],
+                RebuildMode::Greedy,
+            )
+            .is_none());
+
+        let mut no_new_bottleneck = test_refiner(&code, &sizes, &hyper, &log2);
+        assert!(no_new_bottleneck
+            .waist_surgery_local(
+                &incumbent,
+                f64::INFINITY,
+                2.0,
+                &[0, 1],
+                &[],
+                RebuildMode::Greedy,
+            )
+            .is_none());
+        assert_eq!(no_new_bottleneck.report.waist_min_hits, 1);
+        assert_eq!(no_new_bottleneck.report.rebuild_attempts, 0);
+
+        let mut non_improving = test_refiner(&code, &sizes, &hyper, &log2);
+        assert!(non_improving
+            .waist_surgery_local(
+                &incumbent,
+                0.0,
+                f64::INFINITY,
+                &[0, 1],
+                &[],
+                RebuildMode::Greedy,
+            )
+            .is_none());
+        assert_eq!(non_improving.report.rebuild_attempts, 1);
+        assert_eq!(non_improving.report.rebuild_accepts, 0);
+
+        let mut rebuilds = test_refiner(&code, &sizes, &hyper, &log2);
+        assert!(rebuilds.rebuild_warm(&[true; 4], &incumbent).is_none());
+        assert!(rebuilds
+            .rebuild_local(
+                &[true; 4],
+                &hyper,
+                &[0, 1, 2, 3],
+                &[],
+                &incumbent,
+                &[],
+                RebuildMode::Greedy,
+            )
+            .is_none());
+    }
+
+    #[test]
+    fn test_warm_side_fallbacks_cover_timeout_restriction_and_leaf_mismatch() {
+        let code = EinCode::new(
+            vec![vec![0usize, 1], vec![0, 2], vec![1, 3], vec![2, 3]],
+            vec![],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let log2 = vec![1.0; 4];
+        let hyper = Hyper::build(&code, &label_map, &log2, 4);
+
+        let mut expired = test_refiner(&code, &sizes, &hyper, &log2);
+        expired.budget = Duration::ZERO;
+        assert!(expired
+            .solve_side_warm(&[0, 1], &[1, 2], &ExprTree::leaf(vec![0], 0))
+            .is_none());
+
+        let mut missing = test_refiner(&code, &sizes, &hyper, &log2);
+        let fallback = missing
+            .solve_side_warm(&[0, 1], &[1, 2], &ExprTree::leaf(vec![3], 3))
+            .unwrap();
+        let mut fallback_leaves = fallback.leaf_indices();
+        fallback_leaves.sort_unstable();
+        assert_eq!(fallback_leaves, vec![0, 1]);
+
+        let duplicate = ExprTree::node(
+            ExprTree::node(
+                ExprTree::leaf(code.ixs[0].clone(), 0),
+                ExprTree::leaf(code.ixs[0].clone(), 0),
+                vec![0, 1],
+            ),
+            ExprTree::leaf(code.ixs[1].clone(), 1),
+            vec![1, 2],
+        );
+        let mut mismatched = test_refiner(&code, &sizes, &hyper, &log2);
+        let fallback = mismatched
+            .solve_side_warm(&[0, 1], &[1, 2], &duplicate)
+            .unwrap();
+        let mut fallback_leaves = fallback.leaf_indices();
+        fallback_leaves.sort_unstable();
+        assert_eq!(fallback_leaves, vec![0, 1]);
+    }
 }

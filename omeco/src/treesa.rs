@@ -3876,4 +3876,27 @@ mod tests {
         let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
         assert!(cc.rwc.is_finite());
     }
+
+    #[test]
+    fn test_rounds_non_default_surgery_options_are_exercised() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(&code, &sizes, &config).unwrap();
+        let seed_score = {
+            let cc = crate::contraction_complexity(&seed, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+        let opts = RoundsOptions {
+            surgery: true,
+            rebuild: RebuildMode::WarmRestricted,
+            scope: SurgeryScope::Local,
+        };
+
+        let (tree, report) = anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &opts);
+        let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
+
+        assert_eq!(report.rounds_run, 1);
+        assert_eq!(tree.leaf_count(), code.num_tensors());
+        assert!(config.score.evaluate(cc.tc, cc.sc, cc.rwc) <= seed_score);
+    }
 }
