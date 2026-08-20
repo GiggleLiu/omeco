@@ -4,15 +4,23 @@
 - topic: beat-existing-optimizers  # slug of the chosen topic once stage >= db
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
-- authorized_attempts: 0   # cycle 11 (059-061) executed 2026-08-20; soft gate:
-                           # 061 set confirmed reg3_250 TTF record 7.069s.
-                           # Was: 3, authorized by user 2026-08-20
+- authorized_attempts: 0   # cycle 12 (062-065) executed 2026-08-20; soft gate.
+                           # 064 set confirmed sycamore_m20 TTF record 5.274s.
+                           # Was: 4, authorized by user 2026-08-20 ("yes, go"):
+                           # 062 phase-switched composite (improve/061),
+                           # 063 confirmation-robust early descent (improve/061),
+                           # 064 event-triggered switch (draft),
+                           # 065 early-descent mechanism trace (measurement).
+                           # Execution pattern as cycle 11 (codex, huawei dev
+                           # benches <=600s, validator local).
+                           # [cycle 11 (059-061) done: 061 set confirmed
+                           # reg3_250 TTF record 7.069s]
                            # ("continue the autoresearch with these 3 plans"):
                            # 059 beta(span,t) freeze-out, 060 activity-based
                            # worklist freezing, 061 targeted waist-band reheat.
-- next_attempt: 62         # 057/058 consumed by the attempt-057/058 campaign;
+- next_attempt: 66         # 057/058 consumed by the attempt-057/058 campaign;
                            # counter was stale at 57, corrected 2026-08-20
-- next_cycle: 12
+- next_cycle: 13
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
   - validator_gate: passed 2026-07-22 (v2)  # pending | passed YYYY-MM-DD

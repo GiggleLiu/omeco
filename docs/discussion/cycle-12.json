@@ -1,0 +1,101 @@
+{
+ "schema_version": 1,
+ "project": "omeco beat-existing-optimizers",
+ "cycle": 12,
+ "date_utc": "2026-08-20",
+ "attempts_range": "062-065",
+ "attempts_remaining": 0,
+ "primary_metric": {
+  "name": "median-of-3 tc vs records; confirmed records",
+  "direction": "max"
+ },
+ "bar": {
+  "value": 0.0,
+  "source": "GOAL.md v2.2/v2.3 leaderboard mode"
+ },
+ "guard_metrics": [],
+ "best_prior": "reg3_250 TTF 7.069s (061); sycamore_m20 TTF 39.6s (ref)",
+ "best_this_cycle": "sycamore_m20 TTF 5.274s (attempt-064, confirmed); reg3 tc tie x4 chassis",
+ "holdout": {
+  "spent": false,
+  "result": null,
+  "note": "anytime axis not covered by holdout set"
+ },
+ "attempts": [
+  {
+   "id": 62,
+   "kind": "improve",
+   "parent": 61,
+   "hypothesis": "phase-switched composite: band reheat then freeze-out front",
+   "primary": -0.1568,
+   "status": "no-change",
+   "causal_note": "hypothesis confirmed on dev (early=061 exactly, final beats 059-front by up to 0.99 bits); reg3 TTF 3.9/5.75s both faster than record but worse-of-two misses the 20% bar by 0.09s",
+   "log_path": ".worktrees/attempt-062/LOG.md"
+  },
+  {
+   "id": 63,
+   "kind": "improve",
+   "parent": 61,
+   "hypothesis": "confirmation-robust early descent (sycamore TTF claim)",
+   "primary": -0.1254,
+   "status": "no-change",
+   "causal_note": "doubly falsified as pre-registered: 061's 1.3s was a relabeling lottery; epoch-halving damaged the early curve",
+   "log_path": ".worktrees/attempt-063/LOG.md"
+  },
+  {
+   "id": 64,
+   "kind": "draft",
+   "parent": null,
+   "hypothesis": "event-triggered switch on waist-cost stall",
+   "primary": -0.0328,
+   "status": "improved",
+   "causal_note": "NEW confirmed sycamore_m20 TTF record 5.274s (7.5x); but the stall trigger is degenerate (fires immediately everywhere) \u2014 falsified as a signal, record attributed to immediate-switch being optimal for sycamore",
+   "log_path": ".worktrees/attempt-064/LOG.md"
+  },
+  {
+   "id": 65,
+   "kind": "measurement",
+   "parent": 61,
+   "hypothesis": "why does band reheat accelerate an expander",
+   "primary": null,
+   "status": "improved",
+   "causal_note": "sc-LED descent: band reaches shared sc 3.8s earlier and one rank lower on reg3, nothing on separable control \u2014 inverts 061's premise",
+   "log_path": ".worktrees/attempt-065/LOG.md"
+  }
+ ],
+ "lessons": [
+  {
+   "observation": "immediate switch optimal on sycamore (record), late on reg3 (regression); stall trigger fires immediately everywhere",
+   "root_cause": "under band heat the max node cost never improves within a sqrt(n) window \u2014 the band drops sc (065), not waist cost, so max-node-cost stall is vacuous",
+   "evidence": "waist_gain 0.0000 on all 15 bench runs; 065 sc-led table",
+   "status": "confirmed",
+   "implication": "adaptive switch should watch the sc trajectory; blacklist max-node-cost stall"
+  },
+  {
+   "observation": "062's band prefix improves the 059 front's final tc by ~1 bit on ksg",
+   "root_cause": "reheat hands the front a lower-rank bottleneck basin to refine (065 mechanism)",
+   "evidence": "composite_final vs front059_final: -0.68/-0.99/-0.94 bits",
+   "status": "suspected",
+   "implication": "composite promoted as the campaign's general-purpose schedule (paper)"
+  },
+  {
+   "observation": "061's sycamore claim rejected, diagnosed (063), then legitimately landed (064)",
+   "root_cause": "confirm-twice/worse-of-two plus pre-registered falsifications separate artifact from mechanism",
+   "evidence": "063 robust arm ttf=inf; 064 confirmed 5.274s",
+   "status": "confirmed",
+   "implication": "protocol validated; keep it"
+  }
+ ],
+ "blacklist_new": [
+  "epoch-shortening as confirmation-robustness (063)",
+  "max-node-cost stall as switch signal (064)"
+ ],
+ "insight_promotions": [],
+ "reflection": {
+  "review": "2 of 4 attempts produced positive results; 1 of 4 moved a leaderboard\naxis: attempt-064 set a **confirmed anytime record on sycamore_m20\n(TTF 5.27 s vs 39.6 s, 7.5\u00d7)**. Both primaries' TTF records now belong\nto this campaign's band-reheat line (reg3_250 7.07 s by 061, sycamore\n5.27 s by 064). 0 of 4 moved a tc record (best +0.002 = tie).\n\n- **062** (improve/061): phase-switched composite. Validator \u22120.157, no\n  record \u2014 but reg3 TTF 3.9/5.75 s, BOTH runs faster than the 7.07 s\n  record; worse-of-two misses the \u226520% bar by 0.09 s. Dev bench:\n  hypothesis CONFIRMED \u2014 early phase \u2261 061 (delta 0.0000), final tc\n  beats the 059-front control (ksg \u22120.68..\u22120.99 bits). Best switch 25%.\n- **063** (improve/061): confirmation-robust early descent. Doubly\n  falsified as pre-registered: sycamore 1.3 s was a relabeling-lottery\n  artifact (robust arm ttf=\u221e), and epoch-halving damaged the early curve\n  (tc@1 79.98 vs 62.42). Clean kill.\n- **064** (draft): event-triggered switch. The stall trigger is\n  DEGENERATE (waist gain 0.0000 in the first window everywhere \u2192 fires\n  ~immediately) \u2014 pre-registered falsification hit; 062's fixed switch\n  stays the mechanism. The immediate switch is nonetheless optimal for\n  sycamore's TTF \u2192 the confirmed 5.27 s record; reg3 TTF regressed to\n  13.1 s for the same reason.\n- **065** (measurement): answered \"why does band reheat accelerate an\n  expander\": sc-LED descent \u2014 band reaches the shared bottleneck rank\n  3.8 s earlier and one rank lower on reg3, does nothing on the\n  separable control; in-band heat does destructive work that\n  out-of-band recovery banks. INVERTS 061's separable-network premise.\n\nBudget: 4 of 4 authorized attempts used \u2192 soft gate. Overrides: as\ncycle 11 (codex implementation, huawei dev benches \u2264600 s, validator\nlocal).",
+  "lessons": "1. **(top) Switch-point family-dependence is real; the waist-stall\n   signal is not the way to find it.** Observation: immediate switch is\n   optimal on sycamore (record), late on reg3 (regression); the stall\n   trigger fires immediately everywhere. Root cause (*confirmed*): under\n   band heat the max node cost never improves within a \u221an window \u2014 the\n   band works by dropping sc (065), not by monotone waist-cost descent,\n   so a max-node-cost stall is always \"true\". Evidence: waist_gain\n   0.0000 on all 15 bench runs; 065's sc-led descent table. Implication:\n   an adaptive switch should watch the SC TRAJECTORY (fire when sc stops\n   dropping), the quantity 065 showed actually moves.\n2. **Phases compose synergistically, not just sequentially.**\n   Observation: 062's band prefix improves the 059 front's final tc by\n   ~1 bit on ksg. Root cause (*suspected*; 065's mechanism is the best\n   explanation): the reheat phase hands the front a lower-rank\n   bottleneck basin to refine. Implication: the composite is the\n   campaign's best general-purpose schedule; promote it to the paper.\n3. **The anytime record protocol worked exactly as designed.**\n   061's sycamore claim (lottery) was rejected, 063 diagnosed it, 064's\n   legitimate version confirmed. The confirm-twice/worse-of-two gate\n   plus pre-registered falsifications separated artifact from mechanism\n   in two attempts.",
+  "evidence": "- Anytime leaderboard: reg3_250 7.069 s (061), sycamore_m20 5.274 s\n  (064) \u2014 both confirmed, both from the band-reheat line.\n- Blacklist additions: epoch-shortening as confirmation-robustness\n  (063); max-node-cost stall as a switch signal (064).\n- tc axis: 39.882 reg3 tie reproduced by 4 chassis \u2014 the floor is firm.\n- Standing risk: dev-set overfit unchanged; no holdout spent (anytime\n  axis uncovered by holdout set).",
+  "literature": "No change vs cycle 11: per-node scale/cost-dependent temperatures and\nphase-switched reheat\u2192refine schedules for contraction trees remain\nabsent from the KB; the sc-led-descent mechanism (065) is a new,\npublishable observation.",
+  "next": "The phase-structure direction has now yielded: 2 confirmed TTF records,\na supported composite, a mechanism explanation, and two clean kills.\nCandidate directions for the soft gate: (a) 066 sc-stall adaptive switch\n(fix 064's signal with 065's quantity); (b) 067 composite TTF re-claim\non reg3 (062 missed the bar by 0.09 s; one atomic change: slightly later\nswitch per 065); (c) port the composite into the PR #40 library path for\nthe paper ablation; (d) wind down and write up \u2014 the story is arguably\ncomplete: surgery v2 + phase-structured annealing + certified gaps."
+ }
+}
