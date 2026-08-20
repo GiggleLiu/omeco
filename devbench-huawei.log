@@ -1,12 +1,24 @@
-budget plan: build<=60s + 8 runs*(budget=50000ms+guard=3s) + summarize<=10s = 494s <= 600s
-work match: ATT_MAX_SWEEPS=2048; arms per instance: parent,c=1,c=2,c=4
-instance         mode   c   sweeps       tc  in_accept out_accept in_net_gain out_net_gain
-ksg              parent  -     2048  39.1150    0.3261     0.3195     -14.376       29.631
-ksg              band    1     2048  44.2102    0.5081     0.3205     -27.918       38.288
-ksg              band    2     2048  44.2102    0.5081     0.3205     -27.918       38.288
-ksg              band    4     2048  43.2281    0.4956     0.3197     -34.258       44.946
-sycamore_m20     parent  -     2048  62.2022    0.3424     0.3753     -39.954       66.015
-sycamore_m20     band    1     2048  61.9948    0.5606     0.3769    -126.915      145.277
-sycamore_m20     band    2     2048  62.1671    0.5779     0.3687    -133.761      159.840
-sycamore_m20     band    4     2048  62.0423    0.5729     0.3694    -107.403      125.061
-DONE061
+budget plan: build<=60s + 10 runs*(budget=47000ms+guard=3s) + summarize<=10s = 570s (hard cap 600s)
+work match: ATT_MAX_SWEEPS=2048; serial 1-core runs; arms per instance: 061,059,switch-{15,25,40}%
+final matched-sweep results
+instance         arm        switch  cold_cut  sweeps       tc
+ksg              parent061       -         -    2048  43.2281
+ksg              front059        -         0    2048  44.0755
+ksg              switch15      15%        84    2048  43.3975
+ksg              switch25      25%       140    2048  43.0897
+ksg              switch40      40%       224    2048  43.1383
+surfacecode_d13  parent061       -         -    2048  31.2079
+surfacecode_d13  front059        -         0    2048  31.1661
+surfacecode_d13  switch15      15%        36    2048  31.0368
+surfacecode_d13  switch25      25%        60    2048  31.1101
+surfacecode_d13  switch40      40%        96    2048  31.2639
+
+evidence: composite early vs 061; composite final vs 059
+instance         switch  cold_cut  early_sweep  composite_early  parent061_early  delta_early  composite_final  front059_final  delta_final
+ksg                 15%        84          384          50.4301         50.4301       0.0000          43.3975        44.0755     -0.6780
+ksg                 25%       140          440          50.3872         50.3872       0.0000          43.0897        44.0755     -0.9858
+ksg                 40%       224          524          49.6161         49.6161       0.0000          43.1383        44.0755     -0.9372
+surfacecode_d13     15%        36          336          31.4862         31.4862       0.0000          31.0368        31.1661     -0.1293
+surfacecode_d13     25%        60          360          31.4841         31.4841       0.0000          31.1101        31.1661     -0.0560
+surfacecode_d13     40%        96          396          31.4512         31.4512       0.0000          31.2639        31.1661      0.0978
+DONE062

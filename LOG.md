@@ -58,3 +58,26 @@ the switch point; that redirects to 064's event-triggered switch.
 - `dev_bench.sh <instances_dir> <out.jsonl>` hard-capped at 600 s total
   wall, runnable on 2-core Linux; print the budget plan first and abort
   if it would exceed 600 s.
+
+## Outcome (recorded 2026-08-20)
+
+**Validator (canonical host):** score -0.1568, NO RECORD — but the TTF
+evidence is positive: reg3_250 ttf 3.9 s (run) / 5.75 s (confirmation),
+BOTH faster than the standing 7.069 s record; the worse-of-two (5.745 s)
+misses the >=20% record bar (5.655 s) by 0.09 s. tc tie on reg3
+(39.882); sycamore_m20 -0.315, ttf inf.
+
+**Dev bench (huawei, matched 2048 sweeps, switch in {15,25,40}%):**
+hypothesis CONFIRMED on both axes — composite early phase identical to
+parent-061 (delta 0.0000 at the pre-switch checkpoint, by construction)
+AND composite final tc better than the front-059 control: ksg -0.68 /
+-0.99 / -0.94 bits, d13 -0.13 / -0.06 / +0.10. Best switch 25%. Notably
+the band prefix IMPROVES the front's final tc on ksg by ~1 bit — the
+phases are synergistic, not merely concatenated (the reheat phase's
+lower-rank bottleneck gives the front a better basin to refine).
+
+**Verdict (honest):** phase composition works as hypothesized; the
+record miss is a threshold artifact (5.745 vs 5.655 s), not a mechanism
+failure. The open question passes to 064: an event-triggered switch
+should recover the reg3 TTF margin (fire later on expanders) while
+keeping the d13 behavior (fire early).
