@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-"""Run caps and stdlib-only matched-sweep summaries for attempt 062."""
+"""Caps, relabeling, and stdlib-only tc(t) summaries for attempt 066."""
 
 from __future__ import annotations
 
 import json
 import os
+import random
 import signal
 import subprocess
 import sys
 from pathlib import Path
 from typing import NoReturn
+
+
+RECORD_EPS = 39.883325463011175 + 0.05
+RECORD_EPS_TEXT = "39.883325463011175 + 0.05 = 39.933325463011175"
 
 
 def die(message: str) -> NoReturn:
@@ -66,17 +71,49 @@ def supervise(argv: list[str]) -> None:
     raise SystemExit(returncode)
 
 
+def relabel(argv: list[str]) -> None:
+    if len(argv) != 4:
+        die("usage: summarize_attempt.py relabel <input.json> <output.json> <seed>")
+    source, destination, seed_text = argv[1:]
+    graph = json.loads(Path(source).read_text())
+    labels = sorted(
+        {int(label) for ix in graph["ixs"] for label in ix}
+        | {int(label) for label in graph["iy"]}
+        | {int(label) for label in graph["sizes"]}
+    )
+    shuffled = labels.copy()
+    random.Random(int(seed_text)).shuffle(shuffled)
+    mapping = dict(zip(labels, shuffled))
+    graph["ixs"] = [[mapping[int(label)] for label in ix] for ix in graph["ixs"]]
+    graph["iy"] = [mapping[int(label)] for label in graph["iy"]]
+    graph["sizes"] = {
+        str(mapping[int(label)]): size for label, size in graph["sizes"].items()
+    }
+    Path(destination).write_text(
+        json.dumps(graph, sort_keys=True, separators=(",", ":"))
+    )
+
+
 def fields(line: str) -> dict[str, str]:
     return dict(item.split("=", 1) for item in line.split()[1:] if "=" in item)
 
 
 def make_row(argv: list[str]) -> None:
-    if len(argv) != 7:
+    if len(argv) != 9:
         die(
             "usage: summarize_attempt.py row "
-            "<instance> <arm> <fraction> <sweep_cap> <log> <tree>"
+            "<instance> <relabel> <seed> <arm> <fraction> <sweep_cap> <log> <tree>"
         )
-    instance, arm, fraction_text, sweep_cap, log_path, tree_path = argv[1:]
+    (
+        instance,
+        relabel_text,
+        seed_text,
+        arm,
+        fraction_text,
+        sweep_cap,
+        log_path,
+        tree_path,
+    ) = argv[1:]
     points = []
     final: dict[str, str] = {}
     config: dict[str, str] = {}
@@ -105,26 +142,31 @@ def make_row(argv: list[str]) -> None:
         "planned_cold_sweeps",
         "switch_cold_sweeps",
     }
-    if not required_config.issubset(config) or not final:
-        die(f"missing attempt-062 diagnostics in {log_path}")
+    if not required_config.issubset(config) or not final or not points:
+        die(f"missing attempt-066 diagnostics in {log_path}")
+    if config["mode"] != "composite":
+        die(f"expected composite mode in {log_path}, got {config['mode']}")
+    if abs(float(config["switch_fraction"]) - float(fraction_text)) > 1e-12:
+        die(f"fixed-switch override was not honored in {log_path}")
 
     row = {
-        "attempt": 62,
+        "attempt": 66,
         "instance": instance,
+        "relabel": int(relabel_text),
+        "relabel_seed": int(seed_text),
         "arm": arm,
         "mode": config["mode"],
-        "switch_fraction": (
-            float(fraction_text) if fraction_text not in {"parent", "front"} else None
-        ),
+        "switch_fraction": float(fraction_text),
         "n_reduced": int(config["n"]),
         "epoch_sweeps": int(config["epoch_sweeps"]),
         "planned_cold_sweeps": int(config["planned_cold_sweeps"]),
         "switch_cold_sweeps": int(config["switch_cold_sweeps"]),
-        "sweep_cap": int(sweep_cap),
+        "sweep_cap": int(sweep_cap) if sweep_cap else None,
         "sweeps": int(final["sweeps"]),
         "tc": float(final["tc_final"]),
         "trajectory": [
             {
+                "t_ms": float(point["t_ms"]),
                 "sweeps": int(point["sweeps"]),
                 "cold_sweeps": int(point["cold_sweeps"]),
                 "schedule": point["schedule"],
@@ -136,79 +178,91 @@ def make_row(argv: list[str]) -> None:
     print(json.dumps(row, sort_keys=True, separators=(",", ":")))
 
 
-def tc_at_cold(row: dict, cold_sweeps: int) -> float:
-    matches = [
-        point["tc"]
-        for point in row["trajectory"]
-        if point["cold_sweeps"] == cold_sweeps
-    ]
-    if not matches:
-        die(
-            f'missing cold-sweep checkpoint {cold_sweeps} for '
-            f'{row["instance"]}/{row["arm"]}'
-        )
-    return matches[-1]
+def first_time_at_or_below(row: dict, target: float) -> float | None:
+    return next(
+        (point["t_ms"] for point in row["trajectory"] if point["tc"] <= target),
+        None,
+    )
 
 
 def report(path: str) -> None:
     rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
-    print("final matched-sweep results")
-    print("instance         arm        switch  cold_cut  sweeps       tc")
+    print("final wall-matched results and tc(t) coverage")
+    print("instance         relabel seed   arm   switch cold_cut sweeps points       tc")
     for row in rows:
-        fraction = (
-            "-" if row["switch_fraction"] is None else f'{100 * row["switch_fraction"]:.0f}%'
-        )
-        cold_cut = "-" if row["arm"] == "parent061" else row["switch_cold_sweeps"]
+        fraction = f'{100 * row["switch_fraction"]:.0f}%'
         print(
-            f'{row["instance"]:<16} {row["arm"]:<10} {fraction:>6} '
-            f'{str(cold_cut):>9} {row["sweeps"]:>7} {row["tc"]:>8.4f}'
+            f'{row["instance"]:<16} {row["relabel"]:>7} {row["relabel_seed"]:>5} '
+            f'{row["arm"]:<5} {fraction:>6} {row["switch_cold_sweeps"]:>8} '
+            f'{row["sweeps"]:>6} {len(row["trajectory"]):>6} {row["tc"]:>8.4f}'
         )
-    mismatches = [row for row in rows if row["sweeps"] != row["sweep_cap"]]
+    mismatches = [
+        row
+        for row in rows
+        if row["sweep_cap"] is not None and row["sweeps"] != row["sweep_cap"]
+    ]
     if mismatches:
         die("one or more runs hit the wall deadline before the matched sweep cap")
 
-    print("\nevidence: composite early vs 061; composite final vs 059")
-    print(
-        "instance         switch  cold_cut  early_sweep  composite_early  "
-        "parent061_early  delta_early  composite_final  front059_final  delta_final"
-    )
-    for instance in ("ksg", "surfacecode_d13"):
-        group = [row for row in rows if row["instance"] == instance]
-        parent = next((row for row in group if row["arm"] == "parent061"), None)
-        front = next((row for row in group if row["arm"] == "front059"), None)
-        composites = sorted(
-            (row for row in group if row["arm"].startswith("switch")),
-            key=lambda row: row["switch_fraction"],
+    expected = {
+        (instance, relabel, arm)
+        for instance in ("reg3_250", "ksg")
+        for relabel in (0, 1)
+        for arm in ("q025", "q040")
+    }
+    actual = {(row["instance"], row["relabel"], row["arm"]) for row in rows}
+    if actual != expected:
+        die(
+            f"incomplete evidence matrix: missing={sorted(expected - actual)} "
+            f"extra={sorted(actual - expected)}"
         )
-        if parent is None or front is None or len(composites) != 3:
-            die(f"incomplete evidence arms for {instance}")
-        for composite in composites:
-            cold_cut = composite["switch_cold_sweeps"]
-            composite_early = tc_at_cold(composite, cold_cut)
-            parent_early = tc_at_cold(parent, cold_cut)
-            early_sweep = next(
-                point["sweeps"]
-                for point in composite["trajectory"]
-                if point["cold_sweeps"] == cold_cut
+
+    reg3 = [row for row in rows if row["instance"] == "reg3_250"]
+    earlier_or_equal = 0
+    comparisons = 0
+    print(
+        f"\nreg3_250 time-to-record-eps (tc <= {RECORD_EPS_TEXT}): "
+        "q0.40 vs q0.25 cross-relabel"
+    )
+    print("q040_relabel q025_relabel q040_t_ms q025_t_ms earlier_or_equal")
+    for later in sorted(
+        (row for row in reg3 if row["arm"] == "q040"),
+        key=lambda row: row["relabel"],
+    ):
+        later_time = first_time_at_or_below(later, RECORD_EPS)
+        for earlier in sorted(
+            (row for row in reg3 if row["arm"] == "q025"),
+            key=lambda row: row["relabel"],
+        ):
+            earlier_time = first_time_at_or_below(earlier, RECORD_EPS)
+            wins = later_time is not None and (
+                earlier_time is None or later_time <= earlier_time
             )
+            comparisons += 1
+            earlier_or_equal += int(wins)
+            later_text = "not-reached" if later_time is None else f"{later_time:.3f}"
+            earlier_text = "not-reached" if earlier_time is None else f"{earlier_time:.3f}"
             print(
-                f'{instance:<16} {100 * composite["switch_fraction"]:>5.0f}% '
-                f'{cold_cut:>9} {early_sweep:>12} {composite_early:>16.4f} '
-                f'{parent_early:>15.4f} {composite_early - parent_early:>12.4f} '
-                f'{composite["tc"]:>16.4f} {front["tc"]:>14.4f} '
-                f'{composite["tc"] - front["tc"]:>11.4f}'
+                f'{later["relabel"]:>12} {earlier["relabel"]:>12} '
+                f"{later_text:>9} {earlier_text:>9} {str(wins).lower():>16}"
             )
+    print(
+        f"result: q0.40 earlier-or-equal in {earlier_or_equal}/{comparisons} "
+        "comparisons (target >=3/4)"
+    )
 
 
 def main() -> None:
     if len(sys.argv) < 2:
-        die("expected subcommand: exec, supervise, row, or report")
+        die("expected subcommand: exec, supervise, relabel, row, or report")
     command = sys.argv[1]
     argv = sys.argv[1:]
     if command == "exec":
         run_capped(argv)
     elif command == "supervise":
         supervise(argv)
+    elif command == "relabel":
+        relabel(argv)
     elif command == "row":
         make_row(argv)
     elif command == "report" and len(argv) == 2:

@@ -1,4 +1,4 @@
-//! Attempt entry point for the autoresearch validator (attempt-062).
+//! Attempt entry point for the autoresearch validator (attempt-066).
 //!
 //! Contract: `attempt <graph.json> <budget_ms> <out.json>` — read an einsum
 //! graph, search for a contraction order within the wall-clock budget, and
@@ -9,7 +9,7 @@
 //! # Phase-switched band reheat then continuous freeze-out front
 //!
 //! The attempt-061 pipeline remains simplify -> fixed-seed greedy portfolio ->
-//! warm kick -> cold ladder with incumbent ratcheting. During the first 25% of
+//! warm kick -> cold ladder with incumbent ratcheting. During the first 40% of
 //! one planned cold ladder (clamped to at least two band epochs and at most
 //! 40%), cold passes use 061's targeted waist-band reheating verbatim. They
 //! then switch permanently to 059's continuous log-span freeze-out front.
@@ -519,7 +519,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (default_band_beta_lo, default_band_beta_hi) = default_band_betas(n);
     let band_beta_lo = env_f64("ATT_BAND_BLO", default_band_beta_lo);
     let band_beta_hi = env_f64("ATT_BAND_BHI", default_band_beta_hi).max(band_beta_lo);
-    let switch_fraction = env_f64("ATT_SWITCH_FRAC", 0.25).clamp(0.0, 0.40);
+    let switch_fraction = env_f64("ATT_FIXED_SWITCH", 0.40).clamp(0.0, 0.40);
     let front_width_log2 = env_f64("ATT_FRONT_WIDTH", 1.0).max(f64::EPSILON);
     let max_sweeps = env_u64("ATT_MAX_SWEEPS", u64::MAX);
     let diagnostics = env_bool("ATT_DIAG");
@@ -911,10 +911,11 @@ impl Annealer<'_> {
                             && self.diagnostic_cold_points.contains(&self.cold_sweeps)))
                 {
                     eprintln!(
-                        "ATT_POINT mode={} phase={} schedule={} sweeps={} cold_sweeps={} tc={:.9}",
+                        "ATT_POINT mode={} phase={} schedule={} t_ms={:.3} sweeps={} cold_sweeps={} tc={:.9}",
                         self.mode.label(),
                         phase,
                         if use_front { "front" } else { "band" },
+                        self.elapsed_ms(),
                         self.sweeps,
                         self.cold_sweeps,
                         self.best_tc,
