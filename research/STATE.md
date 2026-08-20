@@ -4,7 +4,14 @@
 - topic: beat-existing-optimizers  # slug of the chosen topic once stage >= db
 - batch_size: 10           # attempts per cycle
 - time_limit_seconds: 300  # hard wall-clock limit per scored run
-- authorized_attempts: 0   # cycle 12 (062-065) executed 2026-08-20; soft gate.
+- authorized_attempts: 0   # cycle 13 (066) executed 2026-08-20: falsified per
+                           # pre-registered gate; campaign winds down to write-up.
+                           # Was: 1, authorized by user 2026-08-20 ("1"):
+                           # single attempt 066 = composite reg3 TTF re-claim
+                           # (labelled 067 in the soft-gate discussion).
+                           # Wind-down track runs in parallel (PR #40, library
+                           # port, write-up). [cycle 12 (062-065) done; soft
+                           # gate passed]
                            # 064 set confirmed sycamore_m20 TTF record 5.274s.
                            # Was: 4, authorized by user 2026-08-20 ("yes, go"):
                            # 062 phase-switched composite (improve/061),
@@ -18,9 +25,9 @@
                            # ("continue the autoresearch with these 3 plans"):
                            # 059 beta(span,t) freeze-out, 060 activity-based
                            # worklist freezing, 061 targeted waist-band reheat.
-- next_attempt: 66         # 057/058 consumed by the attempt-057/058 campaign;
+- next_attempt: 67         # 057/058 consumed by the attempt-057/058 campaign;
                            # counter was stale at 57, corrected 2026-08-20
-- next_cycle: 13
+- next_cycle: 14
 - gates:
   - survey_gate: passed 2026-07-22  # pending | passed YYYY-MM-DD
   - validator_gate: passed 2026-07-22 (v2)  # pending | passed YYYY-MM-DD
