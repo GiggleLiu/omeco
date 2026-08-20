@@ -42,3 +42,23 @@ single thread, relabeling-invariant, pure tc, knobs functions of n,
 fixed seed, LINEAR ramps. ATT_PARENT=1 stays pure 061;
 ATT_FIXED_SWITCH=q still overrides (the change is only the DEFAULT q).
 dev_bench.sh hard cap 600 s total, 2-core-Linux-safe, budget plan first.
+
+## Outcome (recorded 2026-08-20)
+
+**Validator (canonical host):** score -0.2201, NO RECORD, claim
+falsified: reg3_250 tc=40.321 (delta -0.438), ttf=inf on this
+relabeling pair. sycamore_m20 tc=61.524 (-0.003, near-tie), ttf 15.4 s
+(record 5.274 s untouched).
+
+**Dev bench (huawei):** the pre-registered evidence gate FAILED 0/4 —
+q=0.40 reaches record-eps at 9.57 s vs q=0.25's 8.05-8.22 s on every
+cross-relabel comparison, even though q=0.40's matched-work final tc is
+slightly better (39.8817; ksg 38.5965 vs 38.6075).
+
+**Verdict (honest, falsification clause applied):** a later switch is
+better for final tc at matched work but WORSE for time-to-frontier —
+the band phase's extra rank-work delays the front's polish past the eps
+threshold. 062's 0.09 s record miss was relabeling variance, not switch
+placement. The direction closes: the write-up proceeds with the 061
+(reg3 7.069 s) and 064 (sycamore 5.274 s) records and 062's composite
+(q=0.25) as the recommended general-purpose schedule.

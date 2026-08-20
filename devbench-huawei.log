@@ -1,24 +1,21 @@
-budget plan: build<=60s + 10 runs*(budget=47000ms+guard=3s) + summarize<=10s = 570s (hard cap 600s)
-work match: ATT_MAX_SWEEPS=2048; serial 1-core runs; arms per instance: 061,059,switch-{15,25,40}%
-final matched-sweep results
-instance         arm        switch  cold_cut  sweeps       tc
-ksg              parent061       -         -    2048  43.2281
-ksg              front059        -         0    2048  44.0755
-ksg              switch15      15%        84    2048  43.3975
-ksg              switch25      25%       140    2048  43.0897
-ksg              switch40      40%       224    2048  43.1383
-surfacecode_d13  parent061       -         -    2048  31.2079
-surfacecode_d13  front059        -         0    2048  31.1661
-surfacecode_d13  switch15      15%        36    2048  31.0368
-surfacecode_d13  switch25      25%        60    2048  31.1101
-surfacecode_d13  switch40      40%        96    2048  31.2639
+budget plan: build<=60s + 8 serial runs*(budget=60000ms+guard=3s) + summarize<=10s = 574s (hard cap 600s)
+evidence plan: reg3_250,ksg x q={0.25,0.40} x 2 fixed relabelings; wall-matched tc(t) every 40 sweeps; reg3 record-eps=39.883325463011175+0.05=39.933325463011175; ATT_MAX_SWEEPS=unlimited; RAYON_NUM_THREADS=1; CARGO_BUILD_JOBS=2
+final wall-matched results and tc(t) coverage
+instance         relabel seed   arm   switch cold_cut sweeps points       tc
+reg3_250               0 66000 q025     25%       60 662737  16570  39.8817
+reg3_250               0 66000 q040     40%       96 671500  16789  39.8817
+reg3_250               1 66001 q025     25%       60 670073  16753  39.8817
+reg3_250               1 66001 q040     40%       96 668105  16704  39.8817
+ksg                    0 66000 q025     25%      140  46600   1167  38.6075
+ksg                    0 66000 q040     40%      224  42686   1069  38.5965
+ksg                    1 66001 q025     25%      140  46472   1163  38.6075
+ksg                    1 66001 q040     40%      224  42189   1056  38.5965
 
-evidence: composite early vs 061; composite final vs 059
-instance         switch  cold_cut  early_sweep  composite_early  parent061_early  delta_early  composite_final  front059_final  delta_final
-ksg                 15%        84          384          50.4301         50.4301       0.0000          43.3975        44.0755     -0.6780
-ksg                 25%       140          440          50.3872         50.3872       0.0000          43.0897        44.0755     -0.9858
-ksg                 40%       224          524          49.6161         49.6161       0.0000          43.1383        44.0755     -0.9372
-surfacecode_d13     15%        36          336          31.4862         31.4862       0.0000          31.0368        31.1661     -0.1293
-surfacecode_d13     25%        60          360          31.4841         31.4841       0.0000          31.1101        31.1661     -0.0560
-surfacecode_d13     40%        96          396          31.4512         31.4512       0.0000          31.2639        31.1661      0.0978
-DONE062
+reg3_250 time-to-record-eps (tc <= 39.883325463011175 + 0.05 = 39.933325463011175): q0.40 vs q0.25 cross-relabel
+q040_relabel q025_relabel q040_t_ms q025_t_ms earlier_or_equal
+           0            0  9568.384  8218.542            false
+           0            1  9568.384  8051.538            false
+           1            0  9576.993  8218.542            false
+           1            1  9576.993  8051.538            false
+result: q0.40 earlier-or-equal in 0/4 comparisons (target >=3/4)
+DONE066
