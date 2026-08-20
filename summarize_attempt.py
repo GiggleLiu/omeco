@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run caps and stdlib-only summaries for attempt 061 diagnostics."""
+"""Run caps and stdlib-only matched-sweep summaries for attempt 062."""
 
 from __future__ import annotations
 
@@ -71,16 +71,19 @@ def fields(line: str) -> dict[str, str]:
 
 def make_row(argv: list[str]) -> None:
     if len(argv) != 7:
-        die("usage: summarize_attempt.py row <instance> <mode> <c> <sweep_cap> <log> <tree>")
-    instance, mode, c_text, sweep_cap, log_path, tree_path = argv[1:]
-    epochs = []
+        die(
+            "usage: summarize_attempt.py row "
+            "<instance> <arm> <fraction> <sweep_cap> <log> <tree>"
+        )
+    instance, arm, fraction_text, sweep_cap, log_path, tree_path = argv[1:]
+    points = []
     final: dict[str, str] = {}
     config: dict[str, str] = {}
     for line in Path(log_path).read_text().splitlines():
         if line.startswith("ATT_CONFIG "):
             config = fields(line)
-        elif line.startswith("ATT_EPOCH "):
-            epochs.append(fields(line))
+        elif line.startswith("ATT_POINT "):
+            points.append(fields(line))
         elif " tc_final=" in line:
             final = fields(line)
     with open(tree_path) as stream:
@@ -94,71 +97,106 @@ def make_row(argv: list[str]) -> None:
     ):
         die(f"invalid NestedEinsum JSON in {tree_path}")
 
-    def total(key: str, integer: bool = False):
-        values = (int(epoch[key]) if integer else float(epoch[key]) for epoch in epochs)
-        return sum(values)
+    required_config = {
+        "mode",
+        "n",
+        "epoch_sweeps",
+        "planned_cold_sweeps",
+        "switch_cold_sweeps",
+    }
+    if not required_config.issubset(config) or not final:
+        die(f"missing attempt-062 diagnostics in {log_path}")
 
-    in_proposals = total("in_proposals", True)
-    out_proposals = total("out_proposals", True)
-    in_accepts = total("in_accepts", True)
-    out_accepts = total("out_accepts", True)
     row = {
-        "attempt": 61,
+        "attempt": 62,
         "instance": instance,
-        "mode": mode,
-        "band_bits": None if c_text == "parent" else float(c_text),
+        "arm": arm,
+        "mode": config["mode"],
+        "switch_fraction": (
+            float(fraction_text) if fraction_text not in {"parent", "front"} else None
+        ),
         "n_reduced": int(config["n"]),
+        "epoch_sweeps": int(config["epoch_sweeps"]),
+        "planned_cold_sweeps": int(config["planned_cold_sweeps"]),
+        "switch_cold_sweeps": int(config["switch_cold_sweeps"]),
         "sweep_cap": int(sweep_cap),
         "sweeps": int(final["sweeps"]),
         "tc": float(final["tc_final"]),
-        "epoch_count": len(epochs),
-        "in_band": {
-            "proposals": in_proposals,
-            "accepts": in_accepts,
-            "acceptance_rate": in_accepts / in_proposals if in_proposals else None,
-            "net_gain_bits": total("in_net_gain"),
-            "downhill_gain_bits": total("in_downhill_gain"),
-        },
-        "outside_band": {
-            "proposals": out_proposals,
-            "accepts": out_accepts,
-            "acceptance_rate": out_accepts / out_proposals if out_proposals else None,
-            "net_gain_bits": total("out_net_gain"),
-            "downhill_gain_bits": total("out_downhill_gain"),
-        },
-        "waist_trajectory": [
+        "trajectory": [
             {
-                "sweep": int(epoch["sweep"]),
-                "before": float(epoch["waist_before"]),
-                "after": float(epoch["waist_after"]),
+                "sweeps": int(point["sweeps"]),
+                "cold_sweeps": int(point["cold_sweeps"]),
+                "schedule": point["schedule"],
+                "tc": float(point["tc"]),
             }
-            for epoch in epochs
+            for point in points
         ],
-        "band_fraction_mean": (
-            sum(int(epoch["band_nodes"]) / int(epoch["internal_nodes"]) for epoch in epochs)
-            / len(epochs)
-            if epochs
-            else None
-        ),
     }
     print(json.dumps(row, sort_keys=True, separators=(",", ":")))
 
 
+def tc_at_cold(row: dict, cold_sweeps: int) -> float:
+    matches = [
+        point["tc"]
+        for point in row["trajectory"]
+        if point["cold_sweeps"] == cold_sweeps
+    ]
+    if not matches:
+        die(
+            f'missing cold-sweep checkpoint {cold_sweeps} for '
+            f'{row["instance"]}/{row["arm"]}'
+        )
+    return matches[-1]
+
+
 def report(path: str) -> None:
     rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
-    print("instance         mode   c   sweeps       tc  in_accept out_accept in_net_gain out_net_gain")
+    print("final matched-sweep results")
+    print("instance         arm        switch  cold_cut  sweeps       tc")
     for row in rows:
-        inside, outside = row["in_band"], row["outside_band"]
-        c = "-" if row["band_bits"] is None else f'{row["band_bits"]:g}'
+        fraction = (
+            "-" if row["switch_fraction"] is None else f'{100 * row["switch_fraction"]:.0f}%'
+        )
+        cold_cut = "-" if row["arm"] == "parent061" else row["switch_cold_sweeps"]
         print(
-            f'{row["instance"]:<16} {row["mode"]:<6} {c:>2} {row["sweeps"]:>8} '
-            f'{row["tc"]:>8.4f} {inside["acceptance_rate"] or 0:>9.4f} '
-            f'{outside["acceptance_rate"] or 0:>10.4f} {inside["net_gain_bits"]:>11.3f} '
-            f'{outside["net_gain_bits"]:>12.3f}'
+            f'{row["instance"]:<16} {row["arm"]:<10} {fraction:>6} '
+            f'{str(cold_cut):>9} {row["sweeps"]:>7} {row["tc"]:>8.4f}'
         )
     mismatches = [row for row in rows if row["sweeps"] != row["sweep_cap"]]
     if mismatches:
         die("one or more runs hit the wall deadline before the matched sweep cap")
+
+    print("\nevidence: composite early vs 061; composite final vs 059")
+    print(
+        "instance         switch  cold_cut  early_sweep  composite_early  "
+        "parent061_early  delta_early  composite_final  front059_final  delta_final"
+    )
+    for instance in ("ksg", "surfacecode_d13"):
+        group = [row for row in rows if row["instance"] == instance]
+        parent = next((row for row in group if row["arm"] == "parent061"), None)
+        front = next((row for row in group if row["arm"] == "front059"), None)
+        composites = sorted(
+            (row for row in group if row["arm"].startswith("switch")),
+            key=lambda row: row["switch_fraction"],
+        )
+        if parent is None or front is None or len(composites) != 3:
+            die(f"incomplete evidence arms for {instance}")
+        for composite in composites:
+            cold_cut = composite["switch_cold_sweeps"]
+            composite_early = tc_at_cold(composite, cold_cut)
+            parent_early = tc_at_cold(parent, cold_cut)
+            early_sweep = next(
+                point["sweeps"]
+                for point in composite["trajectory"]
+                if point["cold_sweeps"] == cold_cut
+            )
+            print(
+                f'{instance:<16} {100 * composite["switch_fraction"]:>5.0f}% '
+                f'{cold_cut:>9} {early_sweep:>12} {composite_early:>16.4f} '
+                f'{parent_early:>15.4f} {composite_early - parent_early:>12.4f} '
+                f'{composite["tc"]:>16.4f} {front["tc"]:>14.4f} '
+                f'{composite["tc"] - front["tc"]:>11.4f}'
+            )
 
 
 def main() -> None:

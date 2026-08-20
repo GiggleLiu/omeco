@@ -1,95 +1,60 @@
-# Attempt 061 — Targeted waist-band reheating
+# Attempt 062 — Phase-switched composite: band reheat then freeze-out front
 
-- **attempt**: 061
+- **attempt**: 062
 - **date**: 2026-08-20
-- **kind**: draft
-- **parent (machinery)**: none (uses the 052 pipeline as chassis; informed
-  by 042's failure and 054's waist analysis)
+- **kind**: improve
+- **parent**: 061 (band reheat chassis in this worktree); imports the
+  cold-phase mechanism of 059 (freeze-out front)
 
 ## Hypothesis (pre-registered)
 
-The cold ladder converges everywhere but the binding constraint is the
-WAIST — the argmax-cost node and the cuts on its root path. 054 showed the
-waist cut is always globally improvable but two-sided rebuilds only pay on
-separable networks; 042 showed steering MOVE SELECTION onto the argmax
-collapses on peaky profiles. Untried middle ground: keep the move
-distribution uniform and cold everywhere EXCEPT a heated BAND — all nodes
-whose cost is within c bits of the current max, plus their root paths —
-which anneals at a warmer beta_band (linear ramp per epoch; band and
-temperatures recomputed every epoch from the current tree; c, betas,
-epoch length functions of n). Local heating lets the tree renegotiate the
-bottleneck's neighborhood without melting the rest, capturing part of
-waist surgery's effect with no rebuild machinery, and composing with any
-ladder. Claim: beats >= 1 record by > 0.05 (most likely ksg or
-surfacecode-family style separable primaries via reg3_250 is unlikely —
-honest expectation is the sycamore_m20 TTF or a primary tc tie; the
-mechanism data is the main deliverable if no record falls).
+Cycle-11's confirmed lesson: 061's band reheat wins the early
+bottleneck-negotiation phase (reg3_250 TTF 7.1 s vs 16.1 s) but melts
+gains late; 059's continuous freeze-out front wins matched-work
+refinement (ksg −1.7..−4.7 bits) but starts slow. A PHASE-SWITCHED
+composite — run 061's band-reheated ladder for the first
+`f(n) = clamp(round(0.25 * total_planned_sweeps), min 2 epochs, max 40%)`
+of the cold-phase sweep budget, then switch permanently to 059's
+continuous freeze-out ladder (band heating off) — inherits both wins:
+TTF at least as good as 061 AND final matched-sweep tc at least as good
+as 059, on the same chassis.
 
-## Novelty check
-
-042 heated nothing — it biased which node to TRY by congestion softmax
-and starved on peaky profiles; 048 tempered whole replicas; 054/PR#40
-rebuild the waist structurally. Band-local temperature with uniform move
-selection is untried.
+ATOMIC CHANGE vs 061: one scheduler branch — before the switch point the
+cold pass is 061's (band betas); after it, the cold pass is 059's
+(continuous front, verbatim port). Kick, seeds, ratchet untouched.
 
 ## Expected evidence
 
-Validator primaries (90 s): record beat or TTF >= 20%. Dev bench (huawei,
-<= 600 s): on ksg + sycamore_m20 at matched sweeps, (a) acceptance rate
-and realized tc-gain inside vs outside the band; (b) waist node cost
-trajectory vs the cold-only parent; (c) sensitivity to band width c in
-{1, 2, 4} bits — the 042 pathology check (band must not collapse to the
-argmax alone).
+Validator primaries (90 s): TTF <= 7.1 s on reg3_250 (retain the record)
+AND tc delta >= 059's on sycamore_m20; any new record is a bonus. Dev
+bench (huawei, <= 600 s): on ksg + surfacecode_d13 at matched sweeps,
+composite final tc within noise of 059's arm AND early-phase tc(t)
+within noise of 061's arm; report the switch-point sensitivity at
+{15%, 25%, 40%}.
 
 ## Falsification
 
-If in-band heating never converts to retained global tc improvement
-(gains melt back when the band cools) on both dev instances, the
-bottleneck is genuinely structural (only rebuilds move it) — a clean
-negative that sharpens the surgery-vs-annealing boundary from PR #40.
+If the composite is worse than BOTH parents on either axis (the switch
+destroys the band phase's structure before the front can refine it), the
+phases do not compose by concatenation — record the tc(t) curves around
+the switch point; that redirects to 064's event-triggered switch.
 
 ## Constraints (validator contract — non-negotiable)
 
-- Binary: `omeco/examples/attempt.rs`, registered as example `attempt`
-  (the validator builds `cargo build --release --offline --example attempt
-  -p omeco` and runs `target/release/examples/attempt`).
+- Binary: `omeco/examples/attempt.rs`, example name `attempt` (validator
+  builds `cargo build --release --offline --example attempt -p omeco`).
 - Contract: `attempt <graph.json> <budget_ms> <out.json>`; eager atomic
-  best-so-far writes (tmp+rename, rate-limited ~150 ms + forced final flush);
-  single thread (no Rayon); relabeling-invariant; pure tc objective;
-  every knob a function of n; fixed RNG seed; LINEAR beta ramps.
-- Hard wall limit enforced by the harness; treat budget_ms as the deadline.
-- Dev instances readable at /Users/liujinguo/rcode/omeco/research/benchmark/targets/
+  best-so-far writes (tmp+rename, ~150 ms rate limit + forced final
+  flush); single thread; relabeling-invariant; pure tc; knobs functions
+  of n; fixed RNG seed; LINEAR beta ramps.
+- Parent code: THIS worktree already contains attempt-061's
+  omeco/examples/attempt.rs and dev_bench.sh — modify them (the atomic
+  change below), keep `ATT_PARENT=1` reproducing the UNMODIFIED 061
+  behavior byte-for-byte.
+- 059's freeze-out front (for reference/porting):
+  /Users/liujinguo/rcode/omeco/.worktrees/attempt-059/omeco/examples/attempt.rs (read-only).
+- Dev instances: /Users/liujinguo/rcode/omeco/research/benchmark/targets/
   (never touch research/benchmark/private/).
-- Baseline engine to modify: the 052-style pipeline as shipped in this
-  worktree's library (see omeco/src/waist_surgery.rs `gated_sweep`,
-  omeco/src/treesa.rs `fine_tune_tree_sa`) and the reference attempt
-  pipeline in /Users/liujinguo/rcode/omeco/.worktrees/attempt-052/omeco/examples/attempt.rs
-  (read-only): SIMPLIFY -> greedy seed portfolio -> warm kick + cold
-  span-gated ladder ratchet loop.
-- Also produce `dev_bench.sh <instances_dir> <out.jsonl>`: a deterministic
-  mechanism-diagnostic benchmark, HARD-CAPPED at 600 s wall total (user
-  directive), runnable on a 2-core Linux host (huawei).
-
-## Outcome (recorded 2026-08-20)
-
-**Validator (canonical host, v2.4, primaries 90 s):** status=scored,
-score=-0.0315. **NEW ANYTIME RECORD (confirmed, worse-of-two):
-reg3_250 TTF 7.1 s vs record 16.1 s — 2.3x faster to the frontier**, tc
-tie (39.882, +0.002). sycamore_m20: tc -0.065 (sc 54 vs 53), ttf 1.3 s
-vs record 39.6 s claimed but UNCONFIRMED (confirmation run hit the wall
-limit; recorded as unconfirmed per protocol, no retry).
-
-**Dev bench (huawei, matched 2048 sweeps):** final-tc side of the
-hypothesis FALSIFIED as pre-registered: ksg band arms 4-5 bits WORSE than
-parent (44.2 vs 39.1), in-band net gain NEGATIVE everywhere (in-band
-heating accepts uphill moves whose gains melt back; out-of-band recovers
-them). sycamore_m20 ~tie (61.99-62.17 vs 62.20). No 042-style collapse:
-in-band acceptance stayed 0.50-0.58 for c in {1,2,4}.
-
-**Verdict (honest):** the mechanism is an EARLY-DESCENT accelerant, not a
-refiner — heating the waist band renegotiates the bottleneck fast (2.3x
-confirmed TTF speedup on reg3_250, the first TTF record since 032) but
-retains nothing at long budgets. Composition candidate: band reheat for
-the first ~10 s, then hand off to the cold ladder / 059 front (schedule
-switch, one atomic change).
-Artifacts: dev-results-huawei.jsonl, devbench-huawei.log, report.json.
+- `dev_bench.sh <instances_dir> <out.jsonl>` hard-capped at 600 s total
+  wall, runnable on 2-core Linux; print the budget plan first and abort
+  if it would exceed 600 s.

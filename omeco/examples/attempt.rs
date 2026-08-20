@@ -1,4 +1,4 @@
-//! Attempt entry point for the autoresearch validator (attempt-061).
+//! Attempt entry point for the autoresearch validator (attempt-062).
 //!
 //! Contract: `attempt <graph.json> <budget_ms> <out.json>` — read an einsum
 //! graph, search for a contraction order within the wall-clock budget, and
@@ -6,15 +6,14 @@
 //! `out.json` in omeco `writejson` format. Every improvement is written
 //! EAGERLY and ATOMICALLY (tmp file + rename) the instant it is found.
 //!
-//! # Targeted waist-band reheating on the attempt-052 chassis
+//! # Phase-switched band reheat then continuous freeze-out front
 //!
-//! The pipeline remains simplify -> fixed-seed greedy portfolio -> warm kick ->
-//! cold span-gated ladder with incumbent ratcheting. Proposal visitation and
-//! rule selection remain uniform. The sole search-mechanism change is local
-//! temperature: once per epoch, find every contraction node within `c` bits of
-//! the current maximum node cost, add every ancestor on its root path, and use
-//! a warmer linear beta ramp only at those paths. `ATT_PARENT=1` bypasses that
-//! beta substitution and recovers the parent sweep behavior.
+//! The attempt-061 pipeline remains simplify -> fixed-seed greedy portfolio ->
+//! warm kick -> cold ladder with incumbent ratcheting. During the first 25% of
+//! one planned cold ladder (clamped to at least two band epochs and at most
+//! 40%), cold passes use 061's targeted waist-band reheating verbatim. They
+//! then switch permanently to 059's continuous log-span freeze-out front.
+//! `ATT_PARENT=1` restores pure attempt-061 behavior.
 //!
 //!   1. SIMPLIFY and SEED. Deterministic + fixed-seed Boltzmann-randomized
 //!      greedy portfolio;
@@ -74,6 +73,9 @@ const TARGET_TOP: usize = 30;
 /// Check the wall clock only every this many sweeps (keeps overhead low).
 const CLOCK_EVERY: u64 = 8;
 
+/// Sweep interval for the matched-work tc(t) diagnostic.
+const DIAG_EVERY_SWEEPS: u64 = 40;
+
 /// Minimum wall-clock gap between atomic disk writes. The validator polls
 /// `out.json` on its own 0.2 s clock, so writing more often is pure waste; on
 /// large-boundary trees an unthrottled write-per-improvement during descent
@@ -85,6 +87,31 @@ struct GraphData {
     ixs: Vec<Vec<usize>>,
     iy: Vec<usize>,
     sizes: HashMap<String, usize>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AttemptMode {
+    Composite,
+    Parent061,
+    Front059,
+}
+
+impl AttemptMode {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Composite => "composite",
+            Self::Parent061 => "parent061",
+            Self::Front059 => "front059",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct FrontSchedule {
+    front_log2: f64,
+    width_log2: f64,
+    beta_warm: f64,
+    beta_cold: f64,
 }
 
 /// Read an `f64` tuning knob from the environment, falling back to `default`.
@@ -128,6 +155,13 @@ fn default_epoch_sweeps(n: usize) -> u64 {
 fn default_band_betas(n: usize) -> (f64, f64) {
     let log_n = (n.max(2) as f64).log2();
     ((0.5 + log_n / 16.0).min(1.25), (4.0 + log_n / 4.0).min(7.0))
+}
+
+/// Cold-prefix length from the pre-registered fractional switch rule.
+fn switch_cold_sweeps(total_planned: u64, epoch_sweeps: u64, fraction: f64) -> u64 {
+    let maximum = ((0.40 * total_planned as f64).round() as u64).max(1);
+    let minimum = epoch_sweeps.saturating_mul(2).min(maximum);
+    ((fraction * total_planned as f64).round() as u64).clamp(minimum, maximum)
 }
 
 /// Atomically write `tree` to `out_path` (tmp file + rename) so the polling
@@ -467,26 +501,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    // ---- Scale-structured basin-hopping + targeted waist-band heating. -------
-    let parent = env_bool("ATT_PARENT");
+    // ---- Phase-switched band heating -> continuous freeze-out front. ---------
+    let parent061 = env_bool("ATT_PARENT");
+    let front059 = env_bool("ATT_FRONT_ONLY");
+    if parent061 && front059 {
+        return Err("ATT_PARENT and ATT_FRONT_ONLY are mutually exclusive".into());
+    }
+    let mode = if parent061 {
+        AttemptMode::Parent061
+    } else if front059 {
+        AttemptMode::Front059
+    } else {
+        AttemptMode::Composite
+    };
     let band_bits = env_f64("ATT_BAND_BITS", default_band_bits(n)).max(0.0);
     let epoch_sweeps = env_u64("ATT_EPOCH_SWEEPS", default_epoch_sweeps(n)).max(1);
     let (default_band_beta_lo, default_band_beta_hi) = default_band_betas(n);
     let band_beta_lo = env_f64("ATT_BAND_BLO", default_band_beta_lo);
     let band_beta_hi = env_f64("ATT_BAND_BHI", default_band_beta_hi).max(band_beta_lo);
+    let switch_fraction = env_f64("ATT_SWITCH_FRAC", 0.25).clamp(0.0, 0.40);
+    let front_width_log2 = env_f64("ATT_FRONT_WIDTH", 1.0).max(f64::EPSILON);
     let max_sweeps = env_u64("ATT_MAX_SWEEPS", u64::MAX);
     let diagnostics = env_bool("ATT_DIAG");
-    eprintln!(
-        "ATT_CONFIG mode={} n={} c={:.3} epoch_sweeps={} band_beta_lo={:.6} \
-         band_beta_hi={:.6} max_sweeps={}",
-        if parent { "parent" } else { "band" },
-        n,
-        band_bits,
-        epoch_sweeps,
-        band_beta_lo,
-        band_beta_hi,
-        max_sweeps
-    );
 
     let mut ann = Annealer {
         original_ixs: &code.ixs,
@@ -505,12 +541,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         best_tc: &mut best_tc,
         subtrees: &subtrees,
         original_labels: &original_labels,
-        parent,
+        mode,
         diagnostics,
         band_bits,
         epoch_sweeps,
         band_beta_lo,
         band_beta_hi,
+        switch_fraction,
+        front_width_log2,
+        planned_cold_sweeps: 0,
+        switch_cold_sweeps: 0,
+        diagnostic_cold_points: [0; 3],
+        cold_sweeps: 0,
         max_sweeps,
         sweeps: 0,
         accepts: 0,
@@ -547,12 +589,18 @@ struct Annealer<'a> {
     best_tc: &'a mut f64,
     subtrees: &'a [NestedEinsum<usize>],
     original_labels: &'a [usize],
-    parent: bool,
+    mode: AttemptMode,
     diagnostics: bool,
     band_bits: f64,
     epoch_sweeps: u64,
     band_beta_lo: f64,
     band_beta_hi: f64,
+    switch_fraction: f64,
+    front_width_log2: f64,
+    planned_cold_sweeps: u64,
+    switch_cold_sweeps: u64,
+    diagnostic_cold_points: [u64; 3],
+    cold_sweeps: u64,
     max_sweeps: u64,
     sweeps: u64,
     accepts: u64,
@@ -605,6 +653,36 @@ impl Annealer<'_> {
         // improvement (size-scaled: small graphs diversify sooner).
         let stag_threshold = env_u64("ATT_STAG", if n <= 400 { 2 } else { 5 }).max(1);
 
+        self.planned_cold_sweeps = cold_sweeps.saturating_mul(span_levels.len() as u64);
+        self.switch_cold_sweeps = match self.mode {
+            AttemptMode::Composite => switch_cold_sweeps(
+                self.planned_cold_sweeps,
+                self.epoch_sweeps,
+                self.switch_fraction,
+            ),
+            AttemptMode::Parent061 => u64::MAX,
+            AttemptMode::Front059 => 0,
+        };
+        self.diagnostic_cold_points = [0.15, 0.25, 0.40].map(|fraction| {
+            switch_cold_sweeps(self.planned_cold_sweeps, self.epoch_sweeps, fraction)
+        });
+        eprintln!(
+            "ATT_CONFIG mode={} n={} c={:.3} epoch_sweeps={} band_beta_lo={:.6} \
+             band_beta_hi={:.6} front_width_log2={:.3} switch_fraction={:.3} \
+             planned_cold_sweeps={} switch_cold_sweeps={} max_sweeps={}",
+            self.mode.label(),
+            n,
+            self.band_bits,
+            self.epoch_sweeps,
+            self.band_beta_lo,
+            self.band_beta_hi,
+            self.front_width_log2,
+            self.switch_fraction,
+            self.planned_cold_sweeps,
+            self.switch_cold_sweeps,
+            self.max_sweeps,
+        );
+
         // Working incumbent, kept as an ExprTree for cheap restart clones. Its
         // tc (`work_tc`) equals the global best (`*self.best_tc`) here because
         // the seed IS the best; the emitted best is always the global minimum
@@ -653,6 +731,7 @@ impl Annealer<'_> {
                     b_hi,
                     cold_sweeps,
                     "restart",
+                    None,
                 )?;
                 eprintln!(
                     "t={:.0}ms vcycle={vcycle} FLAT-control tc={:.4} improved={improved}",
@@ -680,12 +759,14 @@ impl Annealer<'_> {
                 b_hi,
                 kick_sweeps,
                 "kick",
+                None,
             )?;
             let tc_after_kick = tree_complexity(&tree, self.log2_sizes).0;
 
             // Cold refinement ladder.
             let mut cycle_improved = false;
-            for &span in span_levels.iter() {
+            for (level, &span) in span_levels.iter().enumerate() {
+                let next_span = span_levels.get(level + 1).copied().unwrap_or(1);
                 let improved = self.run_level(
                     &mut tree,
                     &mut s_lin,
@@ -696,6 +777,7 @@ impl Annealer<'_> {
                     b_hi,
                     cold_sweeps,
                     "cold",
+                    Some(next_span),
                 )?;
                 cycle_improved |= improved;
                 if self.exhausted() {
@@ -739,6 +821,7 @@ impl Annealer<'_> {
         b_hi: f64,
         sweeps: u64,
         phase: &str,
+        next_span: Option<usize>,
     ) -> Result<bool, Box<dyn std::error::Error>> {
         let mut improved = false;
         let denom = (sweeps.saturating_sub(1)).max(1) as f64;
@@ -751,6 +834,8 @@ impl Annealer<'_> {
             let mut stats = EpochStats::default();
             let epoch_start = k;
             let epoch_denom = (epoch_end - epoch_start).saturating_sub(1).max(1) as f64;
+            let mut saw_band = false;
+            let mut saw_front = false;
 
             while k < epoch_end && !self.exhausted() {
                 self.sweeps += 1;
@@ -758,23 +843,57 @@ impl Annealer<'_> {
                 let band_beta = self.band_beta_lo
                     + (self.band_beta_hi - self.band_beta_lo)
                         * ((k - epoch_start) as f64 / epoch_denom);
-                let mut path = Vec::new();
-                gated_sweep(
-                    tree,
-                    beta,
-                    band_beta,
-                    self.parent,
-                    &band.paths,
-                    &mut path,
-                    min_span,
-                    self.log2_sizes,
-                    &mut self.rng,
-                    &mut self.scratch,
-                    s_lin,
-                    &mut self.accepts,
-                    &mut stats,
-                );
+                let use_front = next_span.is_some()
+                    && match self.mode {
+                        AttemptMode::Composite => self.cold_sweeps >= self.switch_cold_sweeps,
+                        AttemptMode::Parent061 => false,
+                        AttemptMode::Front059 => true,
+                    };
+                if use_front {
+                    saw_front = true;
+                    let progress = k as f64 / denom;
+                    let start = (min_span as f64).log2();
+                    let end = (next_span.unwrap_or(1) as f64).log2();
+                    continuous_front_sweep(
+                        tree,
+                        FrontSchedule {
+                            front_log2: start + (end - start) * progress,
+                            width_log2: self.front_width_log2,
+                            beta_warm: b_lo,
+                            beta_cold: b_hi,
+                        },
+                        self.log2_sizes,
+                        &mut self.rng,
+                        &mut self.scratch,
+                        s_lin,
+                        &mut self.accepts,
+                    );
+                } else {
+                    saw_band = true;
+                    let mut path = Vec::new();
+                    // `false` is attempt-061's mechanism-on default. Keeping
+                    // this call unchanged preserves the ATT_PARENT=1 control's
+                    // proposal/RNG stream byte-for-byte.
+                    gated_sweep(
+                        tree,
+                        beta,
+                        band_beta,
+                        false,
+                        &band.paths,
+                        &mut path,
+                        min_span,
+                        self.log2_sizes,
+                        &mut self.rng,
+                        &mut self.scratch,
+                        s_lin,
+                        &mut self.accepts,
+                        &mut stats,
+                    );
+                }
                 k += 1;
+                if next_span.is_some() {
+                    self.cold_sweeps += 1;
+                }
 
                 if self.sweeps % RESYNC_SWEEPS == 0 {
                     *s_lin = f64::exp2(tree_complexity(tree, self.log2_sizes).0);
@@ -784,6 +903,22 @@ impl Annealer<'_> {
                 // I/O remains rate-limited independently below.
                 if *s_lin < f64::exp2(*self.best_tc) - 1e-9 {
                     improved |= self.capture_current(tree, best_expr, work_tc, s_lin);
+                }
+
+                if self.diagnostics
+                    && (self.sweeps % DIAG_EVERY_SWEEPS == 0
+                        || (next_span.is_some()
+                            && self.diagnostic_cold_points.contains(&self.cold_sweeps)))
+                {
+                    eprintln!(
+                        "ATT_POINT mode={} phase={} schedule={} sweeps={} cold_sweeps={} tc={:.9}",
+                        self.mode.label(),
+                        phase,
+                        if use_front { "front" } else { "band" },
+                        self.sweeps,
+                        self.cold_sweeps,
+                        self.best_tc,
+                    );
                 }
 
                 // Rate-limited eager writes of the newest in-memory best.
@@ -802,13 +937,18 @@ impl Annealer<'_> {
                 let waist_after = max_node_tc(tree, self.log2_sizes);
                 let tc_after = tree_complexity(tree, self.log2_sizes).0;
                 eprintln!(
-                    "ATT_EPOCH mode={} phase={} span={} sweep={} epoch_sweeps={} c={:.3} \
+                    "ATT_EPOCH mode={} phase={} schedule={} span={} sweep={} epoch_sweeps={} c={:.3} \
                      band_nodes={} internal_nodes={} waist_before={:.9} waist_after={:.9} \
                      tc_before={:.9} tc_after={:.9} in_proposals={} in_accepts={} \
                      in_net_gain={:.9} in_downhill_gain={:.9} out_proposals={} out_accepts={} \
                      out_net_gain={:.9} out_downhill_gain={:.9}",
-                    if self.parent { "parent" } else { "band" },
+                    self.mode.label(),
                     phase,
+                    match (saw_band, saw_front) {
+                        (true, true) => "switch",
+                        (false, true) => "front",
+                        _ => "band",
+                    },
                     min_span,
                     self.sweeps,
                     k - epoch_start,
@@ -1039,6 +1179,55 @@ fn proposal_beta(parent: bool, in_band: bool, beta: f64, band_beta: f64) -> f64 
     }
 }
 
+/// Attempt-059's continuous log-span freeze-out sweep. Every internal node is
+/// visited: nodes ahead of the moving front accept only non-regressing moves,
+/// nodes in its one-octave transition band receive a linear beta ramp, and
+/// nodes behind it are cold. Proposal order and energy are otherwise unchanged.
+#[allow(clippy::too_many_arguments)]
+fn continuous_front_sweep(
+    tree: &mut ExprTree,
+    schedule: FrontSchedule,
+    log2_sizes: &[f64],
+    rng: &mut SmallRng,
+    scratch: &mut ScratchSpace,
+    s_lin: &mut f64,
+    accepts: &mut u64,
+) -> usize {
+    match tree {
+        ExprTree::Leaf(_) => 1,
+        ExprTree::Node { left, right, .. } => {
+            let ls =
+                continuous_front_sweep(left, schedule, log2_sizes, rng, scratch, s_lin, accepts);
+            let rs =
+                continuous_front_sweep(right, schedule, log2_sizes, rng, scratch, s_lin, accepts);
+            let span = ls + rs;
+            let node_log2 = (span as f64).log2();
+            let distance = node_log2 - schedule.front_log2;
+            let beta = if distance < 0.0 {
+                f64::INFINITY
+            } else if distance < schedule.width_log2 {
+                schedule.beta_warm
+                    + (schedule.beta_cold - schedule.beta_warm) * distance / schedule.width_log2
+            } else {
+                schedule.beta_cold
+            };
+            let rules = Rule::applicable_rules(tree, DecompositionType::Tree);
+            if !rules.is_empty() {
+                let rule = rules[rng.random_range(0..rules.len())];
+                if let Some(diff) = scratch.rule_diff(tree, rule, log2_sizes, false) {
+                    let dtc = diff.tc1 - diff.tc0;
+                    if dtc <= 0.0 || rng.random::<f64>() < (-beta * dtc).exp() {
+                        *s_lin += f64::exp2(diff.tc1) - f64::exp2(diff.tc0);
+                        apply_rule_mut(tree, rule, diff.new_labels);
+                        *accepts += 1;
+                    }
+                }
+            }
+            span
+        }
+    }
+}
+
 // ==========================================================================
 // NestedEinsum <-> ExprTree conversions (label-id space).
 // Reimplemented here because the library keeps them private.
@@ -1216,6 +1405,15 @@ mod tests {
         assert_eq!(format!("{left:?}"), format!("{right:?}"));
         assert_eq!(left_s, right_s);
         assert_eq!(left_accepts, right_accepts);
+    }
+
+    #[test]
+    fn switch_rule_uses_fraction_two_epoch_floor_and_forty_percent_cap() {
+        assert_eq!(switch_cold_sweeps(560, 32, 0.15), 84);
+        assert_eq!(switch_cold_sweeps(560, 32, 0.25), 140);
+        assert_eq!(switch_cold_sweeps(560, 32, 0.40), 224);
+        assert_eq!(switch_cold_sweeps(560, 32, 0.01), 64);
+        assert_eq!(switch_cold_sweeps(80, 32, 0.25), 32);
     }
 
     #[test]
