@@ -1,4 +1,4 @@
-//! Attempt entry point for the autoresearch validator (attempt-061).
+//! Attempt entry point for autoresearch attempt 065 (instrumented attempt-061).
 //!
 //! Contract: `attempt <graph.json> <budget_ms> <out.json>` — read an einsum
 //! graph, search for a contraction order within the wall-clock budget, and
@@ -46,6 +46,8 @@
 
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::time::Instant;
 
 use omeco::expr_tree::{
@@ -476,6 +478,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let band_beta_hi = env_f64("ATT_BAND_BHI", default_band_beta_hi).max(band_beta_lo);
     let max_sweeps = env_u64("ATT_MAX_SWEEPS", u64::MAX);
     let diagnostics = env_bool("ATT_DIAG");
+    let trace = match std::env::var("ATT_TRACE_PATH") {
+        Ok(path) => Some(BufWriter::new(File::create(path)?)),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(error) => return Err(error.into()),
+    };
     eprintln!(
         "ATT_CONFIG mode={} n={} c={:.3} epoch_sweeps={} band_beta_lo={:.6} \
          band_beta_hi={:.6} max_sweeps={}",
@@ -514,10 +521,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_sweeps,
         sweeps: 0,
         accepts: 0,
+        trace,
+        trace_epoch: 0,
+        previous_band: None,
         last_write_ms: elapsed_ms(),
         pending_write: false,
     };
     ann.run(seed_expr, n)?;
+    ann.flush_trace()?;
     // Forced final flush even if the deadline landed inside the write window.
     write_atomic(&out_path, ann.best, &subtrees, &original_labels)?;
     let (final_tc, final_sweeps, final_accepts) = (full_tc_of(ann.best), ann.sweeps, ann.accepts);
@@ -556,6 +567,11 @@ struct Annealer<'a> {
     max_sweeps: u64,
     sweeps: u64,
     accepts: u64,
+    /// Opt-in measurement stream. When absent, execution follows the
+    /// unmodified attempt-061 path without structural recomputation or I/O.
+    trace: Option<BufWriter<File>>,
+    trace_epoch: u64,
+    previous_band: Option<HashSet<Vec<usize>>>,
     /// Wall-clock ms of the last atomic disk write (writes are rate-limited to
     /// the validator's poll resolution so rapid descent does not trigger an
     /// O(n) serialize-and-rename storm on large-boundary trees).
@@ -571,6 +587,13 @@ impl Annealer<'_> {
 
     fn exhausted(&self) -> bool {
         self.elapsed_ms() >= self.deadline_ms || self.sweeps >= self.max_sweeps
+    }
+
+    fn flush_trace(&mut self) -> std::io::Result<()> {
+        if let Some(trace) = self.trace.as_mut() {
+            trace.flush()?;
+        }
+        Ok(())
     }
 
     /// Drive the basin-hopping schedule until the deadline.
@@ -746,6 +769,21 @@ impl Annealer<'_> {
         while k < sweeps && !self.exhausted() {
             let epoch_end = (k + self.epoch_sweeps).min(sweeps);
             let band = heated_band(tree, self.log2_sizes, self.band_bits);
+            let (band_jaccard, band_churn) = if self.trace.is_some() {
+                let members = band_members(tree, &band.paths);
+                let jaccard = self
+                    .previous_band
+                    .as_ref()
+                    .map(|previous| set_jaccard(previous, &members));
+                self.previous_band = Some(members);
+                (jaccard, jaccard.map(|value| 1.0 - value))
+            } else {
+                (None, None)
+            };
+            let trace_epoch = self.trace_epoch;
+            if self.trace.is_some() {
+                self.trace_epoch += 1;
+            }
             let waist_before = max_node_tc(tree, self.log2_sizes);
             let tc_before = tree_complexity(tree, self.log2_sizes).0;
             let mut stats = EpochStats::default();
@@ -759,21 +797,43 @@ impl Annealer<'_> {
                     + (self.band_beta_hi - self.band_beta_lo)
                         * ((k - epoch_start) as f64 / epoch_denom);
                 let mut path = Vec::new();
-                gated_sweep(
-                    tree,
-                    beta,
-                    band_beta,
-                    self.parent,
-                    &band.paths,
-                    &mut path,
-                    min_span,
-                    self.log2_sizes,
-                    &mut self.rng,
-                    &mut self.scratch,
-                    s_lin,
-                    &mut self.accepts,
-                    &mut stats,
-                );
+                let sweep_stats = if self.trace.is_some() {
+                    let mut sweep_stats = EpochStats::default();
+                    gated_sweep(
+                        tree,
+                        beta,
+                        band_beta,
+                        self.parent,
+                        &band.paths,
+                        &mut path,
+                        min_span,
+                        self.log2_sizes,
+                        &mut self.rng,
+                        &mut self.scratch,
+                        s_lin,
+                        &mut self.accepts,
+                        &mut sweep_stats,
+                    );
+                    stats.add_assign(&sweep_stats);
+                    Some(sweep_stats)
+                } else {
+                    gated_sweep(
+                        tree,
+                        beta,
+                        band_beta,
+                        self.parent,
+                        &band.paths,
+                        &mut path,
+                        min_span,
+                        self.log2_sizes,
+                        &mut self.rng,
+                        &mut self.scratch,
+                        s_lin,
+                        &mut self.accepts,
+                        &mut stats,
+                    );
+                    None
+                };
                 k += 1;
 
                 if self.sweeps % RESYNC_SWEEPS == 0 {
@@ -784,6 +844,34 @@ impl Annealer<'_> {
                 // I/O remains rate-limited independently below.
                 if *s_lin < f64::exp2(*self.best_tc) - 1e-9 {
                     improved |= self.capture_current(tree, best_expr, work_tc, s_lin);
+                }
+
+                if let Some(sweep_stats) = sweep_stats {
+                    let (tc, sc, _) = tree_complexity(tree, self.log2_sizes);
+                    let max_node_cost = max_node_tc(tree, self.log2_sizes);
+                    let elapsed_ms = self.elapsed_ms();
+                    let mode = if self.parent { "parent" } else { "band" };
+                    let trace = self.trace.as_mut().expect("trace checked above");
+                    match (band_jaccard, band_churn) {
+                        (Some(jaccard), Some(churn)) => writeln!(
+                            trace,
+                            "{{\"t_ms\":{elapsed_ms:.3},\"sweep\":{},\"epoch\":{trace_epoch},\"epoch_sweep\":{},\"mode\":\"{mode}\",\"phase\":\"{phase}\",\"span\":{min_span},\"tc\":{tc:.9},\"sc\":{sc:.9},\"max_node_cost\":{max_node_cost:.9},\"in_band_accepted_gain\":{:.9},\"out_band_accepted_gain\":{:.9},\"band_size\":{},\"band_jaccard\":{jaccard:.9},\"band_churn\":{churn:.9}}}",
+                            self.sweeps,
+                            k - epoch_start,
+                            sweep_stats.inside.net_gain,
+                            sweep_stats.outside.net_gain,
+                            band.paths.len(),
+                        )?,
+                        _ => writeln!(
+                            trace,
+                            "{{\"t_ms\":{elapsed_ms:.3},\"sweep\":{},\"epoch\":{trace_epoch},\"epoch_sweep\":{},\"mode\":\"{mode}\",\"phase\":\"{phase}\",\"span\":{min_span},\"tc\":{tc:.9},\"sc\":{sc:.9},\"max_node_cost\":{max_node_cost:.9},\"in_band_accepted_gain\":{:.9},\"out_band_accepted_gain\":{:.9},\"band_size\":{},\"band_jaccard\":null,\"band_churn\":null}}",
+                            self.sweeps,
+                            k - epoch_start,
+                            sweep_stats.inside.net_gain,
+                            sweep_stats.outside.net_gain,
+                            band.paths.len(),
+                        )?,
+                    }
                 }
 
                 // Rate-limited eager writes of the newest in-memory best.
@@ -892,6 +980,22 @@ struct EpochStats {
     outside: RegionStats,
 }
 
+impl EpochStats {
+    fn add_assign(&mut self, other: &Self) {
+        self.inside.add_assign(&other.inside);
+        self.outside.add_assign(&other.outside);
+    }
+}
+
+impl RegionStats {
+    fn add_assign(&mut self, other: &Self) {
+        self.proposals += other.proposals;
+        self.accepts += other.accepts;
+        self.net_gain += other.net_gain;
+        self.downhill_gain += other.downhill_gain;
+    }
+}
+
 struct HeatedBand {
     paths: HashSet<Vec<bool>>,
     internal_nodes: usize,
@@ -962,6 +1066,49 @@ fn heated_band(tree: &ExprTree, log2_sizes: &[f64], width_bits: f64) -> HeatedBa
     HeatedBand {
         paths,
         internal_nodes,
+    }
+}
+
+/// Identify heated regions by their descendant tensor sets. Unlike a mutable
+/// left/right path, this identity remains meaningful across tree rotations.
+fn band_members(tree: &ExprTree, band: &HashSet<Vec<bool>>) -> HashSet<Vec<usize>> {
+    fn collect(
+        tree: &ExprTree,
+        band: &HashSet<Vec<bool>>,
+        path: &mut Vec<bool>,
+        members: &mut HashSet<Vec<usize>>,
+    ) -> Vec<usize> {
+        match tree {
+            ExprTree::Leaf(info) => vec![info.tensor_id.unwrap_or(0)],
+            ExprTree::Node { left, right, .. } => {
+                path.push(false);
+                let left_ids = collect(left, band, path, members);
+                path.pop();
+                path.push(true);
+                let right_ids = collect(right, band, path, members);
+                path.pop();
+                let mut ids = left_ids;
+                ids.extend(right_ids);
+                ids.sort_unstable();
+                if band.contains(path) {
+                    members.insert(ids.clone());
+                }
+                ids
+            }
+        }
+    }
+
+    let mut members = HashSet::new();
+    collect(tree, band, &mut Vec::new(), &mut members);
+    members
+}
+
+fn set_jaccard(left: &HashSet<Vec<usize>>, right: &HashSet<Vec<usize>>) -> f64 {
+    let union = left.union(right).count();
+    if union == 0 {
+        1.0
+    } else {
+        left.intersection(right).count() as f64 / union as f64
     }
 }
 
@@ -1161,6 +1308,19 @@ mod tests {
         assert!(band.paths.contains(&vec![]));
         assert!(band.paths.contains(&vec![false]));
         assert!(!band.paths.contains(&vec![true]));
+    }
+
+    #[test]
+    fn band_churn_uses_descendant_sets_instead_of_tree_paths() {
+        let tree = band_fixture();
+        let left_band = HashSet::from([vec![], vec![false]]);
+        let right_band = HashSet::from([vec![], vec![true]]);
+        let left_members = band_members(&tree, &left_band);
+        let right_members = band_members(&tree, &right_band);
+
+        assert_eq!(left_members.len(), 2);
+        assert_eq!(right_members.len(), 2);
+        assert!((set_jaccard(&left_members, &right_members) - 1.0 / 3.0).abs() < 1e-12);
     }
 
     #[test]
