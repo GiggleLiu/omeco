@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::time::Instant;
 
-use omeco::treesa::{anneal_refine_rounds, optimize_treesa_seeded, RoundsOptions};
+use omeco::treesa::{anneal_refine_rounds, optimize_treesa_seeded, RoundsOptions, RoundsSchedule};
 use omeco::waist_surgery::{RebuildMode, SurgeryScope};
 use omeco::{
     contraction_complexity, simplify, splice, EinCode, NestedEinsum, ScoreFunction, TreeSA,
@@ -771,6 +771,7 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
                         surgery: true,
                         rebuild,
                         scope,
+                        schedule: RoundsSchedule::Cold,
                     },
                     format!("{name}_r{round_count}"),
                 ));
