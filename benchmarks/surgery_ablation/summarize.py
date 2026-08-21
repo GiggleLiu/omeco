@@ -36,26 +36,40 @@ def markdown_table(headers: list[str], body: list[list[str]]) -> list[str]:
     return lines
 
 
+def protocol(row: dict[str, Any]) -> tuple[Any, Any]:
+    """(raw, target_visits) pair identifying the run protocol of a row."""
+    params = row.get("params", {})
+    return (params.get("raw", False), params.get("target_visits", 0))
+
+
 def quality_table(rows: list[dict[str, Any]]) -> list[str]:
-    grouped: dict[tuple[str, str], list[float]] = defaultdict(list)
+    grouped: dict[tuple[str, str, Any, Any], list[float]] = defaultdict(list)
     for row in rows:
-        grouped[(row["instance"], row["arm"])].append(float(row["tc"]))
+        raw, target_visits = protocol(row)
+        grouped[(row["instance"], row["arm"], raw, target_visits)].append(float(row["tc"]))
     body = []
-    for (instance, arm), values in sorted(grouped.items()):
+    for (instance, arm, raw, target_visits), values in sorted(grouped.items(), key=str):
         body.append(
             [
                 instance,
                 arm,
+                f"raw={int(raw)};v={target_visits}",
                 str(len(values)),
                 f"{min(values):.6f}",
                 f"{statistics.median(values):.6f}",
             ]
         )
-    return markdown_table(["instance", "arm", "n", "min tc", "median tc"], body)
+    return markdown_table(["instance", "arm", "protocol", "n", "min tc", "median tc"], body)
 
 
 def surgery_wtl(rows: list[dict[str, Any]]) -> list[str]:
-    by_key = {(row["instance"], row["label"], row["arm"]): row for row in rows}
+    # Pair surgery arms with their matched cold-only control under the *same*
+    # protocol: raw/target_visits are part of the identity, otherwise a
+    # multi-file summary can compare a surgery row against a cold row from a
+    # different run configuration.
+    by_key = {
+        (row["instance"], row["label"], row["arm"], *protocol(row)): row for row in rows
+    }
     counts: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
     for row in rows:
         arm = row["arm"]
@@ -64,7 +78,9 @@ def surgery_wtl(rows: list[dict[str, Any]]) -> list[str]:
         suffix = arm.rsplit("_r", 1)
         if len(suffix) != 2:
             continue
-        cold = by_key.get((row["instance"], row["label"], f"cold_only_r{suffix[1]}"))
+        cold = by_key.get(
+            (row["instance"], row["label"], f"cold_only_r{suffix[1]}", *protocol(row))
+        )
         if cold is None:
             continue
         delta = float(row["tc"]) - float(cold["tc"])
@@ -79,15 +95,16 @@ def surgery_wtl(rows: list[dict[str, Any]]) -> list[str]:
 
 
 def work_table(rows: list[dict[str, Any]]) -> list[str]:
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, Any, Any], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         if row["arm"].startswith("treesa_x"):
-            grouped[row["arm"]].append(row)
+            grouped[(row["arm"], *protocol(row))].append(row)
     body = []
-    for arm, values in sorted(grouped.items()):
+    for (arm, raw, target_visits), values in sorted(grouped.items(), key=str):
         body.append(
             [
                 arm,
+                f"raw={int(raw)};v={target_visits}",
                 str(len(values)),
                 f"{statistics.median(float(row['tc']) for row in values):.6f}",
                 f"{statistics.median(int(row['total_node_visits']) for row in values):.0f}",
@@ -95,19 +112,22 @@ def work_table(rows: list[dict[str, Any]]) -> list[str]:
             ]
         )
     return markdown_table(
-        ["work-matched arm", "n", "median tc", "median node visits", "median wall s"],
+        ["work-matched arm", "protocol", "n", "median tc", "median node visits", "median wall s"],
         body,
     )
 
 
 def accepted_table(rows: list[dict[str, Any]]) -> list[str]:
-    totals: dict[str, int] = defaultdict(int)
-    calls: dict[str, int] = defaultdict(int)
+    totals: dict[tuple[str, Any, Any], list[int]] = defaultdict(lambda: [0, 0])
     for row in rows:
-        totals[row["arm"]] += int(row.get("accepted_rebuilds", 0))
-        calls[row["arm"]] += 1
-    body = [[arm, str(calls[arm]), str(total)] for arm, total in sorted(totals.items())]
-    return markdown_table(["arm", "jobs", "accepted rebuilds"], body)
+        key = (row["arm"], *protocol(row))
+        totals[key][1] += int(row.get("accepted_rebuilds", 0))
+        totals[key][0] += 1
+    body = [
+        [arm, f"raw={int(raw)};v={target_visits}", str(calls), str(total)]
+        for (arm, raw, target_visits), (calls, total) in sorted(totals.items(), key=str)
+    ]
+    return markdown_table(["arm", "protocol", "jobs", "accepted rebuilds"], body)
 
 
 def render(rows: list[dict[str, Any]]) -> str:

@@ -51,6 +51,9 @@ docs/book/
 *.bak
 *.backup
 
+# Benchmark campaign outputs (archived in the contraction-order-frontiers repo)
+/benchmarks/surgery_ablation/results/
+
 tarpaulin-report.jsonperf.data*
 tarpaulin-report.json
 perf.data*

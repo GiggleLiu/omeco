@@ -44,12 +44,14 @@ contention are acceptable. Each process remains single-trial and deterministic;
 the default is serial. `--only name,name`, `--set a|b`, `--labels N`, and
 `--rounds list` select subsets without changing the default full protocol.
 
-## Committed smoke
+## Smoke run
 
-The committed smoke checks all set-B arms at R=8 on four instances and two
+The smoke run checks all set-B arms at R=8 on four instances and two
 labels. It intentionally lowers the visit target to keep a clean run below 15
 minutes; its rows record that override and are functional evidence, not paper
-quality data.
+quality data. All generated rows land in `results/`, which is gitignored;
+completed campaign artifacts are archived in the companion
+`contraction-order-frontiers` repository under `data/surgery_ablation/`.
 
 ```bash
 RAYON_NUM_THREADS=1 cargo run --release -p omeco --example surgery_ablation -- \

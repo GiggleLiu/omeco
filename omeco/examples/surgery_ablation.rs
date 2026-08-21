@@ -23,6 +23,10 @@ use thiserror::Error;
 
 const DEFAULT_VISITS: u64 = 140_000_000;
 const BETA_LEVELS: u64 = 300;
+/// Row schema version. Bump when the row layout changes: rows written under an
+/// older version are never treated as complete, so a resume re-runs and
+/// replaces them instead of silently keeping stale data.
+const SCHEMA_VERSION: u32 = 2;
 const USAGE: &str = "usage: surgery_ablation --instances <dir> --out <file.jsonl> \
     [--only name,name] [--raw] [--labels N] [--rounds 8,32] \
     [--set all|a|b] [--visits N] [--jobs N]";
@@ -350,6 +354,7 @@ struct TraceRow {
 #[derive(Debug, Clone, Serialize)]
 struct ResultRow {
     key: String,
+    schema_version: u32,
     instance: String,
     label: String,
     arm: String,
@@ -416,6 +421,15 @@ fn existing_keys(path: &Path) -> AppResult<HashSet<String>> {
                 path: path.to_path_buf(),
                 source,
             })?;
+        // Rows written under an older schema are stale: do not let their keys
+        // mark a group complete, so the group is re-run and replaced.
+        if value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64)
+            != Some(SCHEMA_VERSION as u64)
+        {
+            continue;
+        }
         let key = value
             .get("key")
             .and_then(serde_json::Value::as_str)
@@ -433,7 +447,9 @@ fn existing_keys(path: &Path) -> AppResult<HashSet<String>> {
 
 fn pure_tc_config(niters: usize) -> TreeSA {
     TreeSA {
-        betas: (0..300).map(|index| 0.01 + 0.05 * index as f64).collect(),
+        betas: (0..BETA_LEVELS)
+            .map(|index| 0.01 + 0.05 * index as f64)
+            .collect(),
         ntrials: 1,
         niters,
         score: ScoreFunction::time_optimized(),
@@ -582,6 +598,7 @@ fn make_row(
             context.raw,
             context.target_visits,
         ),
+        schema_version: SCHEMA_VERSION,
         instance: context.prepared.original.name.clone(),
         label: context.label.clone(),
         arm,
@@ -589,7 +606,7 @@ fn make_row(
             raw: context.raw,
             relabel_seed: context.relabel_seed,
             optimizer_seed: context.optimizer_seed,
-            beta_levels: 300,
+            beta_levels: BETA_LEVELS as usize,
             niters,
             target_visits: context.target_visits,
             rounds: round_count,
@@ -781,16 +798,61 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
     Ok(rows)
 }
 
+/// Rewrite `path` dropping every row whose key is in `keys`. Used before
+/// appending fresh rows so a stale-schema or duplicate row can never shadow
+/// the newer data for the same key.
+fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
+    if !path.exists() || keys.is_empty() {
+        return Ok(());
+    }
+    let text = fs::read_to_string(path).map_err(|error| io_error(path, error))?;
+    let mut kept = Vec::new();
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let value: serde_json::Value =
+            serde_json::from_str(line).map_err(|source| AppError::Json {
+                path: path.to_path_buf(),
+                source,
+            })?;
+        let key = value
+            .get("key")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| {
+                AppError::Message(format!(
+                    "{} has a row without a string `key`",
+                    path.display()
+                ))
+            })?;
+        if !keys.contains(key) {
+            kept.push(line.to_owned());
+        }
+    }
+    let mut file = File::create(path).map_err(|error| io_error(path, error))?;
+    for line in kept {
+        writeln!(file, "{line}").map_err(|error| io_error(path, error))?;
+    }
+    file.flush().map_err(|error| io_error(path, error))?;
+    Ok(())
+}
+
 fn append_rows(path: &Path, rows: &[ResultRow], existing: &mut HashSet<String>) -> AppResult<()> {
+    let fresh: Vec<&ResultRow> = rows
+        .iter()
+        .filter(|row| !existing.contains(&row.key))
+        .collect();
+    if fresh.is_empty() {
+        return Ok(());
+    }
+    let fresh_keys: HashSet<String> = fresh.iter().map(|row| row.key.clone()).collect();
+    remove_keys(path, &fresh_keys)?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
         .map_err(|error| io_error(path, error))?;
-    for row in rows {
-        if existing.contains(&row.key) {
-            continue;
-        }
+    for row in fresh {
         let mut line = serde_json::to_vec(row).map_err(|source| AppError::Json {
             path: path.to_path_buf(),
             source,
@@ -942,6 +1004,7 @@ fn run_parallel(args: &Args) -> AppResult<()> {
         }
     }
     let mut existing = existing_keys(&args.out)?;
+    let mut fresh_lines = Vec::new();
     for part in &parts {
         let file = File::open(part).map_err(|error| io_error(part, error))?;
         for line in BufReader::new(file).lines() {
@@ -955,15 +1018,27 @@ fn run_parallel(args: &Args) -> AppResult<()> {
                     source,
                 })?;
             if existing.insert(row.key) {
-                let mut out = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&args.out)
-                    .map_err(|error| io_error(&args.out, error))?;
-                writeln!(out, "{line}").map_err(|error| io_error(&args.out, error))?;
+                fresh_lines.push(line);
             }
         }
         fs::remove_file(part).map_err(|error| io_error(part, error))?;
+    }
+    let fresh_keys: HashSet<String> = fresh_lines
+        .iter()
+        .filter_map(|line| {
+            serde_json::from_str::<ResultRowOwned>(line)
+                .ok()
+                .map(|row| row.key)
+        })
+        .collect();
+    remove_keys(&args.out, &fresh_keys)?;
+    let mut out = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&args.out)
+        .map_err(|error| io_error(&args.out, error))?;
+    for line in fresh_lines {
+        writeln!(out, "{line}").map_err(|error| io_error(&args.out, error))?;
     }
     Ok(())
 }
