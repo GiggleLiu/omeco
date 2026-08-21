@@ -794,7 +794,7 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
 /// actually collides, and writes through a temporary file plus atomic rename
 /// so an interruption can never truncate already-completed rows.
 fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
-    if !path.exists() || keys.is_empty() {
+    if !path.exists() {
         return Ok(());
     }
     let text = fs::read_to_string(path).map_err(|error| io_error(path, error))?;
@@ -1163,6 +1163,8 @@ fn run_parallel(args: &Args) -> AppResult<()> {
 #[derive(Debug, Deserialize)]
 struct ResultRowOwned {
     key: String,
+    /// Missing on pre-schema rows, which must be treated as stale.
+    #[serde(default)]
     schema_version: u32,
 }
 
