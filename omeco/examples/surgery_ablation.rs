@@ -1135,30 +1135,40 @@ fn run_parallel(args: &Args) -> AppResult<()> {
     // new workers: their rows are deduplicated into the main output, so the
     // expensive work is never repeated.
     merge_parts(&args.out, &leftover_parts(&args.out, process_id)?)?;
-    let spawn_result = (0..args.jobs).try_for_each(|index| {
-        let part = args
-            .out
-            .with_extension(format!("part.{process_id}.{index}.jsonl"));
-        File::create(&part).map_err(|error| io_error(&part, error))?;
-        let child = child_command(args, &part, index)?
-            .spawn()
-            .map_err(|error| AppError::Message(format!("cannot spawn shard {index}: {error}")))?;
-        children.push(child);
-        parts.push(part);
-        Ok::<(), AppError>(())
-    });
-    if let Err(error) = spawn_result {
-        // Kill and reap every already-started worker and drop their part files
-        // so a retry can never merge or delete live shards.
-        for mut child in children {
-            let _ = child.kill();
-            let _ = child.wait();
+    let spawn_result = {
+        let mut children = Vec::new();
+        let mut parts = Vec::new();
+        let result = (0..args.jobs).try_for_each(|index| {
+            let part = args
+                .out
+                .with_extension(format!("part.{process_id}.{index}.jsonl"));
+            File::create(&part).map_err(|error| io_error(&part, error))?;
+            let child = child_command(args, &part, index)?
+                .spawn()
+                .map_err(|error| {
+                    AppError::Message(format!("cannot spawn shard {index}: {error}"))
+                })?;
+            children.push(child);
+            parts.push(part);
+            Ok::<(), AppError>(())
+        });
+        match result {
+            Ok(()) => Ok((children, parts)),
+            Err(error) => {
+                // Kill and reap every already-started worker and drop their part
+                // files so a retry can never merge or delete live shards.
+                for mut child in children {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+                for part in &parts {
+                    let _ = fs::remove_file(part);
+                }
+                Err(error)
+            }
         }
-        for part in &parts {
-            let _ = fs::remove_file(part);
-        }
-        return Err(error);
-    }
+    };
+    let (children, parts) = spawn_result?;
     // Reap every worker before judging success: returning early while later
     // children are still running would leave them writing shard files that a
     // retry might merge or delete.

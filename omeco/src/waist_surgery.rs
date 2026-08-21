@@ -877,15 +877,28 @@ fn subtree_at_path<'a>(tree: &'a ExprTree, path: &[bool]) -> Option<&'a ExprTree
     Some(current)
 }
 
+/// Leaf count of every subtree, computed in a single post-order traversal so
+/// ancestor sizes on a waist path can be read in O(1) each.
+fn subtree_leaf_counts(tree: &ExprTree, out: &mut HashMap<*const ExprTree, usize>) -> usize {
+    match tree {
+        ExprTree::Leaf(_) => 1,
+        ExprTree::Node { left, right, .. } => {
+            let count = subtree_leaf_counts(left, out) + subtree_leaf_counts(right, out);
+            out.insert(tree as *const ExprTree, count);
+            count
+        }
+    }
+}
+
 fn local_scope_path(tree: &ExprTree, waist_path: &[bool], waist_size: usize) -> Vec<bool> {
-    let target = tree.leaf_count().min(waist_size.saturating_mul(2));
-    // Cache each waist-path ancestor's leaf count in a single descent, then
-    // scan the cached sizes for the lowest ancestor that reaches `target`.
-    // Re-walking the path and recounting per candidate would be quadratic on
-    // deeply unbalanced trees.
-    let mut sizes = Vec::with_capacity(waist_path.len() + 1);
+    let mut sizes = HashMap::new();
+    subtree_leaf_counts(tree, &mut sizes);
+    let target = sizes[&(tree as *const ExprTree)].min(waist_size.saturating_mul(2));
+    // Cache each waist-path ancestor's leaf count during a single descent, then
+    // scan from the waist upward for the lowest ancestor that reaches `target`.
+    let mut ancestor_sizes = Vec::with_capacity(waist_path.len() + 1);
     let mut current = tree;
-    sizes.push(current.leaf_count());
+    ancestor_sizes.push(sizes[&(current as *const ExprTree)]);
     for &right_child in waist_path {
         current = match current {
             ExprTree::Leaf(_) => return Vec::new(),
@@ -897,10 +910,10 @@ fn local_scope_path(tree: &ExprTree, waist_path: &[bool], waist_size: usize) -> 
                 }
             }
         };
-        sizes.push(current.leaf_count());
+        ancestor_sizes.push(sizes[&(current as *const ExprTree)]);
     }
     for depth in (0..=waist_path.len()).rev() {
-        if sizes[depth] >= target {
+        if ancestor_sizes[depth] >= target {
             return waist_path[..depth].to_vec();
         }
     }
