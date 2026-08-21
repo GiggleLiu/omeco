@@ -1173,6 +1173,9 @@ fn real_main() -> AppResult<()> {
     // The output directory may not exist in a fresh checkout (it is
     // gitignored), so create it before any worker opens a file there.
     ensure_output_parent(&args.out)?;
+    // Purge rows from older schemas up front: a fully complete resume skips
+    // every group and would otherwise never reach the append-time cleanup.
+    remove_keys(&args.out, &HashSet::new())?;
     if args.jobs > 1 && args.shard_count == 1 {
         run_parallel(&args)
     } else {
