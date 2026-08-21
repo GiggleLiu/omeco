@@ -1054,12 +1054,15 @@ fn merge_parts(out: &Path, parts: &[PathBuf]) -> AppResult<usize> {
 /// Shard part paths matching `{out}.part.*.jsonl` in the output directory,
 /// excluding those created by the current process (they are live workers).
 fn leftover_parts(out: &Path, process_id: u32) -> AppResult<Vec<PathBuf>> {
-    let Some(parent) = out.parent() else {
+    let parent = out
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let Some(stem) = out.file_stem().and_then(|name| name.to_str()) else {
         return Ok(Vec::new());
     };
-    let Some(stem) = out.file_name().and_then(|name| name.to_str()) else {
-        return Ok(Vec::new());
-    };
+    // Shard names mirror `out.with_extension("part.<pid>.<index>.jsonl")`:
+    // `{stem}.part.<pid>.<index>.jsonl`.
     let prefix = format!("{stem}.part.");
     let current = format!("{prefix}{process_id}.");
     let mut parts = Vec::new();
@@ -1093,13 +1096,18 @@ fn run_parallel(args: &Args) -> AppResult<()> {
         children.push(child);
         parts.push(part);
     }
+    // Reap every worker before judging success: returning early while later
+    // children are still running would leave them writing shard files that a
+    // retry might merge or delete.
+    let mut statuses = Vec::with_capacity(children.len());
     for mut child in children {
         let status = child
             .wait()
             .map_err(|error| AppError::Message(format!("cannot wait for worker: {error}")))?;
-        if !status.success() {
-            return Err(AppError::Worker(status));
-        }
+        statuses.push(status);
+    }
+    if let Some(status) = statuses.into_iter().find(|status| !status.success()) {
+        return Err(AppError::Worker(status));
     }
     merge_parts(&args.out, &parts)?;
     Ok(())
