@@ -1001,32 +1001,13 @@ fn child_command(args: &Args, part: &Path, index: usize) -> AppResult<Command> {
     Ok(command)
 }
 
-fn run_parallel(args: &Args) -> AppResult<()> {
-    let process_id = std::process::id();
-    let mut children = Vec::new();
-    let mut parts = Vec::new();
-    for index in 0..args.jobs {
-        let part = args
-            .out
-            .with_extension(format!("part.{process_id}.{index}.jsonl"));
-        File::create(&part).map_err(|error| io_error(&part, error))?;
-        let child = child_command(args, &part, index)?
-            .spawn()
-            .map_err(|error| AppError::Message(format!("cannot spawn shard {index}: {error}")))?;
-        children.push(child);
-        parts.push(part);
-    }
-    for mut child in children {
-        let status = child
-            .wait()
-            .map_err(|error| AppError::Message(format!("cannot wait for worker: {error}")))?;
-        if !status.success() {
-            return Err(AppError::Worker(status));
-        }
-    }
-    let mut existing = existing_keys(&args.out)?;
+/// Merge the JSONL rows of `parts` into `out`, deduplicating by key, then
+/// delete the parts only after the output is fully written. Returns the number
+/// of fresh rows appended.
+fn merge_parts(out: &Path, parts: &[PathBuf]) -> AppResult<usize> {
+    let mut existing = existing_keys(out)?;
     let mut fresh_lines = Vec::new();
-    for part in &parts {
+    for part in parts {
         let file = File::open(part).map_err(|error| io_error(part, error))?;
         for line in BufReader::new(file).lines() {
             let line = line.map_err(|error| io_error(part, error))?;
@@ -1053,20 +1034,74 @@ fn run_parallel(args: &Args) -> AppResult<()> {
         .collect();
     // Commit the merged output before deleting any shard: a failure below
     // leaves the parts in place for a resumable re-run.
-    remove_keys(&args.out, &fresh_keys)?;
-    let mut out = OpenOptions::new()
+    remove_keys(out, &fresh_keys)?;
+    let mut out_file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&args.out)
-        .map_err(|error| io_error(&args.out, error))?;
+        .open(out)
+        .map_err(|error| io_error(out, error))?;
     for line in &fresh_lines {
-        writeln!(out, "{line}").map_err(|error| io_error(&args.out, error))?;
+        writeln!(out_file, "{line}").map_err(|error| io_error(out, error))?;
     }
-    out.flush().map_err(|error| io_error(&args.out, error))?;
-    drop(out);
+    out_file.flush().map_err(|error| io_error(out, error))?;
+    drop(out_file);
     for part in parts {
-        fs::remove_file(&part).map_err(|error| io_error(&part, error))?;
+        fs::remove_file(part).map_err(|error| io_error(part, error))?;
     }
+    Ok(fresh_lines.len())
+}
+
+/// Shard part paths matching `{out}.part.*.jsonl` in the output directory,
+/// excluding those created by the current process (they are live workers).
+fn leftover_parts(out: &Path, process_id: u32) -> AppResult<Vec<PathBuf>> {
+    let Some(parent) = out.parent() else {
+        return Ok(Vec::new());
+    };
+    let Some(stem) = out.file_name().and_then(|name| name.to_str()) else {
+        return Ok(Vec::new());
+    };
+    let prefix = format!("{stem}.part.");
+    let current = format!("{prefix}{process_id}.");
+    let mut parts = Vec::new();
+    for entry in fs::read_dir(parent).map_err(|error| io_error(parent, error))? {
+        let entry = entry.map_err(|error| io_error(parent, error))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with(&prefix) && name.ends_with(".jsonl") && !name.starts_with(&current) {
+            parts.push(entry.path());
+        }
+    }
+    parts.sort();
+    Ok(parts)
+}
+
+fn run_parallel(args: &Args) -> AppResult<()> {
+    let process_id = std::process::id();
+    // Recover shards an interrupted previous run left behind before starting
+    // new workers: their rows are deduplicated into the main output, so the
+    // expensive work is never repeated.
+    merge_parts(&args.out, &leftover_parts(&args.out, process_id)?)?;
+    let mut children = Vec::new();
+    let mut parts = Vec::new();
+    for index in 0..args.jobs {
+        let part = args
+            .out
+            .with_extension(format!("part.{process_id}.{index}.jsonl"));
+        File::create(&part).map_err(|error| io_error(&part, error))?;
+        let child = child_command(args, &part, index)?
+            .spawn()
+            .map_err(|error| AppError::Message(format!("cannot spawn shard {index}: {error}")))?;
+        children.push(child);
+        parts.push(part);
+    }
+    for mut child in children {
+        let status = child
+            .wait()
+            .map_err(|error| AppError::Message(format!("cannot wait for worker: {error}")))?;
+        if !status.success() {
+            return Err(AppError::Worker(status));
+        }
+    }
+    merge_parts(&args.out, &parts)?;
     Ok(())
 }
 

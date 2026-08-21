@@ -1789,7 +1789,12 @@ pub fn warm_exprtree_to_nested<L: Label>(
 }
 
 /// Diagnostics from an [`anneal_refine_rounds`] run.
+///
+/// Not exhaustive: downstream code must construct it via
+/// [`anneal_refine_rounds`] and match with `..`, so future metrics can be
+/// added without breaking compilation.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct RoundsReport {
     /// Number of interleaved rounds actually executed. Smaller than the
     /// requested `rounds` when the loop stops early (the incumbent tree
