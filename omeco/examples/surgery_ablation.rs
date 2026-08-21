@@ -1040,6 +1040,11 @@ fn merge_parts(out: &Path, parts: &[PathBuf]) -> AppResult<usize> {
                     });
                 }
             };
+            // Rows written by an older driver (e.g. retired greedy arms) must
+            // never leak back into a resumed output.
+            if row.schema_version != SCHEMA_VERSION {
+                continue;
+            }
             if existing.insert(row.key) {
                 fresh_lines.push(line.to_owned());
             }
@@ -1158,6 +1163,7 @@ fn run_parallel(args: &Args) -> AppResult<()> {
 #[derive(Debug, Deserialize)]
 struct ResultRowOwned {
     key: String,
+    schema_version: u32,
 }
 
 fn real_main() -> AppResult<()> {
