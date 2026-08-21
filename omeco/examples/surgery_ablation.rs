@@ -185,6 +185,10 @@ fn parse_args_from<I: Iterator<Item = OsString>>(mut iter: I) -> AppResult<Args>
             "--shard-index must be smaller than --shard-count".to_owned(),
         ));
     }
+    // Drop repeated round counts: running the same arms twice would duplicate
+    // JSONL records and waste hours for no information.
+    let mut seen = HashSet::new();
+    rounds.retain(|round| seen.insert(*round));
     Ok(Args {
         instances: instances
             .ok_or_else(|| AppError::Message(format!("missing --instances\n{USAGE}")))?,
@@ -410,17 +414,30 @@ fn existing_keys(path: &Path) -> AppResult<HashSet<String>> {
         return Ok(HashSet::new());
     }
     let file = File::open(path).map_err(|error| io_error(path, error))?;
+    let lines: Vec<String> = BufReader::new(file)
+        .lines()
+        .map(|line| line.map_err(|error| io_error(path, error)))
+        .collect::<AppResult<_>>()?;
     let mut keys = HashSet::new();
-    for (line_number, line) in BufReader::new(file).lines().enumerate() {
-        let line = line.map_err(|error| io_error(path, error))?;
-        if line.trim().is_empty() {
+    for (line_number, line) in lines.iter().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
             continue;
         }
-        let value: serde_json::Value =
-            serde_json::from_str(&line).map_err(|source| AppError::Json {
-                path: path.to_path_buf(),
-                source,
-            })?;
+        let value = match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(value) => value,
+            Err(source) => {
+                // A kill mid-write can leave the final record truncated; only
+                // that trailing record is incomplete, so resume can proceed.
+                if line_number + 1 == lines.len() {
+                    break;
+                }
+                return Err(AppError::Json {
+                    path: path.to_path_buf(),
+                    source,
+                });
+            }
+        };
         // Rows written under an older schema are stale: do not let their keys
         // mark a group complete, so the group is re-run and replaced.
         if value
@@ -502,18 +519,17 @@ fn full_tree(prepared: &Prepared, reduced: &NestedEinsum<usize>) -> NestedEinsum
 
 fn guard_post_splice_rounds(
     prepared: &Prepared,
-    baseline: &NestedEinsum<usize>,
+    baseline_full: &NestedEinsum<usize>,
     candidate: &NestedEinsum<usize>,
 ) -> (NestedEinsum<usize>, bool) {
-    let baseline = full_tree(prepared, baseline);
     let candidate = full_tree(prepared, candidate);
     let tc = |tree: &NestedEinsum<usize>| {
         contraction_complexity(tree, &prepared.original.sizes, &prepared.original.code.ixs).tc
     };
-    if tc(&candidate) < tc(&baseline) {
+    if tc(&candidate) < tc(baseline_full) {
         (candidate, false)
     } else {
-        (baseline, true)
+        (baseline_full.clone(), true)
     }
 }
 
@@ -629,9 +645,11 @@ fn make_row(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_round_arm(
     context: &GroupContext<'_>,
     baseline: &NestedEinsum<usize>,
+    baseline_full: &NestedEinsum<usize>,
     baseline_niters: usize,
     baseline_wall: f64,
     rounds: u64,
@@ -648,8 +666,11 @@ fn run_round_arm(
         rounds,
         &opts,
     );
+    // The baseline was already spliced once for the x1 row; reuse it here so
+    // the round timer charges exactly the candidate splice, not a second
+    // baseline splice.
     let (reported, post_splice_guard_triggered) =
-        guard_post_splice_rounds(context.prepared, baseline, &tree);
+        guard_post_splice_rounds(context.prepared, baseline_full, &tree);
     make_row(
         context,
         arm,
@@ -737,6 +758,7 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
         let cold = run_round_arm(
             &context,
             &baseline,
+            &baseline_full,
             niters,
             baseline_wall,
             round_count,
@@ -783,6 +805,7 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
                 rows.push(run_round_arm(
                     &context,
                     &baseline,
+                    &baseline_full,
                     niters,
                     baseline_wall,
                     round_count,
@@ -1009,18 +1032,32 @@ fn merge_parts(out: &Path, parts: &[PathBuf]) -> AppResult<usize> {
     let mut fresh_lines = Vec::new();
     for part in parts {
         let file = File::open(part).map_err(|error| io_error(part, error))?;
-        for line in BufReader::new(file).lines() {
-            let line = line.map_err(|error| io_error(part, error))?;
-            if line.trim().is_empty() {
+        let lines: Vec<String> = BufReader::new(file)
+            .lines()
+            .map(|line| line.map_err(|error| io_error(part, error)))
+            .collect::<AppResult<_>>()?;
+        for (line_number, line) in lines.iter().enumerate() {
+            let line = line.trim();
+            if line.is_empty() {
                 continue;
             }
-            let row: ResultRowOwned =
-                serde_json::from_str(&line).map_err(|source| AppError::Json {
-                    path: part.clone(),
-                    source,
-                })?;
+            let row = match serde_json::from_str::<ResultRowOwned>(line) {
+                Ok(row) => row,
+                Err(source) => {
+                    // A worker killed mid-write leaves the final record
+                    // truncated; treat only that trailing record as
+                    // incomplete so the merge keeps the completed rows.
+                    if line_number + 1 == lines.len() {
+                        break;
+                    }
+                    return Err(AppError::Json {
+                        path: part.clone(),
+                        source,
+                    });
+                }
+            };
             if existing.insert(row.key) {
-                fresh_lines.push(line);
+                fresh_lines.push(line.to_owned());
             }
         }
     }

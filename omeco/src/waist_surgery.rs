@@ -879,10 +879,29 @@ fn subtree_at_path<'a>(tree: &'a ExprTree, path: &[bool]) -> Option<&'a ExprTree
 
 fn local_scope_path(tree: &ExprTree, waist_path: &[bool], waist_size: usize) -> Vec<bool> {
     let target = tree.leaf_count().min(waist_size.saturating_mul(2));
+    // Cache each waist-path ancestor's leaf count in a single descent, then
+    // scan the cached sizes for the lowest ancestor that reaches `target`.
+    // Re-walking the path and recounting per candidate would be quadratic on
+    // deeply unbalanced trees.
+    let mut sizes = Vec::with_capacity(waist_path.len() + 1);
+    let mut current = tree;
+    sizes.push(current.leaf_count());
+    for &right_child in waist_path {
+        current = match current {
+            ExprTree::Leaf(_) => return Vec::new(),
+            ExprTree::Node { left, right, .. } => {
+                if right_child {
+                    right
+                } else {
+                    left
+                }
+            }
+        };
+        sizes.push(current.leaf_count());
+    }
     for depth in (0..=waist_path.len()).rev() {
-        let candidate = &waist_path[..depth];
-        if subtree_at_path(tree, candidate).is_some_and(|subtree| subtree.leaf_count() >= target) {
-            return candidate.to_vec();
+        if sizes[depth] >= target {
+            return waist_path[..depth].to_vec();
         }
     }
     Vec::new()
