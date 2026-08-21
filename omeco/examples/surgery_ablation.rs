@@ -836,6 +836,7 @@ fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
     let lines: Vec<&str> = text.lines().collect();
     let mut kept = Vec::new();
     let mut removed = 0_usize;
+    let mut truncated_tail = false;
     for (line_number, line) in lines.iter().enumerate() {
         let line = line.trim();
         if line.is_empty() {
@@ -847,6 +848,7 @@ fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
                 // A killed write can leave a truncated final record; drop it
                 // instead of aborting the resume that this rewrite is part of.
                 if line_number + 1 == lines.len() {
+                    truncated_tail = true;
                     break;
                 }
                 return Err(AppError::Json {
@@ -870,7 +872,9 @@ fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
             kept.push(line.to_owned());
         }
     }
-    if removed == 0 {
+    // A detected truncated tail must also be rewritten away, otherwise the
+    // next append would concatenate onto the fragment.
+    if removed == 0 && !truncated_tail {
         return Ok(());
     }
     let tmp = PathBuf::from(format!("{}.tmp.{}", path.display(), std::process::id()));
@@ -1131,9 +1135,7 @@ fn run_parallel(args: &Args) -> AppResult<()> {
     // new workers: their rows are deduplicated into the main output, so the
     // expensive work is never repeated.
     merge_parts(&args.out, &leftover_parts(&args.out, process_id)?)?;
-    let mut children = Vec::new();
-    let mut parts = Vec::new();
-    for index in 0..args.jobs {
+    let spawn_result = (0..args.jobs).try_for_each(|index| {
         let part = args
             .out
             .with_extension(format!("part.{process_id}.{index}.jsonl"));
@@ -1143,6 +1145,19 @@ fn run_parallel(args: &Args) -> AppResult<()> {
             .map_err(|error| AppError::Message(format!("cannot spawn shard {index}: {error}")))?;
         children.push(child);
         parts.push(part);
+        Ok::<(), AppError>(())
+    });
+    if let Err(error) = spawn_result {
+        // Kill and reap every already-started worker and drop their part files
+        // so a retry can never merge or delete live shards.
+        for mut child in children {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        for part in &parts {
+            let _ = fs::remove_file(part);
+        }
+        return Err(error);
     }
     // Reap every worker before judging success: returning early while later
     // children are still running would leave them writing shard files that a
