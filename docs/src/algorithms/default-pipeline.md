@@ -42,13 +42,37 @@ simplify  ->  anneal trials  ->  [k x (surgery -> cold fine tune)]  ->  splice
    but rejected, and round `r + 1` starts from the best tree retained in round
    `r`. "Best" means best under the configured multi-objective `TreeSA` score,
    so the retained tree's raw time complexity can rise when another weighted
-   term improves — see the [`treesa::anneal_surgery_rounds`] docs for the exact
+   term improves — see the [`treesa::anneal_refine_rounds`] docs for the exact
    ratchet contract. Surgery supplies the nonlocal basin jump; fine tuning need
    not destroy the incumbent to provide one.
 
    **Cost:** on the 761-tensor simplified surface-code network, fine tuning is
    450 sweeps per round, versus 15,000 sweeps for a default cold-start trial.
    Runtime still grows roughly linearly in `surgery_iters`.
+
+   For controlled experiments, [`treesa::anneal_refine_rounds`] exposes four
+   opt-in choices through `RoundsOptions`:
+
+   - `surgery: false` is the matched cold-only arm. It runs the identical cold
+     schedules, trials, seeds, incumbent ratchet, and trace construction while
+     omitting only the waist-surgery call.
+   - `RebuildMode::WarmRestricted` deletes off-side leaves from the incumbent,
+     suppresses unary ancestors, recomputes interfaces, and uses the resulting
+     side topology instead of a new greedy seed before the same cold V-cycles.
+   - `SurgeryScope::Local` chooses the lowest waist ancestor with at least
+     `min(n, 2|A|)` leaves, runs FM on that induced subnetwork, and splices only
+     that subtree. Waists spanning at least half the network still use the root.
+   - `RoundsSchedule::BandReheatThenFront { switch_fraction }` replaces only the
+     rounds fine tuner: it reheats nodes within the size-scaled cost band around
+     the waist (plus their root paths), then switches to a descending log-span
+     freeze-out front. The switch is clamped between two band epochs and 40% of
+     planned sweeps; `RoundsSchedule::Cold` keeps the original pass.
+
+   `RoundsOptions::default()` is `surgery: true`, `Greedy`, `Root`, and `Cold`,
+   exactly the historical behavior. `RoundsReport::fine_tune_sweeps_total`
+   supplies a deterministic work counter for comparing these arms; the separate
+   `benchmarks/surgery_ablation` driver combines it with planned TreeSA node
+   visits and wall time.
 4. **Splice** ([`crate::preprocess::splice`]) expands each reduced-network
    leaf back into the binary subtree `simplify` merged it from, so the
    returned tree's leaves are exactly the original tensors again. Splicing
@@ -83,7 +107,7 @@ deadline binds `optimize_treesa`). Re-running the same configuration
 reproduces the same tree on any machine, with `surgery_iters` at any value:
 `0` (off), or any positive round count. Every positive-round result is guarded
 against the rounds-off baseline after splice-back. The standalone
-`anneal_surgery_rounds` loop is monotone in its round count, under the
+`anneal_refine_rounds` loop is monotone in its round count, under the
 configured `TreeSA` score, on the network it is given.
 
 Wall-clock budgets still exist, but only on the low-level
@@ -125,10 +149,11 @@ extracts the tree's most expensive cut, re-optimizes it directly on the
 tensor hypergraph with balance-constrained Fiduccia–Mattheyses passes, and
 only keeps the result if it strictly lowers `tc`.
 
-Interleaving matters as much as the surgery itself: a surgical cut is a jump
-to a different basin, and the cold fine-tuning pass that follows it in the same
-round is what settles the rest of the tree around the new cut. That is why
-`surgery_iters` runs rounds rather than back-to-back surgery iterations.
+The cold fine-tuning pass can itself produce most or all of a rounds arm's gain,
+so mechanism claims must compare surgery against the `surgery: false` matched
+control rather than against plain TreeSA alone. When surgery does find a useful
+cut, the following cold pass settles the rest of the tree around that nonlocal
+jump; this is why the API exposes rounds rather than back-to-back surgery calls.
 
 - **Helps most** on frozen-waist-prone instances, where the network has
   genuinely distinct good bipartitions of similar cost that local mutations
@@ -182,4 +207,4 @@ ignored rather than allowed to return a non-path tree.
 [`crate::waist_surgery::refine_capped`]: https://docs.rs/omeco/latest/omeco/waist_surgery/fn.refine_capped.html
 [`refine_capped`]: https://docs.rs/omeco/latest/omeco/waist_surgery/fn.refine_capped.html
 [`TreeSA::surgery_iters`]: https://docs.rs/omeco/latest/omeco/treesa/struct.TreeSA.html#structfield.surgery_iters
-[`treesa::anneal_surgery_rounds`]: https://docs.rs/omeco/latest/omeco/treesa/fn.anneal_surgery_rounds.html
+[`treesa::anneal_refine_rounds`]: https://docs.rs/omeco/latest/omeco/treesa/fn.anneal_refine_rounds.html

@@ -176,8 +176,8 @@ pub use preprocess::{simplify, simplify_then_optimize, splice, Simplified, Simpl
 pub use score::ScoreFunction;
 pub use slicer::{slice_code, CodeSlicer, Slicer, TreeSASlicer};
 pub use treesa::{
-    optimize_treesa, prepare_warm_anneal, warm_exprtree_to_nested, Initializer, TreeSA,
-    WarmAnnealCtx,
+    optimize_treesa, optimize_treesa_seeded, prepare_warm_anneal, warm_exprtree_to_nested,
+    Initializer, TreeSA, WarmAnnealCtx,
 };
 pub use treewidth::{
     optimize_treewidth, EliminationAlgorithm, EliminationOrder, Treewidth, TreewidthError,

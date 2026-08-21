@@ -14,7 +14,10 @@ use crate::score::ScoreFunction;
 use crate::utils::fast_log2sumexp2;
 #[cfg(test)]
 use crate::waist_surgery::refine_capped;
-use crate::waist_surgery::{gated_sweep, refine_capped_seeded_with_trace, WaistUpdate};
+use crate::waist_surgery::{
+    gated_sweep, node_tc, refine_capped_seeded_with_trace, refine_capped_seeded_with_trace_opts,
+    RebuildMode, SurgeryOptions, SurgeryScope, WaistUpdate,
+};
 use crate::Label;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -44,7 +47,7 @@ pub struct TreeSA {
     /// this field is set to `true`: splice does not preserve the
     /// path-decomposition guarantee. See [`TreeSA::path`].
     pub preprocess: bool,
-    /// Number of interleaved anneal–surgery rounds ([`anneal_surgery_rounds`],
+    /// Number of interleaved anneal–surgery rounds ([`anneal_refine_rounds`],
     /// the paper's Algorithm 1) run on the tree the pipeline selected; `0`
     /// disables the loop entirely (the default). Each round applies one
     /// waist-surgery iteration and then a cold fine-tuning pass: at most 15
@@ -59,7 +62,7 @@ pub struct TreeSA {
     /// on the original network, so enabling any positive round count is never
     /// worse than leaving the loop off under the configured [`TreeSA::score`]
     /// (`tc` alone carries no such guarantee). The standalone
-    /// [`anneal_surgery_rounds`] loop is additionally monotone in its round
+    /// [`anneal_refine_rounds`] loop is additionally monotone in its round
     /// count, under that same score, on the network it is given. See
     /// [`crate::waist_surgery`] for the surgery step itself.
     ///
@@ -569,16 +572,11 @@ fn fine_tune_beta_schedule(betas: &[f64]) -> Vec<f64> {
         .collect()
 }
 
-/// Fine-tune a specified tree and return `(best_seen, final_endpoint)`.
-///
-/// The endpoint remains useful diagnostics for fine-tuning damage, but the
-/// paper's `Anneal` operator returns its best tree. The relaxation uses the
-/// span-gated kernel from attempt-054: each level of the coarse-to-fine span
-/// ladder receives `sweeps_per_span` sweeps across the cold beta schedule. The
-/// tree is rescored after every sweep with the caller's emitted-tree scorer, so
-/// a later uphill sweep cannot erase an earlier, better checkpoint.
+/// Test-only wrapper around [`fine_tune_tree_sa_counted`] that drops the
+/// sweep count and returns `(best_seen, final_endpoint)`.
+#[cfg(test)]
 fn fine_tune_tree_sa<F>(
-    mut tree: ExprTree,
+    tree: ExprTree,
     log2_sizes: &[f64],
     betas: &[f64],
     sweeps_per_span: usize,
@@ -589,12 +587,22 @@ fn fine_tune_tree_sa<F>(
 where
     F: Fn(&ExprTree) -> f64,
 {
-    let mut best = tree.clone();
-    let mut best_score = score_tree(&best);
-    let mut scratch = ScratchSpace::new(nedge);
-    let mut s_lin = f64::exp2(tree_complexity(&tree, log2_sizes).0);
+    let (best, endpoint, _) = fine_tune_tree_sa_counted(
+        tree,
+        log2_sizes,
+        betas,
+        sweeps_per_span,
+        score_tree,
+        rng,
+        nedge,
+    );
+    (best, endpoint)
+}
 
-    let n = tree.leaf_count();
+/// Coarse-to-fine span ladder for a tree with `n` leaves: a size-scaled top
+/// span halved down to the finest span of 2. Shared by every rounds fine tuner
+/// so their level structures cannot drift apart.
+fn span_ladder(n: usize) -> Vec<usize> {
     let mut span = ((n + 29) / 30).max(2);
     let mut spans = Vec::new();
     while span > 2 {
@@ -602,6 +610,40 @@ where
         span /= 2;
     }
     spans.push(2);
+    spans
+}
+
+/// Fine-tune a specified tree and return `(best_seen, final_endpoint, sweeps)`.
+///
+/// The endpoint remains useful diagnostics for fine-tuning damage, but the
+/// paper's `Anneal` operator returns its best tree. The relaxation uses the
+/// span-gated kernel from attempt-054: each level of the coarse-to-fine span
+/// ladder receives `sweeps_per_span` sweeps across the cold beta schedule. The
+/// tree is rescored after every sweep with the caller's emitted-tree scorer, so
+/// a later uphill sweep cannot erase an earlier, better checkpoint. `sweeps`
+/// counts every span-gated sweep executed, which
+/// [`RoundsReport::fine_tune_sweeps_total`] accumulates as a deterministic
+/// work measure.
+fn fine_tune_tree_sa_counted<F>(
+    mut tree: ExprTree,
+    log2_sizes: &[f64],
+    betas: &[f64],
+    sweeps_per_span: usize,
+    score_tree: &F,
+    rng: &mut rand::rngs::SmallRng,
+    nedge: usize,
+) -> (ExprTree, ExprTree, u64)
+where
+    F: Fn(&ExprTree) -> f64,
+{
+    let mut best = tree.clone();
+    let mut best_score = score_tree(&best);
+    let mut scratch = ScratchSpace::new(nedge);
+    let mut s_lin = f64::exp2(tree_complexity(&tree, log2_sizes).0);
+    let mut sweeps_total = 0_u64;
+
+    let n = tree.leaf_count();
+    let spans = span_ladder(n);
 
     if !betas.is_empty() {
         let denom = sweeps_per_span.saturating_sub(1).max(1);
@@ -617,6 +659,7 @@ where
                     &mut scratch,
                     &mut s_lin,
                 );
+                sweeps_total += 1;
                 let candidate_score = score_tree(&tree);
                 if candidate_score < best_score {
                     best_score = candidate_score;
@@ -626,7 +669,349 @@ where
             s_lin = f64::exp2(tree_complexity(&tree, log2_sizes).0);
         }
     }
-    (best, tree)
+    (best, tree, sweeps_total)
+}
+
+#[derive(Clone, Copy)]
+struct FrontSchedule {
+    front_log2: f64,
+    width_log2: f64,
+    beta_warm: f64,
+    beta_cold: f64,
+}
+
+/// Immutable band snapshot shaped like the tree it was taken from: a node is in
+/// the band iff its subtree contains a contraction within the band width of the
+/// current waist, which is exactly "the node is, or is an ancestor of, a
+/// qualifying node". Walking this in lockstep with the tree costs `O(1)` per
+/// node instead of hashing a root-relative path.
+enum HeatedBand {
+    Leaf,
+    Node {
+        in_band: bool,
+        left: Box<HeatedBand>,
+        right: Box<HeatedBand>,
+    },
+}
+
+static BAND_LEAF: HeatedBand = HeatedBand::Leaf;
+
+impl HeatedBand {
+    fn in_band(&self) -> bool {
+        matches!(self, HeatedBand::Node { in_band: true, .. })
+    }
+
+    /// Children of this band node. A `Leaf` yields leaves, so a tree that has
+    /// been rewritten since the snapshot simply reads as "outside the band",
+    /// matching the miss a stale path lookup would produce.
+    fn children(&self) -> (&HeatedBand, &HeatedBand) {
+        match self {
+            HeatedBand::Leaf => (&BAND_LEAF, &BAND_LEAF),
+            HeatedBand::Node { left, right, .. } => (left, right),
+        }
+    }
+}
+
+fn round_node_tc(tree: &ExprTree, log2_sizes: &[f64]) -> Option<f64> {
+    let ExprTree::Node { left, right, info } = tree else {
+        return None;
+    };
+    Some(node_tc(
+        left.labels(),
+        right.labels(),
+        &info.out_dims,
+        log2_sizes,
+    ))
+}
+
+fn max_round_node_tc(tree: &ExprTree, log2_sizes: &[f64]) -> f64 {
+    match tree {
+        ExprTree::Leaf(_) => f64::NEG_INFINITY,
+        ExprTree::Node { left, right, .. } => round_node_tc(tree, log2_sizes)
+            .unwrap_or(f64::NEG_INFINITY)
+            .max(max_round_node_tc(left, log2_sizes))
+            .max(max_round_node_tc(right, log2_sizes)),
+    }
+}
+
+/// Snapshot all nodes within `width_bits` of the highest-cost contraction and
+/// every ancestor on their paths to the root.
+fn heated_round_band(tree: &ExprTree, log2_sizes: &[f64], width_bits: f64) -> HeatedBand {
+    fn build(tree: &ExprTree, log2_sizes: &[f64], threshold: f64) -> HeatedBand {
+        let ExprTree::Node { left, right, .. } = tree else {
+            return HeatedBand::Leaf;
+        };
+        let left_band = build(left, log2_sizes, threshold);
+        let right_band = build(right, log2_sizes, threshold);
+        let in_band = left_band.in_band()
+            || right_band.in_band()
+            || round_node_tc(tree, log2_sizes).is_some_and(|tc| tc >= threshold - 1e-12);
+        HeatedBand::Node {
+            in_band,
+            left: Box::new(left_band),
+            right: Box::new(right_band),
+        }
+    }
+
+    let threshold = max_round_node_tc(tree, log2_sizes) - width_bits;
+    build(tree, log2_sizes, threshold)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn band_reheat_sweep(
+    tree: &mut ExprTree,
+    beta: f64,
+    band_beta: f64,
+    band: &HeatedBand,
+    min_span: usize,
+    log2_sizes: &[f64],
+    rng: &mut rand::rngs::SmallRng,
+    scratch: &mut ScratchSpace,
+    s_lin: &mut f64,
+) -> usize {
+    match tree {
+        ExprTree::Leaf(_) => 1,
+        ExprTree::Node { left, right, .. } => {
+            let (band_left, band_right) = band.children();
+            let left_span = band_reheat_sweep(
+                left, beta, band_beta, band_left, min_span, log2_sizes, rng, scratch, s_lin,
+            );
+            let right_span = band_reheat_sweep(
+                right, beta, band_beta, band_right, min_span, log2_sizes, rng, scratch, s_lin,
+            );
+            let span = left_span + right_span;
+            if span >= min_span {
+                let rules = Rule::applicable_rules(tree, DecompositionType::Tree);
+                if !rules.is_empty() {
+                    let rule = rules[rng.random_range(0..rules.len())];
+                    if let Some(diff) = scratch.rule_diff(tree, rule, log2_sizes, false) {
+                        let dtc = diff.tc1 - diff.tc0;
+                        let effective_beta = if band.in_band() {
+                            beta.min(band_beta)
+                        } else {
+                            beta
+                        };
+                        if dtc <= 0.0 || rng.random::<f64>() < (-effective_beta * dtc).exp() {
+                            *s_lin += f64::exp2(diff.tc1) - f64::exp2(diff.tc0);
+                            apply_rule_mut(tree, rule, diff.new_labels);
+                        }
+                    }
+                }
+            }
+            span
+        }
+    }
+}
+
+fn front_beta(node_log2: f64, schedule: FrontSchedule) -> f64 {
+    let distance = node_log2 - schedule.front_log2;
+    if distance < 0.0 {
+        f64::INFINITY
+    } else if distance < schedule.width_log2 {
+        schedule.beta_warm
+            + (schedule.beta_cold - schedule.beta_warm) * distance / schedule.width_log2
+    } else {
+        schedule.beta_cold
+    }
+}
+
+/// Continuous log-span freeze-out front from attempt-059. Nodes ahead of the
+/// descending front accept only non-regressing moves; the one-octave front
+/// ramps from warm to cold, and nodes behind it remain cold.
+fn continuous_front_sweep(
+    tree: &mut ExprTree,
+    schedule: FrontSchedule,
+    log2_sizes: &[f64],
+    rng: &mut rand::rngs::SmallRng,
+    scratch: &mut ScratchSpace,
+    s_lin: &mut f64,
+) -> usize {
+    match tree {
+        ExprTree::Leaf(_) => 1,
+        ExprTree::Node { left, right, .. } => {
+            let left_span = continuous_front_sweep(left, schedule, log2_sizes, rng, scratch, s_lin);
+            let right_span =
+                continuous_front_sweep(right, schedule, log2_sizes, rng, scratch, s_lin);
+            let span = left_span + right_span;
+            let beta = front_beta((span as f64).log2(), schedule);
+            let rules = Rule::applicable_rules(tree, DecompositionType::Tree);
+            if !rules.is_empty() {
+                let rule = rules[rng.random_range(0..rules.len())];
+                if let Some(diff) = scratch.rule_diff(tree, rule, log2_sizes, false) {
+                    let dtc = diff.tc1 - diff.tc0;
+                    if dtc <= 0.0 || rng.random::<f64>() < (-beta * dtc).exp() {
+                        *s_lin += f64::exp2(diff.tc1) - f64::exp2(diff.tc0);
+                        apply_rule_mut(tree, rule, diff.new_labels);
+                    }
+                }
+            }
+            span
+        }
+    }
+}
+
+/// Band width (in log2 cost bits) grows with tree size:
+/// `(log2(n) - BAND_BITS_LOG_OFFSET).clamp(MIN_BAND_BITS, MAX_BAND_BITS)`.
+const MIN_BAND_BITS: f64 = 1.0;
+const MAX_BAND_BITS: f64 = 4.0;
+const BAND_BITS_LOG_OFFSET: f64 = 7.0;
+
+/// Sweeps per band epoch grow with tree size: `sqrt(n)` clamped to this range.
+const MIN_EPOCH_SWEEPS: f64 = 8.0;
+const MAX_EPOCH_SWEEPS: f64 = 32.0;
+
+/// Warm and cold band beta endpoints grow with the log size; each is capped.
+const BAND_BETA_WARM_BASE: f64 = 0.5;
+const BAND_BETA_WARM_DIVISOR: f64 = 16.0;
+const BAND_BETA_WARM_CAP: f64 = 1.25;
+const BAND_BETA_COLD_BASE: f64 = 4.0;
+const BAND_BETA_COLD_DIVISOR: f64 = 4.0;
+const BAND_BETA_COLD_CAP: f64 = 7.0;
+
+/// Maximum fraction of planned fine-tuning sweeps spent in the band phase.
+const MAX_SWITCH_FRACTION: f64 = 0.40;
+
+/// Half-width of the continuous freeze-out front, in log2 cost bits.
+const FRONT_WIDTH_LOG2: f64 = 1.0;
+
+fn default_round_band_bits(n: usize) -> f64 {
+    ((n as f64).log2() - BAND_BITS_LOG_OFFSET).clamp(MIN_BAND_BITS, MAX_BAND_BITS)
+}
+
+fn default_round_epoch_sweeps(n: usize) -> u64 {
+    (n as f64)
+        .sqrt()
+        .ceil()
+        .clamp(MIN_EPOCH_SWEEPS, MAX_EPOCH_SWEEPS) as u64
+}
+
+fn default_round_band_betas(n: usize) -> (f64, f64) {
+    let log_n = (n.max(2) as f64).log2();
+    (
+        (BAND_BETA_WARM_BASE + log_n / BAND_BETA_WARM_DIVISOR).min(BAND_BETA_WARM_CAP),
+        (BAND_BETA_COLD_BASE + log_n / BAND_BETA_COLD_DIVISOR).min(BAND_BETA_COLD_CAP),
+    )
+}
+
+/// Clamp the requested phase switch to a two-epoch floor and a
+/// [`MAX_SWITCH_FRACTION`] cap. NaN selects the earliest permitted switch;
+/// infinities saturate to the nearest bound.
+fn composite_switch_sweeps(total_planned: u64, epoch_sweeps: u64, fraction: f64) -> u64 {
+    if total_planned == 0 {
+        return 0;
+    }
+    let fraction = if fraction.is_nan() {
+        0.0
+    } else {
+        fraction.clamp(0.0, MAX_SWITCH_FRACTION)
+    };
+    let maximum = ((MAX_SWITCH_FRACTION * total_planned as f64).round() as u64).max(1);
+    let minimum = epoch_sweeps.saturating_mul(2).min(maximum);
+    ((fraction * total_planned as f64).round() as u64).clamp(minimum, maximum)
+}
+
+/// Phase-structured fine tuner: epochal waist-band reheating followed by a
+/// continuous descending freeze-out front.
+#[allow(clippy::too_many_arguments)]
+fn fine_tune_tree_sa_composite_counted<F>(
+    mut tree: ExprTree,
+    log2_sizes: &[f64],
+    betas: &[f64],
+    sweeps_per_span: usize,
+    switch_fraction: f64,
+    score_tree: &F,
+    rng: &mut rand::rngs::SmallRng,
+    nedge: usize,
+) -> (ExprTree, ExprTree, u64)
+where
+    F: Fn(&ExprTree) -> f64,
+{
+    let mut best = tree.clone();
+    let mut best_score = score_tree(&best);
+    let mut scratch = ScratchSpace::new(nedge);
+    let mut s_lin = f64::exp2(tree_complexity(&tree, log2_sizes).0);
+    let mut sweeps_total = 0_u64;
+
+    let n = tree.leaf_count();
+    let spans = span_ladder(n);
+
+    if !betas.is_empty() {
+        let epoch_sweeps = default_round_epoch_sweeps(n);
+        let planned = (sweeps_per_span as u64).saturating_mul(spans.len() as u64);
+        let switch = composite_switch_sweeps(planned, epoch_sweeps, switch_fraction);
+        let band_bits = default_round_band_bits(n);
+        let (band_beta_lo, band_beta_hi) = default_round_band_betas(n);
+        let beta_warm = betas.iter().copied().fold(f64::INFINITY, f64::min);
+        let beta_cold = betas.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let denominator = sweeps_per_span.saturating_sub(1).max(1);
+        let mut phase_sweeps = 0_u64;
+
+        for (level, &span) in spans.iter().enumerate() {
+            // The finest level freezes out to a span of 1: every level, the
+            // last one included, ends in the continuous front once the switch
+            // has been crossed.
+            let next_span = spans.get(level + 1).copied().unwrap_or(1);
+            let mut sweep = 0usize;
+            while sweep < sweeps_per_span {
+                let epoch_end = sweep
+                    .saturating_add(epoch_sweeps as usize)
+                    .min(sweeps_per_span);
+                let band = (phase_sweeps < switch)
+                    .then(|| heated_round_band(&tree, log2_sizes, band_bits));
+                let epoch_start = sweep;
+                let epoch_denominator = epoch_end.saturating_sub(epoch_start + 1).max(1);
+                while sweep < epoch_end {
+                    let beta_index = sweep * (betas.len() - 1) / denominator;
+                    let beta = betas[beta_index];
+                    let band_progress = (sweep - epoch_start) as f64 / epoch_denominator as f64;
+                    let band_beta = band_beta_lo + (band_beta_hi - band_beta_lo) * band_progress;
+                    match band.as_ref() {
+                        Some(band) if phase_sweeps < switch => {
+                            band_reheat_sweep(
+                                &mut tree,
+                                beta,
+                                band_beta,
+                                band,
+                                span,
+                                log2_sizes,
+                                rng,
+                                &mut scratch,
+                                &mut s_lin,
+                            );
+                        }
+                        _ => {
+                            let progress = sweep as f64 / denominator as f64;
+                            let start = (span as f64).log2();
+                            let end = (next_span as f64).log2();
+                            continuous_front_sweep(
+                                &mut tree,
+                                FrontSchedule {
+                                    front_log2: start + (end - start) * progress,
+                                    width_log2: FRONT_WIDTH_LOG2,
+                                    beta_warm,
+                                    beta_cold,
+                                },
+                                log2_sizes,
+                                rng,
+                                &mut scratch,
+                                &mut s_lin,
+                            );
+                        }
+                    }
+                    sweeps_total += 1;
+                    phase_sweeps += 1;
+                    let candidate_score = score_tree(&tree);
+                    if candidate_score < best_score {
+                        best_score = candidate_score;
+                        best = tree.clone();
+                    }
+                    sweep += 1;
+                }
+            }
+            s_lin = f64::exp2(tree_complexity(&tree, log2_sizes).0);
+        }
+    }
+    (best, tree, sweeps_total)
 }
 
 /// Run TreeSA with a root-level mixture of local sweeps and global surgery
@@ -983,7 +1368,7 @@ fn get_child_labels<L: Label>(nested: &NestedEinsum<L>, original_ixs: &[Vec<L>])
 /// network, optional interleaved anneal–surgery rounds, and splice-back —
 /// controlled by [`TreeSA::preprocess`]. A positive
 /// [`TreeSA::surgery_iters`] runs those rounds
-/// ([`anneal_surgery_rounds`], the paper's Algorithm 1) on the reduced network
+/// ([`anneal_refine_rounds`], the paper's Algorithm 1) on the reduced network
 /// before splice-back: each round is one waist-surgery iteration followed by a
 /// cold specified-tree fine-tuning pass. Running surgery before splice-back is
 /// essential: the paper's FM cut
@@ -1007,17 +1392,56 @@ pub fn optimize_treesa<L: Label>(
     size_dict: &HashMap<L, usize>,
     config: &TreeSA,
 ) -> Option<NestedEinsum<L>> {
+    optimize_treesa_with_seed(code, size_dict, config, 42)
+}
+
+/// Optimize an [`EinCode`] with TreeSA using a caller-selected trial RNG seed.
+///
+/// This is identical to [`optimize_treesa`] except that trial `i` starts from
+/// `seed + i` instead of the historical `42 + i`. It is intended for matched,
+/// reproducible experimental repetitions; [`optimize_treesa`] and all
+/// [`TreeSA`] defaults remain unchanged.
+///
+/// # Example
+///
+/// ```
+/// use omeco::treesa::optimize_treesa_seeded;
+/// use omeco::{EinCode, TreeSA};
+/// use std::collections::HashMap;
+///
+/// let code = EinCode::new(vec![vec!['i', 'j'], vec!['j', 'k']], vec!['i', 'k']);
+/// let sizes: HashMap<char, usize> = [('i', 2), ('j', 4), ('k', 2)].into();
+/// let first = optimize_treesa_seeded(&code, &sizes, &TreeSA::fast(), 7000).unwrap();
+/// let again = optimize_treesa_seeded(&code, &sizes, &TreeSA::fast(), 7000).unwrap();
+/// assert_eq!(first.leaf_indices(), again.leaf_indices());
+/// ```
+pub fn optimize_treesa_seeded<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    seed: u64,
+) -> Option<NestedEinsum<L>> {
+    optimize_treesa_with_seed(code, size_dict, config, seed)
+}
+
+fn optimize_treesa_with_seed<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    seed: u64,
+) -> Option<NestedEinsum<L>> {
     let preprocess = config.preprocess && config.decomposition_type != DecompositionType::Path;
     if preprocess {
         let simplified = simplify(code, size_dict);
-        let reduced = optimize_treesa_core(&simplified.code, size_dict, config)?;
+        let reduced = optimize_treesa_core_seeded(&simplified.code, size_dict, config, seed)?;
         if config.surgery_iters > 0 {
-            let candidate = anneal_surgery_rounds(
+            let candidate = anneal_refine_rounds(
                 &reduced,
                 &simplified.code,
                 size_dict,
                 config,
                 config.surgery_iters,
+                &RoundsOptions::default(),
             )
             .0;
             let baseline = splice(&reduced, &simplified.subtrees);
@@ -1035,9 +1459,19 @@ pub fn optimize_treesa<L: Label>(
         return Some(splice(&reduced, &simplified.subtrees));
     }
 
-    let tree = optimize_treesa_core(code, size_dict, config)?;
+    let tree = optimize_treesa_core_seeded(code, size_dict, config, seed)?;
     if config.surgery_iters > 0 && config.decomposition_type != DecompositionType::Path {
-        return Some(anneal_surgery_rounds(&tree, code, size_dict, config, config.surgery_iters).0);
+        return Some(
+            anneal_refine_rounds(
+                &tree,
+                code,
+                size_dict,
+                config,
+                config.surgery_iters,
+                &RoundsOptions::default(),
+            )
+            .0,
+        );
     }
 
     Some(tree)
@@ -1106,14 +1540,27 @@ fn trial_stack_size(num_tensors: usize) -> usize {
     num_tensors.saturating_mul(PER_TENSOR).clamp(MIN, MAX)
 }
 
-/// Bare TreeSA trial loop, without the structural-simplification front-end.
-///
-/// Used directly by [`optimize_treesa`] when [`TreeSA::preprocess`] is `false`,
-/// and by the preprocessed path to optimize the already-reduced network.
+/// Test-only wrapper around [`optimize_treesa_core_seeded`] with the historical
+/// trial seed base `42`.
+#[cfg(test)]
 fn optimize_treesa_core<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
     config: &TreeSA,
+) -> Option<NestedEinsum<L>> {
+    optimize_treesa_core_seeded(code, size_dict, config, 42)
+}
+
+/// Bare TreeSA trial loop, without the structural-simplification front-end.
+///
+/// Used by [`optimize_treesa`] / [`optimize_treesa_seeded`] when
+/// [`TreeSA::preprocess`] is `false`, and by the preprocessed path to optimize
+/// the already-reduced network. Trial `i` seeds its RNG from `seed + i`.
+fn optimize_treesa_core_seeded<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    seed: u64,
 ) -> Option<NestedEinsum<L>> {
     assert!(
         config.surgery_probability.is_finite() && (0.0..=1.0).contains(&config.surgery_probability),
@@ -1167,7 +1614,8 @@ fn optimize_treesa_core<L: Label>(
             .map(|trial_idx| {
                 // Use thread-local RNG seeded with trial index for reproducibility
                 use rand::SeedableRng;
-                let mut rng = rand::rngs::SmallRng::seed_from_u64(trial_idx as u64 + 42);
+                let mut rng =
+                    rand::rngs::SmallRng::seed_from_u64(seed.wrapping_add(trial_idx as u64));
 
                 // Initialize tree
                 let tree = match config.initializer {
@@ -1340,8 +1788,13 @@ pub fn warm_exprtree_to_nested<L: Label>(
     expr_tree_to_nested(tree, &code.ixs, labels, &code.iy)
 }
 
-/// Diagnostics from an [`anneal_surgery_rounds`] run.
+/// Diagnostics from an [`anneal_refine_rounds`] run.
+///
+/// Not exhaustive: downstream code must construct it via
+/// [`anneal_refine_rounds`] and match with `..`, so future metrics can be
+/// added without breaking compilation.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct RoundsReport {
     /// Number of interleaved rounds actually executed. Smaller than the
     /// requested `rounds` when the loop stops early (the incumbent tree
@@ -1363,6 +1816,90 @@ pub struct RoundsReport {
     /// Total number of waist-surgery iterations attempted across all rounds
     /// (sum of [`crate::waist_surgery::WaistReport::surgery_calls`]).
     pub surgery_calls_total: u64,
+    /// Total sweeps executed by all fine-tuning trials.
+    pub fine_tune_sweeps_total: u64,
+}
+
+/// Fine-tuning schedule used by [`anneal_refine_rounds`].
+///
+/// [`RoundsSchedule::Cold`] is the historical coarse-to-fine, span-gated cold
+/// pass and remains the default. [`RoundsSchedule::BandReheatThenFront`] is the
+/// opt-in phase-structured schedule validated by autoresearch attempts
+/// 061/059/062: it first reheats contraction nodes within a size-dependent
+/// number of cost bits of the current waist, including their root paths, then
+/// switches to a continuous descending log-span freeze-out front.
+///
+/// # Example
+///
+/// ```
+/// use omeco::treesa::RoundsSchedule;
+///
+/// assert_eq!(RoundsSchedule::default(), RoundsSchedule::Cold);
+/// let composite = RoundsSchedule::BandReheatThenFront {
+///     switch_fraction: 0.25,
+/// };
+/// assert_ne!(composite, RoundsSchedule::Cold);
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum RoundsSchedule {
+    /// Historical cold specified-tree fine tuning. This path retains the exact
+    /// proposal order, beta selection, RNG consumption, and returned bytes.
+    #[default]
+    Cold,
+    /// Reheat the current waist band, then freeze out progressively finer spans.
+    ///
+    /// `switch_fraction` is clamped to `[0, 0.40]`, after which the actual
+    /// switch is further constrained to occur no earlier than two band epochs
+    /// and no later than 40% of the planned fine-tuning sweeps. NaN selects the
+    /// earliest permitted switch and infinities saturate to the nearest bound.
+    BandReheatThenFront {
+        /// Requested fraction of planned fine-tuning sweeps spent in the band
+        /// phase before switching to the continuous front.
+        switch_fraction: f64,
+    },
+}
+
+/// Options for [`anneal_refine_rounds`].
+///
+/// The default runs one greedy, root-scoped waist-surgery call before each
+/// cold fine-tuning pass. Set [`RoundsOptions::surgery`] to `false` for the
+/// matched cold-only control.
+///
+/// # Example
+///
+/// ```
+/// use omeco::treesa::RoundsOptions;
+/// use omeco::waist_surgery::{RebuildMode, SurgeryScope};
+///
+/// assert_eq!(RoundsOptions::default().rebuild, RebuildMode::Greedy);
+/// let cold_only = RoundsOptions {
+///     surgery: false,
+///     scope: SurgeryScope::Local,
+///     ..RoundsOptions::default()
+/// };
+/// assert!(!cold_only.surgery);
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoundsOptions {
+    /// Run the waist-surgery call at the start of each round.
+    pub surgery: bool,
+    /// How rebuilt sides are initialized.
+    pub rebuild: RebuildMode,
+    /// Where surgery operates.
+    pub scope: SurgeryScope,
+    /// Fine-tuning schedule applied after the optional surgery call.
+    pub schedule: RoundsSchedule,
+}
+
+impl Default for RoundsOptions {
+    fn default() -> Self {
+        Self {
+            surgery: true,
+            rebuild: RebuildMode::default(),
+            scope: SurgeryScope::default(),
+            schedule: RoundsSchedule::default(),
+        }
+    }
 }
 
 /// One interleaved surgery/fine-tuning round in log2 time-complexity units.
@@ -1376,7 +1913,8 @@ pub struct RoundTrace {
     pub score_before: f64,
     /// Candidate after the surgery step (equal to `tc_before` if rejected).
     pub tc_after_surgery: f64,
-    /// Raw endpoint of the cold fine-tuning pass, whether retained or rejected.
+    /// Raw endpoint of the round's fine-tuning pass, whether retained or
+    /// rejected.
     /// The field keeps its historical `anneal` name for artifact compatibility.
     pub tc_after_anneal: f64,
     /// Best of the round incumbent, surgery candidate, and all sweep
@@ -1463,10 +2001,19 @@ pub struct RoundTrace {
 /// Panics if `size_dict` is missing a label appearing in `code` — the same
 /// completeness requirement as [`optimize_treesa`].
 ///
+/// # Controls
+///
+/// With `opts.surgery == false`, every round runs the same cold fine-tuning
+/// trials and ratchet but skips surgery; surgery trace fields remain empty and
+/// [`RoundsReport::surgery_calls_total`] remains zero. Set
+/// [`RoundsOptions::schedule`] to [`RoundsSchedule::BandReheatThenFront`] to
+/// opt into the phase-structured composite pass; [`RoundsSchedule::Cold`]
+/// preserves the historical fine tuner and RNG stream exactly.
+///
 /// # Example
 ///
 /// ```
-/// use omeco::treesa::anneal_surgery_rounds;
+/// use omeco::treesa::{anneal_refine_rounds, RoundsOptions};
 /// use omeco::{optimize_code, EinCode, GreedyMethod, TreeSA};
 /// use std::collections::HashMap;
 ///
@@ -1476,16 +2023,17 @@ pub struct RoundTrace {
 /// );
 /// let sizes: HashMap<char, usize> = [('i', 4), ('j', 8), ('k', 8), ('l', 4)].into();
 /// let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
-/// let (tree, report) = anneal_surgery_rounds(&seed, &code, &sizes, &TreeSA::fast(), 2);
+/// let (tree, report) = anneal_refine_rounds(&seed, &code, &sizes, &TreeSA::fast(), 2, &RoundsOptions::default());
 /// assert_eq!(tree.leaf_count(), 3);
 /// assert_eq!(report.rounds_run, 2);
 /// ```
-pub fn anneal_surgery_rounds<L: Label>(
+pub fn anneal_refine_rounds<L: Label>(
     seed: &NestedEinsum<L>,
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
     config: &TreeSA,
     rounds: u64,
+    opts: &RoundsOptions,
 ) -> (NestedEinsum<L>, RoundsReport) {
     use rand::SeedableRng;
     let score_of = |t: &NestedEinsum<L>| {
@@ -1501,6 +2049,7 @@ pub fn anneal_surgery_rounds<L: Label>(
         round_scores: Vec::new(),
         round_trace: Vec::new(),
         surgery_calls_total: 0,
+        fine_tune_sweeps_total: 0,
     };
     let fine_betas = fine_tune_beta_schedule(&config.betas);
     let fine_niters = config.niters.min(30);
@@ -1508,15 +2057,45 @@ pub fn anneal_surgery_rounds<L: Label>(
     for r in 0..rounds {
         let tc_before = crate::contraction_complexity(&trajectory, size_dict, &code.ixs).tc;
         let incumbent_score = score_of(&trajectory);
-        let surgery_seed = 0x0000_0054_c0ff_ee00_u64.wrapping_add(r);
-        let (t_surg, wr, waist_trace) = refine_capped_seeded_with_trace(
-            &trajectory,
-            code,
-            size_dict,
-            std::time::Duration::MAX,
-            1,
-            surgery_seed,
-        );
+        let (t_surg, wr, waist_trace) = if opts.surgery {
+            let surgery_seed = 0x0000_0054_c0ff_ee00_u64.wrapping_add(r);
+            if opts.rebuild == RebuildMode::default() && opts.scope == SurgeryScope::default() {
+                refine_capped_seeded_with_trace(
+                    &trajectory,
+                    code,
+                    size_dict,
+                    std::time::Duration::MAX,
+                    1,
+                    surgery_seed,
+                )
+            } else {
+                refine_capped_seeded_with_trace_opts(
+                    &trajectory,
+                    code,
+                    size_dict,
+                    std::time::Duration::MAX,
+                    1,
+                    surgery_seed,
+                    SurgeryOptions {
+                        rebuild: opts.rebuild,
+                        scope: opts.scope,
+                    },
+                )
+            }
+        } else {
+            (
+                trajectory.clone(),
+                crate::waist_surgery::WaistReport {
+                    n_original: code.num_tensors(),
+                    surgery_calls: 0,
+                    cheaper_cuts: 0,
+                    rebuild_attempts: 0,
+                    rebuild_accepts: 0,
+                    waist_min_hits: 0,
+                },
+                None,
+            )
+        };
         report.surgery_calls_total += wr.surgery_calls;
         // The fine-tuning arguments are hoisted into single-line bindings so
         // that the call itself is on one line: coverage instrumentation
@@ -1539,15 +2118,30 @@ pub fn anneal_surgery_rounds<L: Label>(
         for trial in 0..fine_trials {
             let seed = 0xA55E_u64 + r * fine_trials as u64 + trial as u64;
             let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
-            let (fine_tuned, endpoint) = fine_tune_tree_sa(
-                start.clone(),
-                &log2,
-                betas,
-                niters,
-                &emitted_score,
-                &mut rng,
-                nedge,
-            );
+            let (fine_tuned, endpoint, sweeps) = match opts.schedule {
+                RoundsSchedule::Cold => fine_tune_tree_sa_counted(
+                    start.clone(),
+                    &log2,
+                    betas,
+                    niters,
+                    &emitted_score,
+                    &mut rng,
+                    nedge,
+                ),
+                RoundsSchedule::BandReheatThenFront { switch_fraction } => {
+                    fine_tune_tree_sa_composite_counted(
+                        start.clone(),
+                        &log2,
+                        betas,
+                        niters,
+                        switch_fraction,
+                        &emitted_score,
+                        &mut rng,
+                        nedge,
+                    )
+                }
+            };
+            report.fine_tune_sweeps_total += sweeps;
             let candidate = warm_exprtree_to_nested(&fine_tuned, code, &ctx.labels);
             let candidate_score = score_of(&candidate);
             let endpoint = warm_exprtree_to_nested(&endpoint, code, &ctx.labels);
@@ -3282,7 +3876,14 @@ mod tests {
             ..base.clone()
         };
         let seed = optimize_treesa(&simplified.code, &sizes, &reduced_config).unwrap();
-        let (reduced, _) = anneal_surgery_rounds(&seed, &simplified.code, &sizes, &base, 2);
+        let (reduced, _) = anneal_refine_rounds(
+            &seed,
+            &simplified.code,
+            &sizes,
+            &base,
+            2,
+            &RoundsOptions::default(),
+        );
         let seed_spliced = splice(&seed, &simplified.subtrees);
         let reduced_spliced = splice(&reduced, &simplified.subtrees);
         let score_of = |tree: &NestedEinsum<usize>| {
@@ -3374,6 +3975,95 @@ mod tests {
     }
 
     #[test]
+    fn test_rounds_options_default_fields() {
+        assert!(RoundsOptions::default().surgery);
+        assert_eq!(RoundsOptions::default().rebuild, RebuildMode::default());
+        assert_eq!(RoundsOptions::default().scope, SurgeryScope::default());
+        assert_eq!(RoundsOptions::default().schedule, RoundsSchedule::Cold);
+    }
+
+    #[test]
+    fn test_seeded_optimizer_preserves_historical_seed_42_bytes() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let historical = optimize_treesa(&code, &sizes, &config).unwrap();
+        let seeded = optimize_treesa_seeded(&code, &sizes, &config, 42).unwrap();
+        assert_eq!(
+            crate::json::to_json_string(&seeded).unwrap(),
+            crate::json::to_json_string(&historical).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_rounds_report_counts_fine_tune_sweeps() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(&code, &sizes, &config).unwrap();
+        let (_, report) = anneal_refine_rounds(
+            &seed,
+            &code,
+            &sizes,
+            &config,
+            2,
+            &RoundsOptions {
+                surgery: false,
+                ..RoundsOptions::default()
+            },
+        );
+        assert_eq!(report.fine_tune_sweeps_total, 40);
+    }
+
+    #[test]
+    fn test_cold_only_round_matches_fine_tuning_path_alone() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(&code, &sizes, &config).unwrap();
+        let score_of = |tree: &NestedEinsum<usize>| {
+            let cc = crate::contraction_complexity(tree, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+
+        let ctx = prepare_warm_anneal(&code, &sizes, &seed).unwrap();
+        let emitted_score = |candidate: &ExprTree| {
+            let nested = warm_exprtree_to_nested(candidate, &code, &ctx.labels);
+            score_of(&nested)
+        };
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(0xA55E);
+        let (fine_tuned, endpoint) = fine_tune_tree_sa(
+            ctx.tree.clone(),
+            &ctx.log2_sizes,
+            &fine_tune_beta_schedule(&config.betas),
+            config.niters.min(30),
+            &emitted_score,
+            &mut rng,
+            ctx.nedge,
+        );
+        let candidate = warm_exprtree_to_nested(&fine_tuned, &code, &ctx.labels);
+        let endpoint = warm_exprtree_to_nested(&endpoint, &code, &ctx.labels);
+        let expected = if score_of(&candidate) < score_of(&seed) {
+            candidate
+        } else {
+            seed.clone()
+        };
+
+        let opts = RoundsOptions {
+            surgery: false,
+            ..RoundsOptions::default()
+        };
+        let (actual, report) = anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &opts);
+
+        assert_eq!(
+            crate::json::to_json_string(&actual).unwrap(),
+            crate::json::to_json_string(&expected).unwrap()
+        );
+        assert_eq!(report.round_scores, vec![score_of(&endpoint)]);
+        assert_eq!(report.surgery_calls_total, 0);
+        assert_eq!(report.round_trace.len(), 1);
+        assert!(!report.round_trace[0].surgery_accepted);
+        assert!(report.round_trace[0].waist.is_none());
+    }
+
+    #[test]
     fn test_rounds_report_shape_and_determinism() {
         let (code, sizes) = load_benchmark_graph("petersen");
         let config = TreeSA::fast();
@@ -3386,8 +4076,10 @@ mod tests {
             },
         )
         .unwrap();
-        let (t1, r1) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
-        let (t2, r2) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
+        let (t1, r1) =
+            anneal_refine_rounds(&seed, &code, &sizes, &config, 3, &RoundsOptions::default());
+        let (t2, r2) =
+            anneal_refine_rounds(&seed, &code, &sizes, &config, 3, &RoundsOptions::default());
         assert_eq!(r1.rounds_run, 3);
         assert_eq!(r1.round_scores.len(), 3);
         assert_eq!(r1.round_trace.len(), 3);
@@ -3425,8 +4117,10 @@ mod tests {
             config.score.evaluate(cc.tc, cc.sc, cc.rwc)
         };
         let s0 = score_of(&seed);
-        let (t1, _) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 1);
-        let (t3, _) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 3);
+        let (t1, _) =
+            anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &RoundsOptions::default());
+        let (t3, _) =
+            anneal_refine_rounds(&seed, &code, &sizes, &config, 3, &RoundsOptions::default());
         assert!(score_of(&t1) <= s0);
         assert!(score_of(&t3) <= score_of(&t1));
     }
@@ -3467,7 +4161,8 @@ mod tests {
             config.score.evaluate(cc.tc, cc.sc, cc.rwc)
         };
 
-        let (best, report) = anneal_surgery_rounds(&seed, &code, &sizes, &config, 1);
+        let (best, report) =
+            anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &RoundsOptions::default());
         let (surgical, _) = refine_capped(&seed, &code, &sizes, std::time::Duration::MAX, 1);
 
         assert_eq!(report.best_round, 0, "the single round must have won");
@@ -3497,7 +4192,14 @@ mod tests {
         let code: EinCode<usize> = EinCode::new(vec![vec![0, 1]], vec![0, 1]);
         let sizes: HashMap<usize, usize> = [(0, 2), (1, 2)].into();
         let seed = NestedEinsum::leaf(0);
-        let (t, r) = anneal_surgery_rounds(&seed, &code, &sizes, &TreeSA::fast(), 2);
+        let (t, r) = anneal_refine_rounds(
+            &seed,
+            &code,
+            &sizes,
+            &TreeSA::fast(),
+            2,
+            &RoundsOptions::default(),
+        );
         assert_eq!(r.rounds_run, 0);
         assert!(r.round_scores.is_empty());
         assert!(r.round_trace.is_empty());
@@ -3574,5 +4276,239 @@ mod tests {
         assert_eq!(tree.leaf_count(), 4);
         let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
         assert!(cc.rwc.is_finite());
+    }
+
+    #[test]
+    fn test_rounds_non_default_surgery_options_are_exercised() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA::fast();
+        let seed = optimize_treesa(&code, &sizes, &config).unwrap();
+        let seed_score = {
+            let cc = crate::contraction_complexity(&seed, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+        let opts = RoundsOptions {
+            surgery: true,
+            rebuild: RebuildMode::WarmRestricted,
+            scope: SurgeryScope::Local,
+            schedule: RoundsSchedule::Cold,
+        };
+
+        let (tree, report) = anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &opts);
+        let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
+
+        assert_eq!(report.rounds_run, 1);
+        assert_eq!(tree.leaf_count(), code.num_tensors());
+        assert!(config.score.evaluate(cc.tc, cc.sc, cc.rwc) <= seed_score);
+    }
+
+    #[test]
+    fn test_rounds_schedule_default_is_explicit_cold_identity() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA {
+            ntrials: 1,
+            niters: 4,
+            ..TreeSA::fast()
+        };
+        let seed = optimize_treesa(&code, &sizes, &config).unwrap();
+        assert_eq!(RoundsOptions::default().schedule, RoundsSchedule::Cold);
+        let explicit = RoundsOptions {
+            schedule: RoundsSchedule::Cold,
+            ..RoundsOptions::default()
+        };
+
+        let (default_tree, default_report) =
+            anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &RoundsOptions::default());
+        let (explicit_tree, explicit_report) =
+            anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &explicit);
+
+        assert_eq!(
+            crate::json::to_json_string(&explicit_tree).unwrap(),
+            crate::json::to_json_string(&default_tree).unwrap()
+        );
+        assert_eq!(explicit_report, default_report);
+    }
+
+    #[test]
+    fn test_heated_round_band_contains_near_waist_and_root_paths() {
+        let waist = ExprTree::node(
+            ExprTree::leaf(vec![0], 0),
+            ExprTree::leaf(vec![0], 1),
+            vec![],
+        );
+        let cold = ExprTree::node(
+            ExprTree::leaf(vec![1], 2),
+            ExprTree::leaf(vec![1], 3),
+            vec![],
+        );
+        let tree = ExprTree::node(waist, cold, vec![]);
+
+        let band = heated_round_band(&tree, &[5.0, 1.0], 1.0);
+        let (left, right) = band.children();
+
+        assert!(band.in_band());
+        assert!(left.in_band());
+        assert!(!right.in_band());
+        assert!(!left.children().0.in_band());
+        assert!(!left.children().1.in_band());
+    }
+
+    #[test]
+    fn test_heated_band_children_of_a_leaf_read_as_outside_the_band() {
+        let band = heated_round_band(&ExprTree::leaf(vec![0], 0), &[1.0], 1.0);
+        let (left, right) = band.children();
+
+        assert!(!band.in_band());
+        assert!(!left.in_band());
+        assert!(!right.in_band());
+    }
+
+    #[test]
+    fn test_span_ladder_halves_to_the_finest_span() {
+        assert_eq!(span_ladder(10), vec![2]);
+        assert_eq!(span_ladder(60), vec![2]);
+        assert_eq!(span_ladder(64), vec![3, 2]);
+        assert_eq!(span_ladder(250), vec![9, 4, 2]);
+    }
+
+    /// A single-level span ladder (`n <= 60`) still reaches the continuous
+    /// front: switching earlier must change the annealed tree, which it cannot
+    /// do while every level falls back to band reheating.
+    #[test]
+    fn test_composite_front_phase_runs_on_a_single_level_span_ladder() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let seed = crate::optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let config = TreeSA::fast();
+        let ctx = prepare_warm_anneal(&code, &sizes, &seed).unwrap();
+        let emitted_score = |candidate: &ExprTree| {
+            let nested = warm_exprtree_to_nested(candidate, &code, &ctx.labels);
+            let cc = crate::contraction_complexity(&nested, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+        let betas = fine_tune_beta_schedule(&config.betas);
+
+        assert_eq!(span_ladder(ctx.tree.leaf_count()), vec![2]);
+
+        let run = |switch_fraction: f64| {
+            let mut rng = rand::rngs::SmallRng::seed_from_u64(0xA55E);
+            let (_, endpoint, sweeps) = fine_tune_tree_sa_composite_counted(
+                ctx.tree.clone(),
+                &ctx.log2_sizes,
+                &betas,
+                200,
+                switch_fraction,
+                &emitted_score,
+                &mut rng,
+                ctx.nedge,
+            );
+            let nested = warm_exprtree_to_nested(&endpoint, &code, &ctx.labels);
+            (crate::json::to_json_string(&nested).unwrap(), sweeps)
+        };
+
+        let (early, early_sweeps) = run(0.0);
+        let (late, late_sweeps) = run(0.40);
+
+        assert_eq!(early_sweeps, 200);
+        assert_eq!(late_sweeps, 200);
+        assert_ne!(early, late);
+    }
+
+    #[test]
+    fn test_front_beta_transition_is_monotone_by_span() {
+        let schedule = FrontSchedule {
+            front_log2: 2.0,
+            width_log2: 1.0,
+            beta_warm: 0.5,
+            beta_cold: 8.0,
+        };
+        assert!(front_beta(1.5, schedule).is_infinite());
+        let transition =
+            [2.0, 2.25, 2.5, 2.75, 3.0].map(|node_log2| front_beta(node_log2, schedule));
+        assert_eq!(transition[0], 0.5);
+        assert_eq!(transition[4], 8.0);
+        assert!(transition.windows(2).all(|pair| pair[0] <= pair[1]));
+        assert_eq!(front_beta(4.0, schedule), 8.0);
+    }
+
+    #[test]
+    fn test_composite_switch_clamps_fraction_and_epoch_floor() {
+        assert_eq!(composite_switch_sweeps(560, 32, 0.25), 140);
+        assert_eq!(composite_switch_sweeps(560, 32, -1.0), 64);
+        assert_eq!(composite_switch_sweeps(560, 32, f64::NEG_INFINITY), 64);
+        assert_eq!(composite_switch_sweeps(560, 32, f64::NAN), 64);
+        assert_eq!(composite_switch_sweeps(560, 32, 1.0), 224);
+        assert_eq!(composite_switch_sweeps(560, 32, f64::INFINITY), 224);
+        assert_eq!(composite_switch_sweeps(80, 32, 0.25), 32);
+        assert_eq!(composite_switch_sweeps(0, 32, 0.25), 0);
+        assert_eq!(default_round_band_bits(255), MIN_BAND_BITS);
+        assert_eq!(default_round_band_bits(256), 1.0);
+        assert_eq!(default_round_band_bits(2_048), 4.0);
+        assert_eq!(default_round_band_bits(1024), 3.0);
+    }
+
+    #[test]
+    fn test_composite_round_with_empty_beta_schedule_is_an_identity() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let seed = crate::optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let config = TreeSA {
+            betas: vec![],
+            ntrials: 1,
+            ..TreeSA::fast()
+        };
+        let opts = RoundsOptions {
+            surgery: false,
+            schedule: RoundsSchedule::BandReheatThenFront {
+                switch_fraction: 0.25,
+            },
+            ..RoundsOptions::default()
+        };
+
+        let (tree, report) = anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &opts);
+
+        assert_eq!(
+            crate::json::to_json_string(&tree).unwrap(),
+            crate::json::to_json_string(&seed).unwrap()
+        );
+        assert_eq!(report.fine_tune_sweeps_total, 0);
+    }
+
+    #[test]
+    fn test_composite_round_on_small_grid_is_valid_and_never_worse() {
+        let code = grid_code(8, 8);
+        let sizes: HashMap<usize, usize> = code
+            .unique_labels()
+            .into_iter()
+            .map(|label| (label, 2))
+            .collect();
+        let seed = crate::optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let config = TreeSA {
+            betas: vec![2.5, 14.0],
+            ntrials: 1,
+            niters: 8,
+            preprocess: false,
+            ..TreeSA::fast()
+        };
+        let opts = RoundsOptions {
+            surgery: false,
+            schedule: RoundsSchedule::BandReheatThenFront {
+                switch_fraction: 0.25,
+            },
+            ..RoundsOptions::default()
+        };
+        let seed_score = {
+            let cc = crate::contraction_complexity(&seed, &sizes, &code.ixs);
+            config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+        };
+
+        let (tree, report) = anneal_refine_rounds(&seed, &code, &sizes, &config, 1, &opts);
+        let cc = crate::contraction_complexity(&tree, &sizes, &code.ixs);
+        let mut leaves = tree.leaf_indices();
+        leaves.sort_unstable();
+
+        assert_eq!(leaves, (0..code.num_tensors()).collect::<Vec<_>>());
+        assert_eq!(tree.output_labels(&code.ixs), code.iy);
+        assert!(config.score.evaluate(cc.tc, cc.sc, cc.rwc) <= seed_score);
+        assert_eq!(report.rounds_run, 1);
+        assert_eq!(report.fine_tune_sweeps_total, 16);
     }
 }

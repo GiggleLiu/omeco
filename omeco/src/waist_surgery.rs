@@ -27,6 +27,12 @@
 //! records a `waist_min` event. This is a search diagnostic, not a proof of
 //! global cut optimality.
 //!
+//! [`refine`] and [`refine_capped`] always use the historical greedy, root-scoped
+//! rebuild above. The opt-in [`RebuildMode::WarmRestricted`] and
+//! [`SurgeryScope::Local`] variants are selected through
+//! [`crate::treesa::RoundsOptions`] and [`crate::treesa::anneal_refine_rounds`];
+//! every variant keeps the same strict global-`tc` acceptance gate.
+//!
 //! [fm]: https://en.wikipedia.org/wiki/Fiduccia%E2%80%93Mattheyses_algorithm
 //!
 //! # Example
@@ -105,6 +111,70 @@ const MAX_STALE_ITERS: u64 = 4;
 
 /// Deterministic RNG seed for the surgery FM/anneal streams.
 const RNG_SEED: u64 = 0x0000_0054_c0ff_ee00;
+
+/// Initialization strategy for rebuilding each side of a surgery cut.
+///
+/// [`RebuildMode::Greedy`] preserves the historical behavior. The opt-in
+/// [`RebuildMode::WarmRestricted`] variant starts from the incumbent tree
+/// restricted to the tensors assigned to that side (falling back to greedy if
+/// the restriction fails) before the same cold V-cycle schedule. Select it via
+/// [`crate::treesa::RoundsOptions::rebuild`].
+///
+/// # Example
+///
+/// ```
+/// use omeco::waist_surgery::RebuildMode;
+///
+/// assert_eq!(RebuildMode::default(), RebuildMode::Greedy);
+/// let mode = RebuildMode::WarmRestricted;
+/// assert_ne!(mode, RebuildMode::default());
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum RebuildMode {
+    /// Initialize each rebuilt side with the greedy optimizer.
+    #[default]
+    Greedy,
+    /// Initialize each rebuilt side from the restricted incumbent tree.
+    WarmRestricted,
+}
+
+/// Region of the incumbent tree replaced by waist surgery.
+///
+/// [`SurgeryScope::Root`] preserves the historical whole-network rebuild.
+/// [`SurgeryScope::Local`] rebuilds and splices only a bounded ancestor of the
+/// waist node: the lowest ancestor with at least `min(n, 2|A|)` leaves. Waists
+/// spanning at least half the network fall back to the root. Select it via
+/// [`crate::treesa::RoundsOptions::scope`].
+///
+/// # Example
+///
+/// ```
+/// use omeco::waist_surgery::SurgeryScope;
+///
+/// assert_eq!(SurgeryScope::default(), SurgeryScope::Root);
+/// let scope = SurgeryScope::Local;
+/// assert_ne!(scope, SurgeryScope::default());
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SurgeryScope {
+    /// Promote the improved bipartition to the root of the full network.
+    #[default]
+    Root,
+    /// Rebuild only a bounded ancestor subtree around the waist.
+    Local,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SurgeryOptions {
+    pub(crate) rebuild: RebuildMode,
+    pub(crate) scope: SurgeryScope,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct RefineOptions {
+    capture_trace: bool,
+    surgery: SurgeryOptions,
+}
 
 /// One completed like-for-like waist-cut comparison.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -735,39 +805,174 @@ fn bfs_seed(hyper: &Hyper, seed: usize, target: usize) -> Vec<bool> {
 /// other input tensor forms side B. A root argmax has an empty complement, so the
 /// caller treats it as a non-actionable waist.
 fn extract_waist(tree: &ExprTree, log2_sizes: &[f64]) -> Option<(f64, Vec<usize>)> {
+    extract_waist_location(tree, log2_sizes).map(|(cost, leaves, _)| (cost, leaves))
+}
+
+/// Return the waist together with its root-relative child path (`false` = left).
+fn extract_waist_location(
+    tree: &ExprTree,
+    log2_sizes: &[f64],
+) -> Option<(f64, Vec<usize>, Vec<bool>)> {
     fn walk(
         tree: &ExprTree,
         log2_sizes: &[f64],
+        path: &mut Vec<bool>,
         best: &mut f64,
         best_leaves: &mut Vec<usize>,
+        best_path: &mut Vec<bool>,
     ) -> Vec<usize> {
         match tree {
             ExprTree::Leaf(info) => vec![info.tensor_id.unwrap_or(0)],
             ExprTree::Node { left, right, info } => {
-                let lleaves = walk(left, log2_sizes, best, best_leaves);
-                let rleaves = walk(right, log2_sizes, best, best_leaves);
+                path.push(false);
+                let left_leaves = walk(left, log2_sizes, path, best, best_leaves, best_path);
+                path.pop();
+                path.push(true);
+                let right_leaves = walk(right, log2_sizes, path, best, best_leaves, best_path);
+                path.pop();
                 let cost = node_tc(left.labels(), right.labels(), &info.out_dims, log2_sizes);
-                let mut leaves = lleaves;
-                leaves.extend_from_slice(&rleaves);
+                let mut leaves = left_leaves;
+                leaves.extend_from_slice(&right_leaves);
                 if cost > *best {
                     *best = cost;
                     *best_leaves = leaves.clone();
+                    *best_path = path.clone();
                 }
                 leaves
             }
         }
     }
+
     if matches!(tree, ExprTree::Leaf(_)) {
         return None;
     }
     let mut best = f64::NEG_INFINITY;
     let mut best_leaves = Vec::new();
-    walk(tree, log2_sizes, &mut best, &mut best_leaves);
-    Some((best, best_leaves))
+    let mut best_path = Vec::new();
+    walk(
+        tree,
+        log2_sizes,
+        &mut Vec::new(),
+        &mut best,
+        &mut best_leaves,
+        &mut best_path,
+    );
+    Some((best, best_leaves, best_path))
+}
+
+fn subtree_at_path<'a>(tree: &'a ExprTree, path: &[bool]) -> Option<&'a ExprTree> {
+    let mut current = tree;
+    for &right_child in path {
+        current = match current {
+            ExprTree::Leaf(_) => return None,
+            ExprTree::Node { left, right, .. } => {
+                if right_child {
+                    right
+                } else {
+                    left
+                }
+            }
+        };
+    }
+    Some(current)
+}
+
+/// Leaf count of every subtree, computed in a single post-order traversal so
+/// ancestor sizes on a waist path can be read in O(1) each.
+fn subtree_leaf_counts(tree: &ExprTree, out: &mut HashMap<*const ExprTree, usize>) -> usize {
+    match tree {
+        ExprTree::Leaf(_) => 1,
+        ExprTree::Node { left, right, .. } => {
+            let count = subtree_leaf_counts(left, out) + subtree_leaf_counts(right, out);
+            out.insert(tree as *const ExprTree, count);
+            count
+        }
+    }
+}
+
+fn local_scope_path(tree: &ExprTree, waist_path: &[bool], waist_size: usize) -> Vec<bool> {
+    let mut sizes = HashMap::new();
+    subtree_leaf_counts(tree, &mut sizes);
+    let target = sizes[&(tree as *const ExprTree)].min(waist_size.saturating_mul(2));
+    // Cache each waist-path ancestor's leaf count during a single descent, then
+    // scan from the waist upward for the lowest ancestor that reaches `target`.
+    let mut ancestor_sizes = Vec::with_capacity(waist_path.len() + 1);
+    let mut current = tree;
+    ancestor_sizes.push(sizes[&(current as *const ExprTree)]);
+    for &right_child in waist_path {
+        current = match current {
+            ExprTree::Leaf(_) => return Vec::new(),
+            ExprTree::Node { left, right, .. } => {
+                if right_child {
+                    right
+                } else {
+                    left
+                }
+            }
+        };
+        ancestor_sizes.push(sizes[&(current as *const ExprTree)]);
+    }
+    for depth in (0..=waist_path.len()).rev() {
+        if ancestor_sizes[depth] >= target {
+            return waist_path[..depth].to_vec();
+        }
+    }
+    Vec::new()
+}
+
+/// Replace the subtree at `path` (false = left, true = right) of a binary
+/// `ExprTree`.
+#[cfg(test)]
+fn replace_subtree_at_path(
+    tree: &ExprTree,
+    path: &[bool],
+    replacement: &ExprTree,
+) -> Option<ExprTree> {
+    let Some((&right_child, rest)) = path.split_first() else {
+        return Some(replacement.clone());
+    };
+    let ExprTree::Node { left, right, info } = tree else {
+        return None;
+    };
+    if right_child {
+        Some(ExprTree::node(
+            (**left).clone(),
+            replace_subtree_at_path(right, rest, replacement)?,
+            info.out_dims.clone(),
+        ))
+    } else {
+        Some(ExprTree::node(
+            replace_subtree_at_path(left, rest, replacement)?,
+            (**right).clone(),
+            info.out_dims.clone(),
+        ))
+    }
+}
+
+/// Restrict a binary tree to `keep`, suppressing internal nodes made unary.
+fn restrict_expr_tree(tree: &ExprTree, keep: &HashSet<usize>) -> Option<ExprTree> {
+    match tree {
+        ExprTree::Leaf(info) => info
+            .tensor_id
+            .filter(|tensor| keep.contains(tensor))
+            .map(|_| tree.clone()),
+        ExprTree::Node { left, right, info } => {
+            match (
+                restrict_expr_tree(left, keep),
+                restrict_expr_tree(right, keep),
+            ) {
+                (Some(left), Some(right)) => {
+                    Some(ExprTree::node(left, right, info.out_dims.clone()))
+                }
+                (Some(child), None) | (None, Some(child)) => Some(child),
+                (None, None) => None,
+            }
+        }
+    }
 }
 
 /// Exact contraction-node cost used by the TreeSA objective.
-fn node_tc(ix1: &[usize], ix2: &[usize], iy: &[usize], log2_sizes: &[f64]) -> f64 {
+pub(crate) fn node_tc(ix1: &[usize], ix2: &[usize], iy: &[usize], log2_sizes: &[f64]) -> f64 {
     let mut tc: f64 = iy.iter().map(|&l| log2_sizes[l]).sum();
     for &l in ix1 {
         if ix2.contains(&l) && !iy.contains(&l) {
@@ -879,6 +1084,64 @@ fn nested_to_expr_tree(
     }
 }
 
+/// Replace the smallest subtree of `tree` whose leaf set is exactly
+/// `scope_tensors` with `replacement`, preserving every node outside that
+/// region verbatim — including noncanonical `eins` axis orderings, which a
+/// full `ExprTree` re-emission would reorder. The direct parent's `ixs` entry
+/// is re-derived from the replacement so the emitted eins stays consistent.
+fn splice_scope_nested(
+    tree: &NestedEinsum<usize>,
+    scope_tensors: &HashSet<usize>,
+    replacement: &NestedEinsum<usize>,
+) -> Option<NestedEinsum<usize>> {
+    /// Returns `(spliced_tree, leaf_count, leaves_inside_scope)`.
+    fn rec(
+        tree: &NestedEinsum<usize>,
+        scope: &HashSet<usize>,
+        replacement: &NestedEinsum<usize>,
+    ) -> Option<(NestedEinsum<usize>, usize, usize)> {
+        match tree {
+            NestedEinsum::Leaf { tensor_index } => {
+                let in_scope = usize::from(scope.contains(tensor_index));
+                let node = if in_scope == 1 && scope.len() == 1 {
+                    replacement.clone()
+                } else {
+                    tree.clone()
+                };
+                Some((node, 1, in_scope))
+            }
+            NestedEinsum::Node { args, eins } => {
+                let mut new_args = Vec::with_capacity(args.len());
+                let mut new_ixs = eins.ixs.clone();
+                let mut leaves = 0usize;
+                let mut scope_leaves = 0usize;
+                for (index, arg) in args.iter().enumerate() {
+                    let (spliced, count, scope_count) = rec(arg, scope, replacement)?;
+                    leaves += count;
+                    scope_leaves += scope_count;
+                    if scope_count > 0 {
+                        if let NestedEinsum::Node { eins, .. } = &spliced {
+                            new_ixs[index] = eins.iy.clone();
+                        }
+                    }
+                    new_args.push(spliced);
+                }
+                // This node's leaves are exactly the scope tensors: replace it
+                // wholesale instead of splicing deeper.
+                if scope_leaves == leaves && leaves == scope.len() {
+                    return Some((replacement.clone(), leaves, scope_leaves));
+                }
+                Some((
+                    NestedEinsum::node(new_args, EinCode::new(new_ixs, eins.iy.clone())),
+                    leaves,
+                    scope_leaves,
+                ))
+            }
+        }
+    }
+    rec(tree, scope_tensors, replacement).map(|(spliced, _, _)| spliced)
+}
+
 /// Convert an `ExprTree` back into a `NestedEinsum`, deriving every node's output
 /// by **outside-occurrence counting** over `ixs` (a label is a node's output iff
 /// it occurs in a tensor outside the node's subtree or is an open/output label).
@@ -935,7 +1198,21 @@ fn expr_to_nested_counted(
             }
         }
     }
-    rec(tree, ixs, &open_set, &global_count).0
+    let (nested, _, derived_output) = rec(tree, ixs, &open_set, &global_count);
+    match nested {
+        NestedEinsum::Node { args, mut eins } => {
+            // Counting determines membership, but the contraction contract also
+            // includes the caller's output-axis order. Internal interfaces stay
+            // canonical; only the emitted root restores that exact order.
+            eins.iy = open.to_vec();
+            NestedEinsum::node(args, eins)
+        }
+        leaf @ NestedEinsum::Leaf { .. } if derived_output == open => leaf,
+        leaf @ NestedEinsum::Leaf { .. } => NestedEinsum::node(
+            vec![leaf],
+            EinCode::new(vec![derived_output], open.to_vec()),
+        ),
+    }
 }
 
 fn side_open_labels(hyper: &Hyper, part: &[bool]) -> (Vec<usize>, Vec<usize>) {
@@ -963,6 +1240,21 @@ fn side_open_labels(hyper: &Hyper, part: &[bool]) -> (Vec<usize>, Vec<usize>) {
         }
     }
     (open_a, open_b)
+}
+
+fn scope_open_labels(hyper: &Hyper, tensors: &[usize]) -> Vec<usize> {
+    let inside: HashSet<usize> = tensors.iter().copied().collect();
+    hyper
+        .label_tensors
+        .iter()
+        .enumerate()
+        .filter(|(label, members)| {
+            let occurs_inside = members.iter().any(|tensor| inside.contains(tensor));
+            let occurs_outside = members.iter().any(|tensor| !inside.contains(tensor));
+            occurs_inside && (occurs_outside || hyper.is_out[*label])
+        })
+        .map(|(label, _)| label)
+        .collect()
 }
 
 /// Remap the leaf tensor indices of a `NestedEinsum` through `map` (leaf i -> map[i]).
@@ -1011,6 +1303,46 @@ impl Refiner<'_> {
         incumbent: &ExprTree,
         work_tc: f64,
     ) -> Option<(NestedEinsum<usize>, f64)> {
+        self.waist_surgery_opts(
+            incumbent,
+            work_tc,
+            RebuildMode::default(),
+            SurgeryScope::default(),
+            &expr_to_nested_counted(incumbent, &self.code.ixs, &self.code.iy),
+        )
+    }
+
+    /// Configurable form of [`Self::waist_surgery`].
+    fn waist_surgery_opts(
+        &mut self,
+        incumbent: &ExprTree,
+        work_tc: f64,
+        rebuild_mode: RebuildMode,
+        scope: SurgeryScope,
+        original: &NestedEinsum<usize>,
+    ) -> Option<(NestedEinsum<usize>, f64)> {
+        if scope == SurgeryScope::Local {
+            if let Some((waist_node_cost, a_leaves, waist_path)) =
+                extract_waist_location(incumbent, self.log2_sizes)
+            {
+                let scope_path = if a_leaves.len().saturating_mul(2) >= self.hyper.n {
+                    Vec::new()
+                } else {
+                    local_scope_path(incumbent, &waist_path, a_leaves.len())
+                };
+                if !scope_path.is_empty() {
+                    return self.waist_surgery_local(
+                        incumbent,
+                        work_tc,
+                        waist_node_cost,
+                        &a_leaves,
+                        &scope_path,
+                        rebuild_mode,
+                        original,
+                    );
+                }
+            }
+        }
         self.report.surgery_calls += 1;
         let (waist_node_cost, a_leaves) = extract_waist(incumbent, self.log2_sizes)?;
         let n = self.hyper.n;
@@ -1094,7 +1426,136 @@ impl Refiner<'_> {
         if self.out_of_time() {
             return None;
         }
-        let rebuilt = self.rebuild(&part)?;
+        let rebuilt = match rebuild_mode {
+            RebuildMode::Greedy => self.rebuild(&part)?,
+            RebuildMode::WarmRestricted => self.rebuild_warm(&part, incumbent)?,
+        };
+        if self.out_of_time() {
+            return None;
+        }
+        let new_tc = contraction_complexity(&rebuilt, self.sizes, &self.code.ixs).tc;
+        if new_tc < work_tc - 1e-9 {
+            self.report.rebuild_accepts += 1;
+            if let Some(trace) = &mut self.last_call_trace {
+                trace.rebuild_accepted = true;
+            }
+            Some((rebuilt, new_tc))
+        } else {
+            None
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn waist_surgery_local(
+        &mut self,
+        incumbent: &ExprTree,
+        work_tc: f64,
+        waist_node_cost: f64,
+        a_leaves: &[usize],
+        scope_path: &[bool],
+        rebuild_mode: RebuildMode,
+        original: &NestedEinsum<usize>,
+    ) -> Option<(NestedEinsum<usize>, f64)> {
+        self.report.surgery_calls += 1;
+        let scope_tree = subtree_at_path(incumbent, scope_path)?;
+        let scope_tensors = scope_tree.leaf_ids();
+        let scope_n = scope_tensors.len();
+        if scope_n < 2 || a_leaves.is_empty() || a_leaves.len() >= scope_n {
+            return None;
+        }
+        let scope_open = scope_open_labels(self.hyper, &scope_tensors);
+        let scope_code = EinCode::new(
+            scope_tensors
+                .iter()
+                .map(|&tensor| self.code.ixs.get(tensor).cloned())
+                .collect::<Option<Vec<_>>>()?,
+            scope_open.clone(),
+        );
+        let label_map: HashMap<usize, usize> = (0..self.log2_sizes.len())
+            .map(|label| (label, label))
+            .collect();
+        let scope_hyper = Hyper::build(
+            &scope_code,
+            &label_map,
+            self.log2_sizes,
+            self.log2_sizes.len(),
+        );
+        let a_set: HashSet<usize> = a_leaves.iter().copied().collect();
+        let cur_part: Vec<bool> = scope_tensors
+            .iter()
+            .map(|tensor| a_set.contains(tensor))
+            .collect();
+        let incumbent_cut_cost = scope_hyper.cut_cost(&cur_part);
+        let target_a = a_leaves.len();
+        let lo = ((target_a as f64 * (1.0 - FM_SLACK)).floor() as usize).max(1);
+        let hi = ((target_a as f64 * (1.0 + FM_SLACK)).ceil() as usize).min(scope_n - 1);
+
+        let mut seeds = vec![cur_part];
+        let mut deg_order: Vec<usize> = (0..scope_n).collect();
+        deg_order.sort_by_key(|&tensor| Reverse(scope_hyper.tlabels[tensor].len()));
+        seeds.push(bfs_seed(&scope_hyper, deg_order[0], target_a));
+        for _ in 0..3 {
+            let seed = self.rng.random_range(0..scope_n);
+            seeds.push(bfs_seed(&scope_hyper, seed, target_a));
+        }
+
+        let mut best_alt_cost = f64::INFINITY;
+        let mut best_alt_part = None;
+        for seed in seeds {
+            if self.out_of_time() {
+                break;
+            }
+            let (part, _) = fm_refine(&scope_hyper, seed, lo, hi, self.start, self.budget);
+            let size_a = part.iter().filter(|&&side| side).count();
+            if size_a < lo || size_a > hi {
+                continue;
+            }
+            let cost = scope_hyper.cut_cost(&part);
+            if cost < best_alt_cost {
+                best_alt_cost = cost;
+                best_alt_part = Some(part);
+            }
+        }
+
+        let Some(part) = best_alt_part else {
+            if !self.out_of_time() {
+                self.report.waist_min_hits += 1;
+            }
+            return None;
+        };
+        if self.capture_trace {
+            self.last_call_trace = Some(WaistCallTrace {
+                incumbent_cut_cost,
+                best_alt_cut_cost: best_alt_cost,
+                waist_node_cost,
+                rebuild_attempted: false,
+                rebuild_accepted: false,
+            });
+        }
+        if best_alt_cost < incumbent_cut_cost - 1e-9 {
+            self.report.cheaper_cuts += 1;
+        } else {
+            self.report.waist_min_hits += 1;
+        }
+        if best_alt_cost >= waist_node_cost - 1e-9 {
+            return None;
+        }
+        self.report.rebuild_attempts += 1;
+        if let Some(trace) = &mut self.last_call_trace {
+            trace.rebuild_attempted = true;
+        }
+        if self.out_of_time() {
+            return None;
+        }
+        let rebuilt = self.rebuild_local(
+            &part,
+            &scope_hyper,
+            &scope_tensors,
+            &scope_open,
+            incumbent,
+            original,
+            rebuild_mode,
+        )?;
         if self.out_of_time() {
             return None;
         }
@@ -1126,6 +1587,69 @@ impl Refiner<'_> {
         let sub_b = self.solve_side(&b_tensors, &open_b)?;
         let eins = EinCode::new(vec![open_a, open_b], self.code.iy.clone());
         Some(NestedEinsum::node(vec![sub_a, sub_b], eins))
+    }
+
+    /// Root-scoped rebuild whose side initializers retain incumbent topology.
+    fn rebuild_warm(&mut self, part: &[bool], incumbent: &ExprTree) -> Option<NestedEinsum<usize>> {
+        let n = self.hyper.n;
+        let a_tensors: Vec<usize> = (0..n).filter(|&tensor| part[tensor]).collect();
+        let b_tensors: Vec<usize> = (0..n).filter(|&tensor| !part[tensor]).collect();
+        if a_tensors.is_empty() || b_tensors.is_empty() {
+            return None;
+        }
+        let (open_a, open_b) = self.side_open_labels(part);
+        let sub_a = self.solve_side_warm(&a_tensors, &open_a, incumbent)?;
+        if self.out_of_time() {
+            return None;
+        }
+        let sub_b = self.solve_side_warm(&b_tensors, &open_b, incumbent)?;
+        let eins = EinCode::new(vec![open_a, open_b], self.code.iy.clone());
+        Some(NestedEinsum::node(vec![sub_a, sub_b], eins))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn rebuild_local(
+        &mut self,
+        part: &[bool],
+        scope_hyper: &Hyper,
+        scope_tensors: &[usize],
+        scope_open: &[usize],
+        incumbent: &ExprTree,
+        original: &NestedEinsum<usize>,
+        rebuild_mode: RebuildMode,
+    ) -> Option<NestedEinsum<usize>> {
+        let a_tensors: Vec<usize> = scope_tensors
+            .iter()
+            .zip(part)
+            .filter_map(|(&tensor, &side)| side.then_some(tensor))
+            .collect();
+        let b_tensors: Vec<usize> = scope_tensors
+            .iter()
+            .zip(part)
+            .filter_map(|(&tensor, &side)| (!side).then_some(tensor))
+            .collect();
+        if a_tensors.is_empty() || b_tensors.is_empty() {
+            return None;
+        }
+        let (open_a, open_b) = side_open_labels(scope_hyper, part);
+        let solve = |refiner: &mut Self, tensors: &[usize], open: &[usize]| match rebuild_mode {
+            RebuildMode::Greedy => refiner.solve_side(tensors, open),
+            RebuildMode::WarmRestricted => refiner.solve_side_warm(tensors, open, incumbent),
+        };
+        let sub_a = solve(self, &a_tensors, &open_a)?;
+        if self.out_of_time() {
+            return None;
+        }
+        let sub_b = solve(self, &b_tensors, &open_b)?;
+        let rebuilt_scope = NestedEinsum::node(
+            vec![sub_a, sub_b],
+            EinCode::new(vec![open_a, open_b], scope_open.to_vec()),
+        );
+        // Splice in NestedEinsum space so out-of-scope branches keep their
+        // exact serialization; re-emitting the whole tree through an ExprTree
+        // round trip would reorder their eins axes.
+        let scope_set: HashSet<usize> = scope_tensors.iter().copied().collect();
+        splice_scope_nested(original, &scope_set, &rebuilt_scope)
     }
 
     /// Open label-ids for each side: a label is open on side A iff it occurs in A
@@ -1171,55 +1695,121 @@ impl Refiner<'_> {
             .collect();
 
         let mut sub_best = greedy;
-        if let Some(mut tree) = nested_to_expr_tree(&sub_best, &sub_label_map) {
-            let mut scratch = ScratchSpace::new(sub_labels.len());
-            let m = tree.leaf_count();
-            let s_top = ((m + TARGET_TOP - 1) / TARGET_TOP).max(2);
-            let mut spans: Vec<usize> = Vec::new();
-            let mut s = s_top;
-            while s > 2 {
-                spans.push(s);
-                s /= 2;
-            }
-            spans.push(2);
-            let mut s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-            let mut best_lin = s_lin;
-            let mut best_tree = tree.clone();
-            let mut sweeps: u64 = 0;
-            'anneal: for _vc in 0..REBUILD_VCYCLES.max(1) {
-                for &span in &spans {
-                    let denom = (REBUILD_COLD_SWEEPS.saturating_sub(1)).max(1) as f64;
-                    for k in 0..REBUILD_COLD_SWEEPS {
-                        if self.out_of_time() {
-                            break 'anneal;
-                        }
-                        let beta = B_LO_COLD + (B_HI - B_LO_COLD) * (k as f64 / denom);
-                        gated_sweep(
-                            &mut tree,
-                            beta,
-                            span,
-                            &sub_log2,
-                            &mut self.rng,
-                            &mut scratch,
-                            &mut s_lin,
-                        );
-                        sweeps += 1;
-                        if sweeps % RESYNC_SWEEPS == 0 {
-                            s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-                        }
-                    }
-                    s_lin = f64::exp2(tree_complexity(&tree, &sub_log2).0);
-                    if s_lin < best_lin - 1e-9 {
-                        best_lin = s_lin;
-                        best_tree = tree.clone();
-                    }
-                }
-                tree = best_tree.clone();
-                s_lin = best_lin;
-            }
+        if let Some(tree) = nested_to_expr_tree(&sub_best, &sub_label_map) {
+            let best_tree = self.anneal_side(tree, &sub_log2, sub_labels.len());
             sub_best = expr_to_nested_counted(&best_tree, &sub_ixs, open);
         }
         Some(remap_leaves(&sub_best, tensors))
+    }
+
+    /// Cold V-cycle body shared by both side solvers: the coarse-to-fine span
+    /// ladder, `REBUILD_VCYCLES` beta ramps of `REBUILD_COLD_SWEEPS` gated
+    /// sweeps each, periodic `RESYNC_SWEEPS` rescoring, and the best-tree
+    /// ratchet. Only the initial tree differs between callers, so keeping one
+    /// body is what makes the two schedules provably identical.
+    fn anneal_side(&mut self, mut tree: ExprTree, sub_log2: &[f64], nedge: usize) -> ExprTree {
+        let mut scratch = ScratchSpace::new(nedge);
+        let m = tree.leaf_count();
+        let s_top = ((m + TARGET_TOP - 1) / TARGET_TOP).max(2);
+        let mut spans: Vec<usize> = Vec::new();
+        let mut s = s_top;
+        while s > 2 {
+            spans.push(s);
+            s /= 2;
+        }
+        spans.push(2);
+        let mut s_lin = f64::exp2(tree_complexity(&tree, sub_log2).0);
+        let mut best_lin = s_lin;
+        let mut best_tree = tree.clone();
+        let mut sweeps: u64 = 0;
+        'anneal: for _vc in 0..REBUILD_VCYCLES.max(1) {
+            for &span in &spans {
+                let denom = (REBUILD_COLD_SWEEPS.saturating_sub(1)).max(1) as f64;
+                for k in 0..REBUILD_COLD_SWEEPS {
+                    if self.out_of_time() {
+                        break 'anneal;
+                    }
+                    let beta = B_LO_COLD + (B_HI - B_LO_COLD) * (k as f64 / denom);
+                    gated_sweep(
+                        &mut tree,
+                        beta,
+                        span,
+                        sub_log2,
+                        &mut self.rng,
+                        &mut scratch,
+                        &mut s_lin,
+                    );
+                    sweeps += 1;
+                    if sweeps % RESYNC_SWEEPS == 0 {
+                        s_lin = f64::exp2(tree_complexity(&tree, sub_log2).0);
+                    }
+                }
+                s_lin = f64::exp2(tree_complexity(&tree, sub_log2).0);
+                if s_lin < best_lin - 1e-9 {
+                    best_lin = s_lin;
+                    best_tree = tree.clone();
+                }
+            }
+            tree = best_tree.clone();
+            s_lin = best_lin;
+        }
+        best_tree
+    }
+
+    /// Warm-restricted side solve. Restriction failure falls back to the
+    /// historical greedy initializer; the cold V-cycle schedule is unchanged.
+    fn solve_side_warm(
+        &mut self,
+        tensors: &[usize],
+        open: &[usize],
+        incumbent: &ExprTree,
+    ) -> Option<NestedEinsum<usize>> {
+        if tensors.len() <= 1 {
+            return self.solve_side(tensors, open);
+        }
+        if self.out_of_time() {
+            return None;
+        }
+        let keep: HashSet<usize> = tensors.iter().copied().collect();
+        let Some(restricted) = restrict_expr_tree(incumbent, &keep) else {
+            return self.solve_side(tensors, open);
+        };
+        let mut restricted_leaves = restricted.leaf_ids();
+        let mut expected_leaves = tensors.to_vec();
+        restricted_leaves.sort_unstable();
+        expected_leaves.sort_unstable();
+        if restricted_leaves != expected_leaves {
+            return self.solve_side(tensors, open);
+        }
+
+        let sub_ixs: Vec<Vec<usize>> = tensors
+            .iter()
+            .filter_map(|&tensor| self.code.ixs.get(tensor).cloned())
+            .collect();
+        if sub_ixs.len() != tensors.len() {
+            return self.solve_side(tensors, open);
+        }
+        let sub_code = EinCode::new(sub_ixs, open.to_vec());
+        let sub_labels = sub_code.unique_labels();
+        let sub_label_map: HashMap<usize, usize> = sub_labels
+            .iter()
+            .enumerate()
+            .map(|(index, &label)| (label, index))
+            .collect();
+        let sub_log2: Vec<f64> = sub_labels
+            .iter()
+            .map(|label| (*self.sizes.get(label).unwrap_or(&1) as f64).log2())
+            .collect();
+        let normalized = expr_to_nested_counted(&restricted, &self.code.ixs, open);
+        let Some(tree) = nested_to_expr_tree(&normalized, &sub_label_map) else {
+            return self.solve_side(tensors, open);
+        };
+        if self.out_of_time() {
+            return None;
+        }
+
+        let best_tree = self.anneal_side(tree, &sub_log2, sub_labels.len());
+        Some(expr_to_nested_counted(&best_tree, &self.code.ixs, open))
     }
 }
 
@@ -1323,8 +1913,15 @@ pub(crate) fn refine_capped_seeded<L: Label>(
     max_iters: u64,
     rng_seed: u64,
 ) -> (NestedEinsum<L>, WaistReport) {
-    let (tree, report, _) =
-        refine_capped_seeded_impl(tree, code, sizes, budget, max_iters, rng_seed, false);
+    let (tree, report, _) = refine_capped_seeded_impl(
+        tree,
+        code,
+        sizes,
+        budget,
+        max_iters,
+        rng_seed,
+        RefineOptions::default(),
+    );
     (tree, report)
 }
 
@@ -1341,11 +1938,43 @@ pub(crate) fn refine_capped_seeded_with_trace<L: Label>(
     max_iters: u64,
     rng_seed: u64,
 ) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
+    refine_capped_seeded_with_trace_opts(
+        tree,
+        code,
+        sizes,
+        budget,
+        max_iters,
+        rng_seed,
+        SurgeryOptions::default(),
+    )
+}
+
+/// One-call fixed-work refinement with caller-selected opt-in surgery modes.
+pub(crate) fn refine_capped_seeded_with_trace_opts<L: Label>(
+    tree: &NestedEinsum<L>,
+    code: &EinCode<L>,
+    sizes: &HashMap<L, usize>,
+    budget: Duration,
+    max_iters: u64,
+    rng_seed: u64,
+    surgery: SurgeryOptions,
+) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
     debug_assert!(
         max_iters <= 1,
         "last-call trace semantics require max_iters <= 1, got {max_iters}"
     );
-    refine_capped_seeded_impl(tree, code, sizes, budget, max_iters, rng_seed, true)
+    refine_capped_seeded_impl(
+        tree,
+        code,
+        sizes,
+        budget,
+        max_iters,
+        rng_seed,
+        RefineOptions {
+            capture_trace: true,
+            surgery,
+        },
+    )
 }
 
 fn refine_capped_seeded_impl<L: Label>(
@@ -1355,7 +1984,7 @@ fn refine_capped_seeded_impl<L: Label>(
     budget: Duration,
     max_iters: u64,
     rng_seed: u64,
-    capture_trace: bool,
+    options: RefineOptions,
 ) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
     let n = code.num_tensors();
     let mut report = WaistReport {
@@ -1422,7 +2051,7 @@ fn refine_capped_seeded_impl<L: Label>(
         max_iters,
         rng: SmallRng::seed_from_u64(rng_seed),
         report,
-        capture_trace,
+        capture_trace: options.capture_trace,
         last_call_trace: None,
     };
 
@@ -1434,7 +2063,20 @@ fn refine_capped_seeded_impl<L: Label>(
         let Some(incumbent) = nested_to_expr_tree(&best, &id_label_map) else {
             break;
         };
-        match refiner.waist_surgery(&incumbent, best_tc) {
+        let candidate = if options.surgery.rebuild == RebuildMode::default()
+            && options.surgery.scope == SurgeryScope::default()
+        {
+            refiner.waist_surgery(&incumbent, best_tc)
+        } else {
+            refiner.waist_surgery_opts(
+                &incumbent,
+                best_tc,
+                options.surgery.rebuild,
+                options.surgery.scope,
+                &best,
+            )
+        };
+        match candidate {
             Some((new_tree, new_tc)) if new_tc < best_tc - 1e-9 => {
                 best = new_tree;
                 best_tc = new_tc;
@@ -1760,6 +2402,293 @@ mod tests {
             }
         }
         EinCode::new(ixs, vec![])
+    }
+
+    fn test_refiner<'a>(
+        code: &'a EinCode<usize>,
+        sizes: &'a HashMap<usize, usize>,
+        hyper: &'a Hyper,
+        log2: &'a [f64],
+    ) -> Refiner<'a> {
+        Refiner {
+            code,
+            sizes,
+            hyper,
+            log2_sizes: log2,
+            start: Instant::now(),
+            budget: Duration::from_secs(30),
+            max_iters: 1,
+            rng: SmallRng::seed_from_u64(RNG_SEED),
+            report: WaistReport {
+                n_original: code.num_tensors(),
+                surgery_calls: 0,
+                cheaper_cuts: 0,
+                rebuild_attempts: 0,
+                rebuild_accepts: 0,
+                waist_min_hits: 0,
+            },
+            capture_trace: true,
+            last_call_trace: None,
+        }
+    }
+
+    fn assert_nested_interfaces(tree: &NestedEinsum<usize>, code: &EinCode<usize>) -> Vec<usize> {
+        match tree {
+            NestedEinsum::Leaf { tensor_index } => code.ixs[*tensor_index].clone(),
+            NestedEinsum::Node { args, eins } => {
+                assert_eq!(args.len(), 2);
+                let child_outputs: Vec<Vec<usize>> = args
+                    .iter()
+                    .map(|child| assert_nested_interfaces(child, code))
+                    .collect();
+                assert_eq!(eins.ixs, child_outputs);
+                eins.iy.clone()
+            }
+        }
+    }
+
+    #[test]
+    fn test_warm_restriction_preserves_leaf_set_and_interfaces() {
+        let code = grid(3, 3);
+        let sizes = uniform_sizes(&code, 2);
+        let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let label_map: HashMap<usize, usize> = code
+            .unique_labels()
+            .into_iter()
+            .map(|label| (label, label))
+            .collect();
+        let incumbent = nested_to_expr_tree(&seed, &label_map).unwrap();
+        let tensors = vec![0, 1, 3, 4];
+        let keep: HashSet<usize> = tensors.iter().copied().collect();
+        let restricted = restrict_expr_tree(&incumbent, &keep).unwrap();
+        let log2 = vec![1.0; code.unique_labels().len()];
+        let hyper = Hyper::build(&code, &label_map, &log2, log2.len());
+        let open = scope_open_labels(&hyper, &tensors);
+        let nested = expr_to_nested_counted(&restricted, &code.ixs, &open);
+
+        let mut leaves = nested.leaf_indices();
+        leaves.sort_unstable();
+        assert_eq!(leaves, tensors);
+        assert_eq!(assert_nested_interfaces(&nested, &code), open);
+        assert!(nested.is_binary());
+    }
+
+    #[test]
+    fn test_warm_restricted_seed_is_no_worse_than_greedy_on_optimized_half() {
+        let code = grid(2, 4);
+        let sizes = uniform_sizes(&code, 2);
+        let labels = code.unique_labels();
+        let label_map: HashMap<usize, usize> =
+            labels.iter().copied().map(|label| (label, label)).collect();
+        let log2 = vec![1.0; labels.len()];
+        let hyper = Hyper::build(&code, &label_map, &log2, labels.len());
+        let part = vec![true, true, true, true, false, false, false, false];
+        let (open_a, open_b) = side_open_labels(&hyper, &part);
+        let side_tree = |tensors: &[usize], open: &[usize]| {
+            let sub_code = EinCode::new(
+                tensors
+                    .iter()
+                    .map(|&tensor| code.ixs[tensor].clone())
+                    .collect(),
+                open.to_vec(),
+            );
+            let local = optimize_code(&sub_code, &sizes, &GreedyMethod::default()).unwrap();
+            remap_leaves(&local, tensors)
+        };
+        let a_tensors = vec![0, 1, 2, 3];
+        let b_tensors = vec![4, 5, 6, 7];
+        let greedy_a = side_tree(&a_tensors, &open_a);
+        let incumbent_nested = NestedEinsum::node(
+            vec![greedy_a.clone(), side_tree(&b_tensors, &open_b)],
+            EinCode::new(vec![open_a.clone(), open_b], code.iy.clone()),
+        );
+        let incumbent = nested_to_expr_tree(&incumbent_nested, &label_map).unwrap();
+        let mut refiner = test_refiner(&code, &sizes, &hyper, &log2);
+        let warm = refiner
+            .solve_side_warm(&a_tensors, &open_a, &incumbent)
+            .unwrap();
+        let warm_tc = contraction_complexity(&warm, &sizes, &code.ixs).tc;
+        let greedy_tc = contraction_complexity(&greedy_a, &sizes, &code.ixs).tc;
+
+        assert!(warm_tc <= greedy_tc + 1e-9);
+        assert!(warm_tc.is_finite());
+        assert_eq!(assert_nested_interfaces(&warm, &code), open_a);
+    }
+
+    #[test]
+    fn test_local_scope_splice_preserves_outside_subtree_byte_for_byte() {
+        let ixs = vec![
+            vec![0, 1, 2],
+            vec![0, 1, 3],
+            vec![2],
+            vec![3],
+            vec![4],
+            vec![5],
+            vec![6],
+            vec![7],
+        ];
+        let waist = ExprTree::node(
+            ExprTree::leaf(vec![0, 1, 2], 0),
+            ExprTree::leaf(vec![0, 1, 3], 1),
+            vec![2, 3],
+        );
+        let inside_sibling = ExprTree::node(
+            ExprTree::leaf(vec![2], 2),
+            ExprTree::leaf(vec![3], 3),
+            vec![2, 3],
+        );
+        let scope = ExprTree::node(waist, inside_sibling, vec![4]);
+        let outside = ExprTree::node(
+            ExprTree::node(
+                ExprTree::leaf(vec![4], 4),
+                ExprTree::leaf(vec![5], 5),
+                vec![4, 5],
+            ),
+            ExprTree::node(
+                ExprTree::leaf(vec![6], 6),
+                ExprTree::leaf(vec![7], 7),
+                vec![6, 7],
+            ),
+            vec![4],
+        );
+        let tree = ExprTree::node(scope, outside, vec![]);
+        let (_, waist_leaves, waist_path) = extract_waist_location(&tree, &[1.0; 8]).unwrap();
+        assert_eq!(waist_leaves, vec![0, 1]);
+        assert_eq!(waist_path, vec![false, false]);
+        let scope_path = local_scope_path(&tree, &waist_path, waist_leaves.len());
+        assert_eq!(scope_path, vec![false]);
+        let outside_before = format!("{:?}", subtree_at_path(&tree, &[true]).unwrap());
+        let emitted_before = expr_to_nested_counted(&tree, &ixs, &[]);
+        let emitted_outside_before = match &emitted_before {
+            NestedEinsum::Node { args, .. } => crate::json::to_json_string(&args[1]).unwrap(),
+            NestedEinsum::Leaf { .. } => panic!("fixture root must be a node"),
+        };
+        let replacement = ExprTree::node(
+            ExprTree::node(
+                ExprTree::leaf(vec![2], 2),
+                ExprTree::leaf(vec![0, 1, 2], 0),
+                vec![0, 1],
+            ),
+            ExprTree::node(
+                ExprTree::leaf(vec![0, 1, 3], 1),
+                ExprTree::leaf(vec![3], 3),
+                vec![0, 1],
+            ),
+            vec![4],
+        );
+        let spliced = replace_subtree_at_path(&tree, &scope_path, &replacement).unwrap();
+        let outside_after = format!("{:?}", subtree_at_path(&spliced, &[true]).unwrap());
+        let emitted_after = expr_to_nested_counted(&spliced, &ixs, &[]);
+        let emitted_outside_after = match &emitted_after {
+            NestedEinsum::Node { args, .. } => crate::json::to_json_string(&args[1]).unwrap(),
+            NestedEinsum::Leaf { .. } => panic!("fixture root must be a node"),
+        };
+
+        assert_eq!(outside_after, outside_before);
+        assert_eq!(emitted_outside_after, emitted_outside_before);
+        let mut spliced_leaves = spliced.leaf_ids();
+        let mut original_leaves = tree.leaf_ids();
+        spliced_leaves.sort_unstable();
+        original_leaves.sort_unstable();
+        assert_eq!(spliced_leaves, original_leaves);
+    }
+
+    #[test]
+    fn test_local_opt_in_rebuilds_preserve_unsorted_root_output_order() {
+        // Two disconnected four-rings. The first subtree contracts alternating
+        // vertices, giving local surgery a deterministic accepted improvement.
+        // Labels 9 and 8 are dimension-one outputs so their deliberately
+        // unsorted order does not change which contraction is the waist.
+        let code = EinCode::new(
+            vec![
+                vec![0usize, 3, 8],
+                vec![0, 1],
+                vec![1, 2],
+                vec![2, 3],
+                vec![4, 7, 9],
+                vec![4, 5],
+                vec![5, 6],
+                vec![6, 7],
+            ],
+            vec![9, 8],
+        );
+        let mut sizes = uniform_sizes(&code, 2);
+        sizes.insert(8, 1);
+        sizes.insert(9, 1);
+        let bad_ring = |offset: usize| {
+            let alternating_a = ExprTree::node(
+                ExprTree::leaf(code.ixs[offset].clone(), offset),
+                ExprTree::leaf(code.ixs[offset + 2].clone(), offset + 2),
+                Vec::new(),
+            );
+            let alternating_b = ExprTree::node(
+                ExprTree::leaf(code.ixs[offset + 1].clone(), offset + 1),
+                ExprTree::leaf(code.ixs[offset + 3].clone(), offset + 3),
+                Vec::new(),
+            );
+            ExprTree::node(alternating_a, alternating_b, Vec::new())
+        };
+        let incumbent = ExprTree::node(bad_ring(0), bad_ring(4), Vec::new());
+        let mut seed = expr_to_nested_counted(&incumbent, &code.ixs, &code.iy);
+        match &mut seed {
+            NestedEinsum::Node { eins, .. } => eins.iy.clone_from(&code.iy),
+            NestedEinsum::Leaf { .. } => panic!("fixture root must be a node"),
+        }
+        assert_eq!(seed.output_labels(&code.ixs), code.iy);
+        let seed_tc = contraction_complexity(&seed, &sizes, &code.ixs).tc;
+
+        for rebuild in [RebuildMode::Greedy, RebuildMode::WarmRestricted] {
+            let (refined, report, _) = refine_capped_seeded_with_trace_opts(
+                &seed,
+                &code,
+                &sizes,
+                Duration::MAX,
+                1,
+                RNG_SEED,
+                SurgeryOptions {
+                    rebuild,
+                    scope: SurgeryScope::Local,
+                },
+            );
+
+            assert_eq!(
+                report.rebuild_accepts, 1,
+                "fixture must accept one {rebuild:?} local rebuild"
+            );
+            assert!(contraction_complexity(&refined, &sizes, &code.ixs).tc < seed_tc - 1e-9);
+            assert_eq!(refined.output_labels(&code.ixs), code.iy, "{rebuild:?}");
+        }
+    }
+
+    #[test]
+    fn test_opt_in_variants_preserve_permutation_and_strict_acceptance_gate() {
+        let code = grid(4, 4);
+        let sizes = uniform_sizes(&code, 2);
+        let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let seed_tc = contraction_complexity(&seed, &sizes, &code.ixs).tc;
+        for rebuild in [RebuildMode::Greedy, RebuildMode::WarmRestricted] {
+            let (refined, report, _) = refine_capped_seeded_with_trace_opts(
+                &seed,
+                &code,
+                &sizes,
+                Duration::MAX,
+                1,
+                RNG_SEED,
+                SurgeryOptions {
+                    rebuild,
+                    scope: SurgeryScope::Local,
+                },
+            );
+            let refined_tc = contraction_complexity(&refined, &sizes, &code.ixs).tc;
+            assert!(refined_tc <= seed_tc + 1e-9);
+            assert!(refined_tc.is_finite());
+            if report.rebuild_accepts > 0 {
+                assert!(refined_tc < seed_tc - 1e-9);
+            }
+            let mut leaves = refined.leaf_indices();
+            leaves.sort_unstable();
+            assert_eq!(leaves, (0..code.num_tensors()).collect::<Vec<_>>());
+        }
     }
 
     #[test]
@@ -2458,5 +3387,192 @@ mod tests {
         let mut leaves = after.leaf_ids();
         leaves.sort_unstable();
         assert_eq!(leaves, (0..8).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_local_tree_helpers_cover_invalid_and_right_paths() {
+        let leaf = ExprTree::leaf(vec![0], 0);
+        assert!(extract_waist_location(&leaf, &[1.0]).is_none());
+
+        let tree = ExprTree::node(
+            leaf.clone(),
+            ExprTree::node(
+                ExprTree::leaf(vec![1], 1),
+                ExprTree::leaf(vec![2], 2),
+                vec![1, 2],
+            ),
+            vec![],
+        );
+        assert!(subtree_at_path(&tree, &[false, true]).is_none());
+        assert!(replace_subtree_at_path(&leaf, &[false], &leaf).is_none());
+
+        let replacement = ExprTree::leaf(vec![3], 3);
+        let replaced = replace_subtree_at_path(&tree, &[true, false], &replacement).unwrap();
+        assert_eq!(
+            subtree_at_path(&replaced, &[true, false])
+                .unwrap()
+                .leaf_ids(),
+            vec![3]
+        );
+        assert_eq!(
+            subtree_at_path(&replaced, &[false]).unwrap().leaf_ids(),
+            vec![0]
+        );
+    }
+
+    #[test]
+    fn test_leaf_emission_covers_identity_and_reduction_fallbacks() {
+        let leaf = ExprTree::leaf(vec![0], 0);
+        let identity = expr_to_nested_counted(&leaf, &[vec![0]], &[0]);
+        assert!(matches!(identity, NestedEinsum::Leaf { tensor_index: 0 }));
+
+        let reduced = expr_to_nested_counted(&leaf, &[vec![0]], &[]);
+        let NestedEinsum::Node { args, eins } = reduced else {
+            panic!("changed leaf interface must materialize a unary reduction");
+        };
+        assert_eq!(args, vec![NestedEinsum::leaf(0)]);
+        assert_eq!(eins, EinCode::new(vec![vec![0]], vec![]));
+    }
+
+    #[test]
+    fn test_local_surgery_defensive_and_rejection_paths() {
+        let code = EinCode::new(
+            vec![vec![0usize, 1], vec![0, 2], vec![1, 3], vec![2, 3]],
+            vec![],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let log2 = vec![1.0; 4];
+        let hyper = Hyper::build(&code, &label_map, &log2, 4);
+        let incumbent = ExprTree::node(
+            ExprTree::node(
+                ExprTree::leaf(code.ixs[0].clone(), 0),
+                ExprTree::leaf(code.ixs[1].clone(), 1),
+                vec![1, 2],
+            ),
+            ExprTree::node(
+                ExprTree::leaf(code.ixs[2].clone(), 2),
+                ExprTree::leaf(code.ixs[3].clone(), 3),
+                vec![1, 2],
+            ),
+            vec![],
+        );
+        let original = expr_to_nested_counted(&incumbent, &code.ixs, &code.iy);
+
+        let mut expired = test_refiner(&code, &sizes, &hyper, &log2);
+        expired.budget = Duration::ZERO;
+        assert!(expired
+            .waist_surgery_local(
+                &incumbent,
+                f64::INFINITY,
+                f64::INFINITY,
+                &[0, 1],
+                &[],
+                RebuildMode::Greedy,
+                &original,
+            )
+            .is_none());
+        assert_eq!(expired.report.surgery_calls, 1);
+        assert_eq!(expired.report.waist_min_hits, 0);
+
+        let mut invalid = test_refiner(&code, &sizes, &hyper, &log2);
+        assert!(invalid
+            .waist_surgery_local(
+                &incumbent,
+                f64::INFINITY,
+                f64::INFINITY,
+                &[],
+                &[],
+                RebuildMode::Greedy,
+                &original,
+            )
+            .is_none());
+
+        let mut no_new_bottleneck = test_refiner(&code, &sizes, &hyper, &log2);
+        assert!(no_new_bottleneck
+            .waist_surgery_local(
+                &incumbent,
+                f64::INFINITY,
+                2.0,
+                &[0, 1],
+                &[],
+                RebuildMode::Greedy,
+                &original,
+            )
+            .is_none());
+        assert_eq!(no_new_bottleneck.report.waist_min_hits, 1);
+        assert_eq!(no_new_bottleneck.report.rebuild_attempts, 0);
+
+        let mut non_improving = test_refiner(&code, &sizes, &hyper, &log2);
+        assert!(non_improving
+            .waist_surgery_local(
+                &incumbent,
+                0.0,
+                f64::INFINITY,
+                &[0, 1],
+                &[],
+                RebuildMode::Greedy,
+                &original,
+            )
+            .is_none());
+        assert_eq!(non_improving.report.rebuild_attempts, 1);
+        assert_eq!(non_improving.report.rebuild_accepts, 0);
+
+        let mut rebuilds = test_refiner(&code, &sizes, &hyper, &log2);
+        assert!(rebuilds.rebuild_warm(&[true; 4], &incumbent).is_none());
+        assert!(rebuilds
+            .rebuild_local(
+                &[true; 4],
+                &hyper,
+                &[0, 1, 2, 3],
+                &[],
+                &incumbent,
+                &original,
+                RebuildMode::Greedy,
+            )
+            .is_none());
+    }
+
+    #[test]
+    fn test_warm_side_fallbacks_cover_timeout_restriction_and_leaf_mismatch() {
+        let code = EinCode::new(
+            vec![vec![0usize, 1], vec![0, 2], vec![1, 3], vec![2, 3]],
+            vec![],
+        );
+        let sizes = uniform_sizes(&code, 2);
+        let label_map: HashMap<usize, usize> = (0..4).map(|label| (label, label)).collect();
+        let log2 = vec![1.0; 4];
+        let hyper = Hyper::build(&code, &label_map, &log2, 4);
+
+        let mut expired = test_refiner(&code, &sizes, &hyper, &log2);
+        expired.budget = Duration::ZERO;
+        assert!(expired
+            .solve_side_warm(&[0, 1], &[1, 2], &ExprTree::leaf(vec![0], 0))
+            .is_none());
+
+        let mut missing = test_refiner(&code, &sizes, &hyper, &log2);
+        let fallback = missing
+            .solve_side_warm(&[0, 1], &[1, 2], &ExprTree::leaf(vec![3], 3))
+            .unwrap();
+        let mut fallback_leaves = fallback.leaf_indices();
+        fallback_leaves.sort_unstable();
+        assert_eq!(fallback_leaves, vec![0, 1]);
+
+        let duplicate = ExprTree::node(
+            ExprTree::node(
+                ExprTree::leaf(code.ixs[0].clone(), 0),
+                ExprTree::leaf(code.ixs[0].clone(), 0),
+                vec![0, 1],
+            ),
+            ExprTree::leaf(code.ixs[1].clone(), 1),
+            vec![1, 2],
+        );
+        let mut mismatched = test_refiner(&code, &sizes, &hyper, &log2);
+        let fallback = mismatched
+            .solve_side_warm(&[0, 1], &[1, 2], &duplicate)
+            .unwrap();
+        let mut fallback_leaves = fallback.leaf_indices();
+        fallback_leaves.sort_unstable();
+        assert_eq!(fallback_leaves, vec![0, 1]);
     }
 }
