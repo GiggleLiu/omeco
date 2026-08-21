@@ -6,6 +6,10 @@ omeco adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+**Breaking:** `treesa::anneal_surgery_rounds` is removed; use
+`anneal_refine_rounds(seed, code, sizes, config, rounds, &RoundsOptions::default())`
+for identical behavior.
+
 - Added `treesa::RoundsOptions` and `anneal_refine_rounds`, including an
   exactly work-matched cold-only control (`surgery: false`) and an incumbent
   ratchet that makes the loop monotone in its round count.
