@@ -23,10 +23,11 @@ use thiserror::Error;
 
 const DEFAULT_VISITS: u64 = 140_000_000;
 const BETA_LEVELS: u64 = 300;
-/// Row schema version. Bump when the row layout changes: rows written under an
-/// older version are never treated as complete, so a resume re-runs and
-/// replaces them instead of silently keeping stale data.
-const SCHEMA_VERSION: u32 = 2;
+/// Row schema version. Bump when the row layout or the arm set changes: rows
+/// written under an older version are never treated as complete, so a resume
+/// re-runs and replaces them instead of silently keeping stale data (e.g. the
+/// retired `surg_greedy_*` arms of schema 2).
+const SCHEMA_VERSION: u32 = 3;
 const USAGE: &str = "usage: surgery_ablation --instances <dir> --out <file.jsonl> \
     [--only name,name] [--raw] [--labels N] [--rounds 8,32] \
     [--set all|a|b] [--visits N] [--jobs N]";
@@ -830,7 +831,11 @@ fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
                     path.display()
                 ))
             })?;
-        if keys.contains(key) {
+        let stale = value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64)
+            != Some(SCHEMA_VERSION as u64);
+        if stale || keys.contains(key) {
             removed += 1;
         } else {
             kept.push(line.to_owned());
