@@ -833,17 +833,28 @@ fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
         return Ok(());
     }
     let text = fs::read_to_string(path).map_err(|error| io_error(path, error))?;
+    let lines: Vec<&str> = text.lines().collect();
     let mut kept = Vec::new();
     let mut removed = 0_usize;
-    for line in text.lines() {
-        if line.trim().is_empty() {
+    for (line_number, line) in lines.iter().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
             continue;
         }
-        let value: serde_json::Value =
-            serde_json::from_str(line).map_err(|source| AppError::Json {
-                path: path.to_path_buf(),
-                source,
-            })?;
+        let value = match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(value) => value,
+            Err(source) => {
+                // A killed write can leave a truncated final record; drop it
+                // instead of aborting the resume that this rewrite is part of.
+                if line_number + 1 == lines.len() {
+                    break;
+                }
+                return Err(AppError::Json {
+                    path: path.to_path_buf(),
+                    source,
+                });
+            }
+        };
         let key = value
             .get("key")
             .and_then(serde_json::Value::as_str)
