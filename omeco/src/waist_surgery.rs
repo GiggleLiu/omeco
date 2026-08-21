@@ -1052,14 +1052,6 @@ fn nested_to_expr_tree(
     }
 }
 
-/// Leaf tensor ids of a `NestedEinsum`, in tree order.
-fn nested_leaf_ids(tree: &NestedEinsum<usize>) -> Vec<usize> {
-    match tree {
-        NestedEinsum::Leaf { tensor_index } => vec![*tensor_index],
-        NestedEinsum::Node { args, .. } => args.iter().flat_map(nested_leaf_ids).collect(),
-    }
-}
-
 /// Replace the smallest subtree of `tree` whose leaf set is exactly
 /// `scope_tensors` with `replacement`, preserving every node outside that
 /// region verbatim — including noncanonical `eins` axis orderings, which a
@@ -1070,43 +1062,52 @@ fn splice_scope_nested(
     scope_tensors: &HashSet<usize>,
     replacement: &NestedEinsum<usize>,
 ) -> Option<NestedEinsum<usize>> {
-    match tree {
-        NestedEinsum::Leaf { tensor_index } => {
-            if scope_tensors.len() == 1 && scope_tensors.contains(tensor_index) {
-                Some(replacement.clone())
-            } else {
-                Some(tree.clone())
+    /// Returns `(spliced_tree, leaf_count, leaves_inside_scope)`.
+    fn rec(
+        tree: &NestedEinsum<usize>,
+        scope: &HashSet<usize>,
+        replacement: &NestedEinsum<usize>,
+    ) -> Option<(NestedEinsum<usize>, usize, usize)> {
+        match tree {
+            NestedEinsum::Leaf { tensor_index } => {
+                let in_scope = usize::from(scope.contains(tensor_index));
+                let node = if in_scope == 1 && scope.len() == 1 {
+                    replacement.clone()
+                } else {
+                    tree.clone()
+                };
+                Some((node, 1, in_scope))
             }
-        }
-        NestedEinsum::Node { args, eins } => {
-            let leaves = nested_leaf_ids(tree);
-            let exact = leaves.len() == scope_tensors.len()
-                && leaves.iter().all(|t| scope_tensors.contains(t));
-            if exact {
-                return Some(replacement.clone());
-            }
-            let mut new_args = Vec::with_capacity(args.len());
-            let mut new_ixs = eins.ixs.clone();
-            for (index, arg) in args.iter().enumerate() {
-                if nested_leaf_ids(arg)
-                    .iter()
-                    .any(|t| scope_tensors.contains(t))
-                {
-                    let spliced = splice_scope_nested(arg, scope_tensors, replacement)?;
-                    if let NestedEinsum::Node { eins, .. } = &spliced {
-                        new_ixs[index] = eins.iy.clone();
+            NestedEinsum::Node { args, eins } => {
+                let mut new_args = Vec::with_capacity(args.len());
+                let mut new_ixs = eins.ixs.clone();
+                let mut leaves = 0usize;
+                let mut scope_leaves = 0usize;
+                for (index, arg) in args.iter().enumerate() {
+                    let (spliced, count, scope_count) = rec(arg, scope, replacement)?;
+                    leaves += count;
+                    scope_leaves += scope_count;
+                    if scope_count > 0 {
+                        if let NestedEinsum::Node { eins, .. } = &spliced {
+                            new_ixs[index] = eins.iy.clone();
+                        }
                     }
                     new_args.push(spliced);
-                } else {
-                    new_args.push(arg.clone());
                 }
+                // This node's leaves are exactly the scope tensors: replace it
+                // wholesale instead of splicing deeper.
+                if scope_leaves == leaves && leaves == scope.len() {
+                    return Some((replacement.clone(), leaves, scope_leaves));
+                }
+                Some((
+                    NestedEinsum::node(new_args, EinCode::new(new_ixs, eins.iy.clone())),
+                    leaves,
+                    scope_leaves,
+                ))
             }
-            Some(NestedEinsum::node(
-                new_args,
-                EinCode::new(new_ixs, eins.iy.clone()),
-            ))
         }
     }
+    rec(tree, scope_tensors, replacement).map(|(spliced, _, _)| spliced)
 }
 
 /// Convert an `ExprTree` back into a `NestedEinsum`, deriving every node's output

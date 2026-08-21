@@ -66,11 +66,12 @@ def surgery_wtl(rows: list[dict[str, Any]]) -> list[str]:
     # Pair surgery arms with their matched cold-only control under the *same*
     # protocol: raw/target_visits are part of the identity, otherwise a
     # multi-file summary can compare a surgery row against a cold row from a
-    # different run configuration.
+    # different run configuration. Counts are keyed by protocol too, so
+    # different protocols are never aggregated into one W/T/L total.
     by_key = {
         (row["instance"], row["label"], row["arm"], *protocol(row)): row for row in rows
     }
-    counts: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
+    counts: dict[tuple[str, Any, Any], list[int]] = defaultdict(lambda: [0, 0, 0])
     for row in rows:
         arm = row["arm"]
         if not arm.startswith("surg_"):
@@ -85,13 +86,20 @@ def surgery_wtl(rows: list[dict[str, Any]]) -> list[str]:
             continue
         delta = float(row["tc"]) - float(cold["tc"])
         if delta < -1e-9:
-            counts[arm][0] += 1
+            counts[(arm, *protocol(row))][0] += 1
         elif delta > 1e-9:
-            counts[arm][2] += 1
+            counts[(arm, *protocol(row))][2] += 1
         else:
-            counts[arm][1] += 1
-    body = [[arm, *(str(value) for value in values)] for arm, values in sorted(counts.items())]
-    return markdown_table(["surgery arm vs cold-only", "W", "T", "L"], body)
+            counts[(arm, *protocol(row))][1] += 1
+    body = [
+        [
+            arm,
+            f"raw={int(raw)};v={target_visits}",
+            *(str(value) for value in values),
+        ]
+        for (arm, raw, target_visits), values in sorted(counts.items(), key=str)
+    ]
+    return markdown_table(["surgery arm vs cold-only", "protocol", "W", "T", "L"], body)
 
 
 def work_table(rows: list[dict[str, Any]]) -> list[str]:
