@@ -690,11 +690,13 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
         optimizer_seed,
     )
     .ok_or_else(|| AppError::Message("TreeSA returned no tree".to_owned()))?;
+    // Stop the clock only after splice-back so the x1 arm measures the same
+    // full-tree conversion the x2/x4/x8 arms include.
+    let baseline_full = full_tree(&prepared, &baseline);
     let baseline_wall = baseline_started.elapsed().as_secs_f64();
     let mut rows = Vec::new();
 
     if args.set.includes_a() {
-        let baseline_full = full_tree(&prepared, &baseline);
         rows.push(make_row(
             &context,
             "treesa_x1".to_owned(),
@@ -872,6 +874,15 @@ fn append_rows(path: &Path, rows: &[ResultRow], existing: &mut HashSet<String>) 
             .map_err(|error| io_error(path, error))?;
         file.flush().map_err(|error| io_error(path, error))?;
         existing.insert(row.key.clone());
+    }
+    Ok(())
+}
+
+fn ensure_output_parent(path: &Path) -> AppResult<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).map_err(|error| io_error(parent, error))?;
+        }
     }
     Ok(())
 }
@@ -1066,6 +1077,9 @@ struct ResultRowOwned {
 
 fn real_main() -> AppResult<()> {
     let args = parse_args_from(std::env::args_os().skip(1))?;
+    // The output directory may not exist in a fresh checkout (it is
+    // gitignored), so create it before any worker opens a file there.
+    ensure_output_parent(&args.out)?;
     if args.jobs > 1 && args.shard_count == 1 {
         run_parallel(&args)
     } else {
