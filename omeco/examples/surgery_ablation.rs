@@ -11,7 +11,7 @@ use std::process::{Command, ExitStatus};
 use std::time::Instant;
 
 use omeco::treesa::{anneal_refine_rounds, optimize_treesa_seeded, RoundsOptions, RoundsSchedule};
-use omeco::waist_surgery::{RebuildMode, SurgeryScope};
+use omeco::waist_surgery::SurgeryScope;
 use omeco::{
     contraction_complexity, simplify, splice, EinCode, NestedEinsum, ScoreFunction, TreeSA,
 };
@@ -339,7 +339,6 @@ struct Params {
     target_visits: u64,
     rounds: Option<u64>,
     surgery: Option<bool>,
-    rebuild: Option<&'static str>,
     scope: Option<&'static str>,
     n_original: usize,
     n_optimized: usize,
@@ -391,15 +390,9 @@ fn expected_arms(args: &Args) -> Vec<String> {
     for rounds in &args.rounds {
         if args.set.includes_b() {
             arms.extend(
-                [
-                    "cold_only",
-                    "surg_greedy_root",
-                    "surg_warm_root",
-                    "surg_greedy_local",
-                    "surg_warm_local",
-                ]
-                .into_iter()
-                .map(|arm| format!("{arm}_r{rounds}")),
+                ["cold_only", "surg_warm_root", "surg_warm_local"]
+                    .into_iter()
+                    .map(|arm| format!("{arm}_r{rounds}")),
             );
         }
         if args.set.includes_a() {
@@ -556,54 +549,41 @@ fn make_row(
         &context.prepared.original.sizes,
         &context.prepared.original.code.ixs,
     );
-    let (
-        round_count,
-        surgery,
-        rebuild,
-        scope,
-        fine_sweeps,
-        accepted,
-        trace,
-        post_splice_guard_triggered,
-    ) = rounds.map_or(
-        (None, None, None, None, 0, 0, Vec::new(), false),
-        |(count, opts, report, guard_triggered)| {
-            let rebuild = match opts.rebuild {
-                RebuildMode::Greedy => "greedy",
-                RebuildMode::WarmRestricted => "warm_restricted",
-            };
-            let scope = match opts.scope {
-                SurgeryScope::Root => "root",
-                SurgeryScope::Local => "local",
-            };
-            let trace = report
-                .round_trace
-                .iter()
-                .map(|item| TraceRow {
-                    round: item.round,
-                    tc_before: item.tc_before,
-                    tc_after_surgery: item.tc_after_surgery,
-                    tc_after_anneal: item.tc_after_anneal,
-                    tc_retained: item.tc_retained,
-                    surgery_accepted: item.surgery_accepted,
-                })
-                .collect();
-            (
-                Some(count),
-                Some(opts.surgery),
-                Some(rebuild),
-                Some(scope),
-                report.fine_tune_sweeps_total,
-                report
+    let (round_count, surgery, scope, fine_sweeps, accepted, trace, post_splice_guard_triggered) =
+        rounds.map_or(
+            (None, None, None, 0, 0, Vec::new(), false),
+            |(count, opts, report, guard_triggered)| {
+                let scope = match opts.scope {
+                    SurgeryScope::Root => "root",
+                    SurgeryScope::Local => "local",
+                };
+                let trace = report
                     .round_trace
                     .iter()
-                    .filter(|item| item.surgery_accepted)
-                    .count() as u64,
-                trace,
-                guard_triggered,
-            )
-        },
-    );
+                    .map(|item| TraceRow {
+                        round: item.round,
+                        tc_before: item.tc_before,
+                        tc_after_surgery: item.tc_after_surgery,
+                        tc_after_anneal: item.tc_after_anneal,
+                        tc_retained: item.tc_retained,
+                        surgery_accepted: item.surgery_accepted,
+                    })
+                    .collect();
+                (
+                    Some(count),
+                    Some(opts.surgery),
+                    Some(scope),
+                    report.fine_tune_sweeps_total,
+                    report
+                        .round_trace
+                        .iter()
+                        .filter(|item| item.surgery_accepted)
+                        .count() as u64,
+                    trace,
+                    guard_triggered,
+                )
+            },
+        );
     let fine_visits =
         fine_sweeps.saturating_mul(context.prepared.code.num_tensors().saturating_sub(1) as u64);
     ResultRow {
@@ -627,7 +607,6 @@ fn make_row(
             target_visits: context.target_visits,
             rounds: round_count,
             surgery,
-            rebuild,
             scope,
             n_original: context.prepared.original.code.num_tensors(),
             n_optimized: context.prepared.code.num_tensors(),
@@ -784,23 +763,9 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
             rows.push(row);
         }
         if args.set.includes_b() {
-            for (name, rebuild, scope) in [
-                ("surg_greedy_root", RebuildMode::Greedy, SurgeryScope::Root),
-                (
-                    "surg_warm_root",
-                    RebuildMode::WarmRestricted,
-                    SurgeryScope::Root,
-                ),
-                (
-                    "surg_greedy_local",
-                    RebuildMode::Greedy,
-                    SurgeryScope::Local,
-                ),
-                (
-                    "surg_warm_local",
-                    RebuildMode::WarmRestricted,
-                    SurgeryScope::Local,
-                ),
+            for (name, scope) in [
+                ("surg_warm_root", SurgeryScope::Root),
+                ("surg_warm_local", SurgeryScope::Local),
             ] {
                 rows.push(run_round_arm(
                     &context,
@@ -811,7 +776,6 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
                     round_count,
                     RoundsOptions {
                         surgery: true,
-                        rebuild,
                         scope,
                         schedule: RoundsSchedule::Cold,
                     },
