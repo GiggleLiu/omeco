@@ -888,6 +888,9 @@ fn local_scope_path(tree: &ExprTree, waist_path: &[bool], waist_size: usize) -> 
     Vec::new()
 }
 
+/// Replace the subtree at `path` (false = left, true = right) of a binary
+/// `ExprTree`.
+#[cfg(test)]
 fn replace_subtree_at_path(
     tree: &ExprTree,
     path: &[bool],
@@ -1046,6 +1049,63 @@ fn nested_to_expr_tree(
             }
             _ => None,
         },
+    }
+}
+
+/// Leaf tensor ids of a `NestedEinsum`, in tree order.
+fn nested_leaf_ids(tree: &NestedEinsum<usize>) -> Vec<usize> {
+    match tree {
+        NestedEinsum::Leaf { tensor_index } => vec![*tensor_index],
+        NestedEinsum::Node { args, .. } => args.iter().flat_map(nested_leaf_ids).collect(),
+    }
+}
+
+/// Replace the smallest subtree of `tree` whose leaf set is exactly
+/// `scope_tensors` with `replacement`, preserving every node outside that
+/// region verbatim — including noncanonical `eins` axis orderings, which a
+/// full `ExprTree` re-emission would reorder. The direct parent's `ixs` entry
+/// is re-derived from the replacement so the emitted eins stays consistent.
+fn splice_scope_nested(
+    tree: &NestedEinsum<usize>,
+    scope_tensors: &HashSet<usize>,
+    replacement: &NestedEinsum<usize>,
+) -> Option<NestedEinsum<usize>> {
+    match tree {
+        NestedEinsum::Leaf { tensor_index } => {
+            if scope_tensors.len() == 1 && scope_tensors.contains(tensor_index) {
+                Some(replacement.clone())
+            } else {
+                Some(tree.clone())
+            }
+        }
+        NestedEinsum::Node { args, eins } => {
+            let leaves = nested_leaf_ids(tree);
+            let exact = leaves.len() == scope_tensors.len()
+                && leaves.iter().all(|t| scope_tensors.contains(t));
+            if exact {
+                return Some(replacement.clone());
+            }
+            let mut new_args = Vec::with_capacity(args.len());
+            let mut new_ixs = eins.ixs.clone();
+            for (index, arg) in args.iter().enumerate() {
+                if nested_leaf_ids(arg)
+                    .iter()
+                    .any(|t| scope_tensors.contains(t))
+                {
+                    let spliced = splice_scope_nested(arg, scope_tensors, replacement)?;
+                    if let NestedEinsum::Node { eins, .. } = &spliced {
+                        new_ixs[index] = eins.iy.clone();
+                    }
+                    new_args.push(spliced);
+                } else {
+                    new_args.push(arg.clone());
+                }
+            }
+            Some(NestedEinsum::node(
+                new_args,
+                EinCode::new(new_ixs, eins.iy.clone()),
+            ))
+        }
     }
 }
 
@@ -1215,6 +1275,7 @@ impl Refiner<'_> {
             work_tc,
             RebuildMode::default(),
             SurgeryScope::default(),
+            &expr_to_nested_counted(incumbent, &self.code.ixs, &self.code.iy),
         )
     }
 
@@ -1225,6 +1286,7 @@ impl Refiner<'_> {
         work_tc: f64,
         rebuild_mode: RebuildMode,
         scope: SurgeryScope,
+        original: &NestedEinsum<usize>,
     ) -> Option<(NestedEinsum<usize>, f64)> {
         if scope == SurgeryScope::Local {
             if let Some((waist_node_cost, a_leaves, waist_path)) =
@@ -1243,6 +1305,7 @@ impl Refiner<'_> {
                         &a_leaves,
                         &scope_path,
                         rebuild_mode,
+                        original,
                     );
                 }
             }
@@ -1358,6 +1421,7 @@ impl Refiner<'_> {
         a_leaves: &[usize],
         scope_path: &[bool],
         rebuild_mode: RebuildMode,
+        original: &NestedEinsum<usize>,
     ) -> Option<(NestedEinsum<usize>, f64)> {
         self.report.surgery_calls += 1;
         let scope_tree = subtree_at_path(incumbent, scope_path)?;
@@ -1456,7 +1520,7 @@ impl Refiner<'_> {
             &scope_tensors,
             &scope_open,
             incumbent,
-            scope_path,
+            original,
             rebuild_mode,
         )?;
         if self.out_of_time() {
@@ -1518,7 +1582,7 @@ impl Refiner<'_> {
         scope_tensors: &[usize],
         scope_open: &[usize],
         incumbent: &ExprTree,
-        scope_path: &[bool],
+        original: &NestedEinsum<usize>,
         rebuild_mode: RebuildMode,
     ) -> Option<NestedEinsum<usize>> {
         let a_tensors: Vec<usize> = scope_tensors
@@ -1548,16 +1612,11 @@ impl Refiner<'_> {
             vec![sub_a, sub_b],
             EinCode::new(vec![open_a, open_b], scope_open.to_vec()),
         );
-        let label_map: HashMap<usize, usize> = (0..self.log2_sizes.len())
-            .map(|label| (label, label))
-            .collect();
-        let replacement = nested_to_expr_tree(&rebuilt_scope, &label_map)?;
-        let spliced = replace_subtree_at_path(incumbent, scope_path, &replacement)?;
-        Some(expr_to_nested_counted(
-            &spliced,
-            &self.code.ixs,
-            &self.code.iy,
-        ))
+        // Splice in NestedEinsum space so out-of-scope branches keep their
+        // exact serialization; re-emitting the whole tree through an ExprTree
+        // round trip would reorder their eins axes.
+        let scope_set: HashSet<usize> = scope_tensors.iter().copied().collect();
+        splice_scope_nested(original, &scope_set, &rebuilt_scope)
     }
 
     /// Open label-ids for each side: a label is open on side A iff it occurs in A
@@ -1981,6 +2040,7 @@ fn refine_capped_seeded_impl<L: Label>(
                 best_tc,
                 options.surgery.rebuild,
                 options.surgery.scope,
+                &best,
             )
         };
         match candidate {
@@ -3364,6 +3424,7 @@ mod tests {
             ),
             vec![],
         );
+        let original = expr_to_nested_counted(&incumbent, &code.ixs, &code.iy);
 
         let mut expired = test_refiner(&code, &sizes, &hyper, &log2);
         expired.budget = Duration::ZERO;
@@ -3375,6 +3436,7 @@ mod tests {
                 &[0, 1],
                 &[],
                 RebuildMode::Greedy,
+                &original,
             )
             .is_none());
         assert_eq!(expired.report.surgery_calls, 1);
@@ -3389,6 +3451,7 @@ mod tests {
                 &[],
                 &[],
                 RebuildMode::Greedy,
+                &original,
             )
             .is_none());
 
@@ -3401,6 +3464,7 @@ mod tests {
                 &[0, 1],
                 &[],
                 RebuildMode::Greedy,
+                &original,
             )
             .is_none());
         assert_eq!(no_new_bottleneck.report.waist_min_hits, 1);
@@ -3415,6 +3479,7 @@ mod tests {
                 &[0, 1],
                 &[],
                 RebuildMode::Greedy,
+                &original,
             )
             .is_none());
         assert_eq!(non_improving.report.rebuild_attempts, 1);
@@ -3429,7 +3494,7 @@ mod tests {
                 &[0, 1, 2, 3],
                 &[],
                 &incumbent,
-                &[],
+                &original,
                 RebuildMode::Greedy,
             )
             .is_none());

@@ -800,13 +800,16 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
 
 /// Rewrite `path` dropping every row whose key is in `keys`. Used before
 /// appending fresh rows so a stale-schema or duplicate row can never shadow
-/// the newer data for the same key.
+/// the newer data for the same key. Only rewrites when at least one key
+/// actually collides, and writes through a temporary file plus atomic rename
+/// so an interruption can never truncate already-completed rows.
 fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
     if !path.exists() || keys.is_empty() {
         return Ok(());
     }
     let text = fs::read_to_string(path).map_err(|error| io_error(path, error))?;
     let mut kept = Vec::new();
+    let mut removed = 0_usize;
     for line in text.lines() {
         if line.trim().is_empty() {
             continue;
@@ -825,15 +828,22 @@ fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
                     path.display()
                 ))
             })?;
-        if !keys.contains(key) {
+        if keys.contains(key) {
+            removed += 1;
+        } else {
             kept.push(line.to_owned());
         }
     }
-    let mut file = File::create(path).map_err(|error| io_error(path, error))?;
-    for line in kept {
-        writeln!(file, "{line}").map_err(|error| io_error(path, error))?;
+    if removed == 0 {
+        return Ok(());
     }
-    file.flush().map_err(|error| io_error(path, error))?;
+    let tmp = PathBuf::from(format!("{}.tmp.{}", path.display(), std::process::id()));
+    let mut file = File::create(&tmp).map_err(|error| io_error(&tmp, error))?;
+    for line in kept {
+        writeln!(file, "{line}").map_err(|error| io_error(&tmp, error))?;
+    }
+    file.flush().map_err(|error| io_error(&tmp, error))?;
+    fs::rename(&tmp, path).map_err(|error| io_error(path, error))?;
     Ok(())
 }
 
@@ -1021,7 +1031,6 @@ fn run_parallel(args: &Args) -> AppResult<()> {
                 fresh_lines.push(line);
             }
         }
-        fs::remove_file(part).map_err(|error| io_error(part, error))?;
     }
     let fresh_keys: HashSet<String> = fresh_lines
         .iter()
@@ -1031,14 +1040,21 @@ fn run_parallel(args: &Args) -> AppResult<()> {
                 .map(|row| row.key)
         })
         .collect();
+    // Commit the merged output before deleting any shard: a failure below
+    // leaves the parts in place for a resumable re-run.
     remove_keys(&args.out, &fresh_keys)?;
     let mut out = OpenOptions::new()
         .create(true)
         .append(true)
         .open(&args.out)
         .map_err(|error| io_error(&args.out, error))?;
-    for line in fresh_lines {
+    for line in &fresh_lines {
         writeln!(out, "{line}").map_err(|error| io_error(&args.out, error))?;
+    }
+    out.flush().map_err(|error| io_error(&args.out, error))?;
+    drop(out);
+    for part in parts {
+        fs::remove_file(&part).map_err(|error| io_error(&part, error))?;
     }
     Ok(())
 }
