@@ -403,6 +403,29 @@ fn expected_arms(args: &Args) -> Vec<String> {
     arms
 }
 
+/// Classify a row's schema version: `Ok(true)` for the current schema,
+/// `Ok(false)` for stale (older or missing) rows, and `Err` for rows written
+/// by a newer driver — which must be rejected, never deleted.
+fn schema_is_current(
+    path: &Path,
+    line_number: usize,
+    value: &serde_json::Value,
+) -> AppResult<bool> {
+    let version = value
+        .get("schema_version")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    if version > SCHEMA_VERSION as u64 {
+        return Err(AppError::Message(format!(
+            "{}:{} was written by a newer driver (schema {version} > {SCHEMA_VERSION}); \
+             refusing to modify it",
+            path.display(),
+            line_number
+        )));
+    }
+    Ok(version == SCHEMA_VERSION as u64)
+}
+
 fn existing_keys(path: &Path) -> AppResult<HashSet<String>> {
     if !path.exists() {
         return Ok(HashSet::new());
@@ -433,12 +456,9 @@ fn existing_keys(path: &Path) -> AppResult<HashSet<String>> {
             }
         };
         // Rows written under an older schema are stale: do not let their keys
-        // mark a group complete, so the group is re-run and replaced.
-        if value
-            .get("schema_version")
-            .and_then(serde_json::Value::as_u64)
-            != Some(SCHEMA_VERSION as u64)
-        {
+        // mark a group complete, so the group is re-run and replaced. Rows
+        // from a newer driver are an error, never silently ignored.
+        if !schema_is_current(path, line_number + 1, &value)? {
             continue;
         }
         let key = value
@@ -831,10 +851,9 @@ fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
                     path.display()
                 ))
             })?;
-        let stale = value
-            .get("schema_version")
-            .and_then(serde_json::Value::as_u64)
-            != Some(SCHEMA_VERSION as u64);
+        // Rows from a newer driver must be rejected, never purged; rows from
+        // an older schema are stale and dropped.
+        let stale = !schema_is_current(path, line_number + 1, &value)?;
         if stale || keys.contains(key) {
             removed += 1;
         } else {
@@ -1040,9 +1059,18 @@ fn merge_parts(out: &Path, parts: &[PathBuf]) -> AppResult<usize> {
                     });
                 }
             };
-            // Rows written by an older driver (e.g. retired greedy arms) must
-            // never leak back into a resumed output.
-            if row.schema_version != SCHEMA_VERSION {
+            // Rows from a newer driver must be rejected, never merged; rows
+            // written by an older driver (e.g. retired greedy arms) are stale
+            // and must never leak back into a resumed output.
+            if row.schema_version > SCHEMA_VERSION {
+                return Err(AppError::Message(format!(
+                    "{} was written by a newer driver (schema {} > {SCHEMA_VERSION}); \
+                     refusing to modify it",
+                    part.display(),
+                    row.schema_version
+                )));
+            }
+            if row.schema_version < SCHEMA_VERSION {
                 continue;
             }
             if existing.insert(row.key) {
