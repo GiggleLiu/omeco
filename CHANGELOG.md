@@ -18,10 +18,11 @@ for identical behavior.
   `BandReheatThenFront { switch_fraction }` reheats the waist cost band and then
   descends a continuous log-span freeze-out front, with the switch clamped
   between two band epochs and a fixed fraction of the planned sweeps.
-- Added opt-in `waist_surgery::RebuildMode::WarmRestricted` and
-  `SurgeryScope::Local`. The former initializes rebuilt sides from the
-  restricted incumbent topology; the latter rebuilds only a bounded ancestor
-  around a deep waist. Defaults remain `Greedy` + `Root`.
+- Waist-surgery side rebuilds now initialize from the restricted incumbent
+  topology (`warm-restricted`), which the surgery ablation campaign showed
+  strictly better than the historical greedy seed; `SurgeryScope::Local` is
+  opt-in and rebuilds only a bounded ancestor around a deep waist. Defaults
+  are warm-restricted + `Root`.
 - `RoundsReport::fine_tune_sweeps_total` exposes deterministic fine-tuning work,
   and `optimize_treesa_seeded` supports matched optimizer repetitions. The
   resumable `surgery_ablation` example reports quality against both node visits

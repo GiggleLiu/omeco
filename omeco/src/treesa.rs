@@ -15,8 +15,8 @@ use crate::utils::fast_log2sumexp2;
 #[cfg(test)]
 use crate::waist_surgery::refine_capped;
 use crate::waist_surgery::{
-    gated_sweep, node_tc, refine_capped_seeded_with_trace, refine_capped_seeded_with_trace_opts,
-    RebuildMode, SurgeryOptions, SurgeryScope, WaistUpdate,
+    gated_sweep, node_tc, refine_capped_seeded_with_trace_opts, SurgeryOptions, SurgeryScope,
+    WaistUpdate,
 };
 use crate::Label;
 use rand::prelude::*;
@@ -1861,17 +1861,16 @@ pub enum RoundsSchedule {
 
 /// Options for [`anneal_refine_rounds`].
 ///
-/// The default runs one greedy, root-scoped waist-surgery call before each
-/// cold fine-tuning pass. Set [`RoundsOptions::surgery`] to `false` for the
-/// matched cold-only control.
+/// The default runs one warm-restricted, root-scoped waist-surgery call before
+/// each cold fine-tuning pass. Set [`RoundsOptions::surgery`] to `false` for
+/// the matched cold-only control.
 ///
 /// # Example
 ///
 /// ```
 /// use omeco::treesa::RoundsOptions;
-/// use omeco::waist_surgery::{RebuildMode, SurgeryScope};
+/// use omeco::waist_surgery::SurgeryScope;
 ///
-/// assert_eq!(RoundsOptions::default().rebuild, RebuildMode::Greedy);
 /// let cold_only = RoundsOptions {
 ///     surgery: false,
 ///     scope: SurgeryScope::Local,
@@ -1883,8 +1882,6 @@ pub enum RoundsSchedule {
 pub struct RoundsOptions {
     /// Run the waist-surgery call at the start of each round.
     pub surgery: bool,
-    /// How rebuilt sides are initialized.
-    pub rebuild: RebuildMode,
     /// Where surgery operates.
     pub scope: SurgeryScope,
     /// Fine-tuning schedule applied after the optional surgery call.
@@ -1895,7 +1892,6 @@ impl Default for RoundsOptions {
     fn default() -> Self {
         Self {
             surgery: true,
-            rebuild: RebuildMode::default(),
             scope: SurgeryScope::default(),
             schedule: RoundsSchedule::default(),
         }
@@ -2059,29 +2055,15 @@ pub fn anneal_refine_rounds<L: Label>(
         let incumbent_score = score_of(&trajectory);
         let (t_surg, wr, waist_trace) = if opts.surgery {
             let surgery_seed = 0x0000_0054_c0ff_ee00_u64.wrapping_add(r);
-            if opts.rebuild == RebuildMode::default() && opts.scope == SurgeryScope::default() {
-                refine_capped_seeded_with_trace(
-                    &trajectory,
-                    code,
-                    size_dict,
-                    std::time::Duration::MAX,
-                    1,
-                    surgery_seed,
-                )
-            } else {
-                refine_capped_seeded_with_trace_opts(
-                    &trajectory,
-                    code,
-                    size_dict,
-                    std::time::Duration::MAX,
-                    1,
-                    surgery_seed,
-                    SurgeryOptions {
-                        rebuild: opts.rebuild,
-                        scope: opts.scope,
-                    },
-                )
-            }
+            refine_capped_seeded_with_trace_opts(
+                &trajectory,
+                code,
+                size_dict,
+                std::time::Duration::MAX,
+                1,
+                surgery_seed,
+                SurgeryOptions { scope: opts.scope },
+            )
         } else {
             (
                 trajectory.clone(),
@@ -3977,7 +3959,6 @@ mod tests {
     #[test]
     fn test_rounds_options_default_fields() {
         assert!(RoundsOptions::default().surgery);
-        assert_eq!(RoundsOptions::default().rebuild, RebuildMode::default());
         assert_eq!(RoundsOptions::default().scope, SurgeryScope::default());
         assert_eq!(RoundsOptions::default().schedule, RoundsSchedule::Cold);
     }
@@ -4289,7 +4270,6 @@ mod tests {
         };
         let opts = RoundsOptions {
             surgery: true,
-            rebuild: RebuildMode::WarmRestricted,
             scope: SurgeryScope::Local,
             schedule: RoundsSchedule::Cold,
         };

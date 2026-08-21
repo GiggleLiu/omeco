@@ -11,7 +11,7 @@ use std::process::{Command, ExitStatus};
 use std::time::Instant;
 
 use omeco::treesa::{anneal_refine_rounds, optimize_treesa_seeded, RoundsOptions, RoundsSchedule};
-use omeco::waist_surgery::{RebuildMode, SurgeryScope};
+use omeco::waist_surgery::SurgeryScope;
 use omeco::{
     contraction_complexity, simplify, splice, EinCode, NestedEinsum, ScoreFunction, TreeSA,
 };
@@ -23,10 +23,11 @@ use thiserror::Error;
 
 const DEFAULT_VISITS: u64 = 140_000_000;
 const BETA_LEVELS: u64 = 300;
-/// Row schema version. Bump when the row layout changes: rows written under an
-/// older version are never treated as complete, so a resume re-runs and
-/// replaces them instead of silently keeping stale data.
-const SCHEMA_VERSION: u32 = 2;
+/// Row schema version. Bump when the row layout or the arm set changes: rows
+/// written under an older version are never treated as complete, so a resume
+/// re-runs and replaces them instead of silently keeping stale data (e.g. the
+/// retired `surg_greedy_*` arms of schema 2).
+const SCHEMA_VERSION: u32 = 3;
 const USAGE: &str = "usage: surgery_ablation --instances <dir> --out <file.jsonl> \
     [--only name,name] [--raw] [--labels N] [--rounds 8,32] \
     [--set all|a|b] [--visits N] [--jobs N]";
@@ -339,7 +340,6 @@ struct Params {
     target_visits: u64,
     rounds: Option<u64>,
     surgery: Option<bool>,
-    rebuild: Option<&'static str>,
     scope: Option<&'static str>,
     n_original: usize,
     n_optimized: usize,
@@ -391,15 +391,9 @@ fn expected_arms(args: &Args) -> Vec<String> {
     for rounds in &args.rounds {
         if args.set.includes_b() {
             arms.extend(
-                [
-                    "cold_only",
-                    "surg_greedy_root",
-                    "surg_warm_root",
-                    "surg_greedy_local",
-                    "surg_warm_local",
-                ]
-                .into_iter()
-                .map(|arm| format!("{arm}_r{rounds}")),
+                ["cold_only", "surg_warm_root", "surg_warm_local"]
+                    .into_iter()
+                    .map(|arm| format!("{arm}_r{rounds}")),
             );
         }
         if args.set.includes_a() {
@@ -407,6 +401,29 @@ fn expected_arms(args: &Args) -> Vec<String> {
         }
     }
     arms
+}
+
+/// Classify a row's schema version: `Ok(true)` for the current schema,
+/// `Ok(false)` for stale (older or missing) rows, and `Err` for rows written
+/// by a newer driver — which must be rejected, never deleted.
+fn schema_is_current(
+    path: &Path,
+    line_number: usize,
+    value: &serde_json::Value,
+) -> AppResult<bool> {
+    let version = value
+        .get("schema_version")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    if version > SCHEMA_VERSION as u64 {
+        return Err(AppError::Message(format!(
+            "{}:{} was written by a newer driver (schema {version} > {SCHEMA_VERSION}); \
+             refusing to modify it",
+            path.display(),
+            line_number
+        )));
+    }
+    Ok(version == SCHEMA_VERSION as u64)
 }
 
 fn existing_keys(path: &Path) -> AppResult<HashSet<String>> {
@@ -439,12 +456,9 @@ fn existing_keys(path: &Path) -> AppResult<HashSet<String>> {
             }
         };
         // Rows written under an older schema are stale: do not let their keys
-        // mark a group complete, so the group is re-run and replaced.
-        if value
-            .get("schema_version")
-            .and_then(serde_json::Value::as_u64)
-            != Some(SCHEMA_VERSION as u64)
-        {
+        // mark a group complete, so the group is re-run and replaced. Rows
+        // from a newer driver are an error, never silently ignored.
+        if !schema_is_current(path, line_number + 1, &value)? {
             continue;
         }
         let key = value
@@ -556,54 +570,41 @@ fn make_row(
         &context.prepared.original.sizes,
         &context.prepared.original.code.ixs,
     );
-    let (
-        round_count,
-        surgery,
-        rebuild,
-        scope,
-        fine_sweeps,
-        accepted,
-        trace,
-        post_splice_guard_triggered,
-    ) = rounds.map_or(
-        (None, None, None, None, 0, 0, Vec::new(), false),
-        |(count, opts, report, guard_triggered)| {
-            let rebuild = match opts.rebuild {
-                RebuildMode::Greedy => "greedy",
-                RebuildMode::WarmRestricted => "warm_restricted",
-            };
-            let scope = match opts.scope {
-                SurgeryScope::Root => "root",
-                SurgeryScope::Local => "local",
-            };
-            let trace = report
-                .round_trace
-                .iter()
-                .map(|item| TraceRow {
-                    round: item.round,
-                    tc_before: item.tc_before,
-                    tc_after_surgery: item.tc_after_surgery,
-                    tc_after_anneal: item.tc_after_anneal,
-                    tc_retained: item.tc_retained,
-                    surgery_accepted: item.surgery_accepted,
-                })
-                .collect();
-            (
-                Some(count),
-                Some(opts.surgery),
-                Some(rebuild),
-                Some(scope),
-                report.fine_tune_sweeps_total,
-                report
+    let (round_count, surgery, scope, fine_sweeps, accepted, trace, post_splice_guard_triggered) =
+        rounds.map_or(
+            (None, None, None, 0, 0, Vec::new(), false),
+            |(count, opts, report, guard_triggered)| {
+                let scope = match opts.scope {
+                    SurgeryScope::Root => "root",
+                    SurgeryScope::Local => "local",
+                };
+                let trace = report
                     .round_trace
                     .iter()
-                    .filter(|item| item.surgery_accepted)
-                    .count() as u64,
-                trace,
-                guard_triggered,
-            )
-        },
-    );
+                    .map(|item| TraceRow {
+                        round: item.round,
+                        tc_before: item.tc_before,
+                        tc_after_surgery: item.tc_after_surgery,
+                        tc_after_anneal: item.tc_after_anneal,
+                        tc_retained: item.tc_retained,
+                        surgery_accepted: item.surgery_accepted,
+                    })
+                    .collect();
+                (
+                    Some(count),
+                    Some(opts.surgery),
+                    Some(scope),
+                    report.fine_tune_sweeps_total,
+                    report
+                        .round_trace
+                        .iter()
+                        .filter(|item| item.surgery_accepted)
+                        .count() as u64,
+                    trace,
+                    guard_triggered,
+                )
+            },
+        );
     let fine_visits =
         fine_sweeps.saturating_mul(context.prepared.code.num_tensors().saturating_sub(1) as u64);
     ResultRow {
@@ -627,7 +628,6 @@ fn make_row(
             target_visits: context.target_visits,
             rounds: round_count,
             surgery,
-            rebuild,
             scope,
             n_original: context.prepared.original.code.num_tensors(),
             n_optimized: context.prepared.code.num_tensors(),
@@ -784,23 +784,9 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
             rows.push(row);
         }
         if args.set.includes_b() {
-            for (name, rebuild, scope) in [
-                ("surg_greedy_root", RebuildMode::Greedy, SurgeryScope::Root),
-                (
-                    "surg_warm_root",
-                    RebuildMode::WarmRestricted,
-                    SurgeryScope::Root,
-                ),
-                (
-                    "surg_greedy_local",
-                    RebuildMode::Greedy,
-                    SurgeryScope::Local,
-                ),
-                (
-                    "surg_warm_local",
-                    RebuildMode::WarmRestricted,
-                    SurgeryScope::Local,
-                ),
+            for (name, scope) in [
+                ("surg_warm_root", SurgeryScope::Root),
+                ("surg_warm_local", SurgeryScope::Local),
             ] {
                 rows.push(run_round_arm(
                     &context,
@@ -811,7 +797,6 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
                     round_count,
                     RoundsOptions {
                         surgery: true,
-                        rebuild,
                         scope,
                         schedule: RoundsSchedule::Cold,
                     },
@@ -829,7 +814,7 @@ fn run_group(prepared: Prepared, label_index: usize, args: &Args) -> AppResult<V
 /// actually collides, and writes through a temporary file plus atomic rename
 /// so an interruption can never truncate already-completed rows.
 fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
-    if !path.exists() || keys.is_empty() {
+    if !path.exists() {
         return Ok(());
     }
     let text = fs::read_to_string(path).map_err(|error| io_error(path, error))?;
@@ -866,7 +851,10 @@ fn remove_keys(path: &Path, keys: &HashSet<String>) -> AppResult<()> {
                     path.display()
                 ))
             })?;
-        if keys.contains(key) {
+        // Rows from a newer driver must be rejected, never purged; rows from
+        // an older schema are stale and dropped.
+        let stale = !schema_is_current(path, line_number + 1, &value)?;
+        if stale || keys.contains(key) {
             removed += 1;
         } else {
             kept.push(line.to_owned());
@@ -1071,6 +1059,20 @@ fn merge_parts(out: &Path, parts: &[PathBuf]) -> AppResult<usize> {
                     });
                 }
             };
+            // Rows from a newer driver must be rejected, never merged; rows
+            // written by an older driver (e.g. retired greedy arms) are stale
+            // and must never leak back into a resumed output.
+            if row.schema_version > SCHEMA_VERSION {
+                return Err(AppError::Message(format!(
+                    "{} was written by a newer driver (schema {} > {SCHEMA_VERSION}); \
+                     refusing to modify it",
+                    part.display(),
+                    row.schema_version
+                )));
+            }
+            if row.schema_version < SCHEMA_VERSION {
+                continue;
+            }
             if existing.insert(row.key) {
                 fresh_lines.push(line.to_owned());
             }
@@ -1189,6 +1191,9 @@ fn run_parallel(args: &Args) -> AppResult<()> {
 #[derive(Debug, Deserialize)]
 struct ResultRowOwned {
     key: String,
+    /// Missing on pre-schema rows, which must be treated as stale.
+    #[serde(default)]
+    schema_version: u32,
 }
 
 fn real_main() -> AppResult<()> {
@@ -1196,6 +1201,9 @@ fn real_main() -> AppResult<()> {
     // The output directory may not exist in a fresh checkout (it is
     // gitignored), so create it before any worker opens a file there.
     ensure_output_parent(&args.out)?;
+    // Purge rows from older schemas up front: a fully complete resume skips
+    // every group and would otherwise never reach the append-time cleanup.
+    remove_keys(&args.out, &HashSet::new())?;
     if args.jobs > 1 && args.shard_count == 1 {
         run_parallel(&args)
     } else {

@@ -56,9 +56,10 @@ simplify  ->  anneal trials  ->  [k x (surgery -> cold fine tune)]  ->  splice
    - `surgery: false` is the matched cold-only arm. It runs the identical cold
      schedules, trials, seeds, incumbent ratchet, and trace construction while
      omitting only the waist-surgery call.
-   - `RebuildMode::WarmRestricted` deletes off-side leaves from the incumbent,
-     suppresses unary ancestors, recomputes interfaces, and uses the resulting
-     side topology instead of a new greedy seed before the same cold V-cycles.
+   - The side rebuilds start from the incumbent tree restricted to each side's
+     tensors (suppressing off-side leaves and unary ancestors, falling back to
+     a greedy seed only when the restriction fails) before the same cold
+     V-cycles.
    - `SurgeryScope::Local` chooses the lowest waist ancestor with at least
      `min(n, 2|A|)` leaves, runs FM on that induced subnetwork, and splices only
      that subtree. Waists spanning at least half the network still use the root.
@@ -68,8 +69,8 @@ simplify  ->  anneal trials  ->  [k x (surgery -> cold fine tune)]  ->  splice
      freeze-out front. The switch is clamped between two band epochs and 40% of
      planned sweeps; `RoundsSchedule::Cold` keeps the original pass.
 
-   `RoundsOptions::default()` is `surgery: true`, `Greedy`, `Root`, and `Cold`,
-   exactly the historical behavior. `RoundsReport::fine_tune_sweeps_total`
+   `RoundsOptions::default()` is `surgery: true`, `Root`, and `Cold`, with
+   warm-restricted side rebuilds. `RoundsReport::fine_tune_sweeps_total`
    supplies a deterministic work counter for comparing these arms; the separate
    `benchmarks/surgery_ablation` driver combines it with planned TreeSA node
    visits and wall time.

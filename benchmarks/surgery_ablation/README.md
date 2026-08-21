@@ -1,7 +1,8 @@
 # Surgery v2 and work-matched ablation
 
-This benchmark compares the matched cold-only control, four opt-in surgery
-variants, and longer TreeSA runs. The default protocol uses five deterministic
+This benchmark compares the matched cold-only control, the warm-restricted
+surgery arms (root and local), and longer TreeSA runs. The default protocol
+uses five deterministic
 labels (`r0`–`r4`), 140 million planned baseline node visits, rounds 8 and 32,
 pure-time scoring, preprocessing, and serial execution.
 

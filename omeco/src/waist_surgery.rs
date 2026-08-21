@@ -27,11 +27,12 @@
 //! records a `waist_min` event. This is a search diagnostic, not a proof of
 //! global cut optimality.
 //!
-//! [`refine`] and [`refine_capped`] always use the historical greedy, root-scoped
-//! rebuild above. The opt-in [`RebuildMode::WarmRestricted`] and
-//! [`SurgeryScope::Local`] variants are selected through
+//! [`refine`] and [`refine_capped`] use the warm-restricted, root-scoped
+//! rebuild above: each rebuilt side starts from the incumbent tree restricted
+//! to its tensors (falling back to a greedy seed if the restriction fails).
+//! [`SurgeryScope::Local`] is opt-in through
 //! [`crate::treesa::RoundsOptions`] and [`crate::treesa::anneal_refine_rounds`];
-//! every variant keeps the same strict global-`tc` acceptance gate.
+//! every scope keeps the same strict global-`tc` acceptance gate.
 //!
 //! [fm]: https://en.wikipedia.org/wiki/Fiduccia%E2%80%93Mattheyses_algorithm
 //!
@@ -112,32 +113,6 @@ const MAX_STALE_ITERS: u64 = 4;
 /// Deterministic RNG seed for the surgery FM/anneal streams.
 const RNG_SEED: u64 = 0x0000_0054_c0ff_ee00;
 
-/// Initialization strategy for rebuilding each side of a surgery cut.
-///
-/// [`RebuildMode::Greedy`] preserves the historical behavior. The opt-in
-/// [`RebuildMode::WarmRestricted`] variant starts from the incumbent tree
-/// restricted to the tensors assigned to that side (falling back to greedy if
-/// the restriction fails) before the same cold V-cycle schedule. Select it via
-/// [`crate::treesa::RoundsOptions::rebuild`].
-///
-/// # Example
-///
-/// ```
-/// use omeco::waist_surgery::RebuildMode;
-///
-/// assert_eq!(RebuildMode::default(), RebuildMode::Greedy);
-/// let mode = RebuildMode::WarmRestricted;
-/// assert_ne!(mode, RebuildMode::default());
-/// ```
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum RebuildMode {
-    /// Initialize each rebuilt side with the greedy optimizer.
-    #[default]
-    Greedy,
-    /// Initialize each rebuilt side from the restricted incumbent tree.
-    WarmRestricted,
-}
-
 /// Region of the incumbent tree replaced by waist surgery.
 ///
 /// [`SurgeryScope::Root`] preserves the historical whole-network rebuild.
@@ -166,7 +141,6 @@ pub enum SurgeryScope {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct SurgeryOptions {
-    pub(crate) rebuild: RebuildMode,
     pub(crate) scope: SurgeryScope,
 }
 
@@ -1296,8 +1270,10 @@ impl Refiner<'_> {
         self.start.elapsed() >= self.budget
     }
 
-    /// One waist-surgery pass on `incumbent` (best NestedEinsum, tc `work_tc`).
-    /// Returns an accepted (tree, tc) strictly better than `work_tc`, or `None`.
+    /// One root-scoped waist-surgery pass on `incumbent` (best NestedEinsum,
+    /// tc `work_tc`). Returns an accepted (tree, tc) strictly better than
+    /// `work_tc`, or `None`.
+    #[cfg(test)]
     fn waist_surgery(
         &mut self,
         incumbent: &ExprTree,
@@ -1306,7 +1282,6 @@ impl Refiner<'_> {
         self.waist_surgery_opts(
             incumbent,
             work_tc,
-            RebuildMode::default(),
             SurgeryScope::default(),
             &expr_to_nested_counted(incumbent, &self.code.ixs, &self.code.iy),
         )
@@ -1317,7 +1292,6 @@ impl Refiner<'_> {
         &mut self,
         incumbent: &ExprTree,
         work_tc: f64,
-        rebuild_mode: RebuildMode,
         scope: SurgeryScope,
         original: &NestedEinsum<usize>,
     ) -> Option<(NestedEinsum<usize>, f64)> {
@@ -1337,7 +1311,6 @@ impl Refiner<'_> {
                         waist_node_cost,
                         &a_leaves,
                         &scope_path,
-                        rebuild_mode,
                         original,
                     );
                 }
@@ -1426,10 +1399,7 @@ impl Refiner<'_> {
         if self.out_of_time() {
             return None;
         }
-        let rebuilt = match rebuild_mode {
-            RebuildMode::Greedy => self.rebuild(&part)?,
-            RebuildMode::WarmRestricted => self.rebuild_warm(&part, incumbent)?,
-        };
+        let rebuilt = self.rebuild_warm(&part, incumbent)?;
         if self.out_of_time() {
             return None;
         }
@@ -1453,7 +1423,6 @@ impl Refiner<'_> {
         waist_node_cost: f64,
         a_leaves: &[usize],
         scope_path: &[bool],
-        rebuild_mode: RebuildMode,
         original: &NestedEinsum<usize>,
     ) -> Option<(NestedEinsum<usize>, f64)> {
         self.report.surgery_calls += 1;
@@ -1554,7 +1523,6 @@ impl Refiner<'_> {
             &scope_open,
             incumbent,
             original,
-            rebuild_mode,
         )?;
         if self.out_of_time() {
             return None;
@@ -1569,24 +1537,6 @@ impl Refiner<'_> {
         } else {
             None
         }
-    }
-
-    /// Rebuild the whole tree from a top-level bipartition `part`.
-    fn rebuild(&mut self, part: &[bool]) -> Option<NestedEinsum<usize>> {
-        let n = self.hyper.n;
-        let a_tensors: Vec<usize> = (0..n).filter(|&t| part[t]).collect();
-        let b_tensors: Vec<usize> = (0..n).filter(|&t| !part[t]).collect();
-        if a_tensors.is_empty() || b_tensors.is_empty() {
-            return None;
-        }
-        let (open_a, open_b) = self.side_open_labels(part);
-        let sub_a = self.solve_side(&a_tensors, &open_a)?;
-        if self.out_of_time() {
-            return None;
-        }
-        let sub_b = self.solve_side(&b_tensors, &open_b)?;
-        let eins = EinCode::new(vec![open_a, open_b], self.code.iy.clone());
-        Some(NestedEinsum::node(vec![sub_a, sub_b], eins))
     }
 
     /// Root-scoped rebuild whose side initializers retain incumbent topology.
@@ -1616,7 +1566,6 @@ impl Refiner<'_> {
         scope_open: &[usize],
         incumbent: &ExprTree,
         original: &NestedEinsum<usize>,
-        rebuild_mode: RebuildMode,
     ) -> Option<NestedEinsum<usize>> {
         let a_tensors: Vec<usize> = scope_tensors
             .iter()
@@ -1632,15 +1581,11 @@ impl Refiner<'_> {
             return None;
         }
         let (open_a, open_b) = side_open_labels(scope_hyper, part);
-        let solve = |refiner: &mut Self, tensors: &[usize], open: &[usize]| match rebuild_mode {
-            RebuildMode::Greedy => refiner.solve_side(tensors, open),
-            RebuildMode::WarmRestricted => refiner.solve_side_warm(tensors, open, incumbent),
-        };
-        let sub_a = solve(self, &a_tensors, &open_a)?;
+        let sub_a = self.solve_side_warm(&a_tensors, &open_a, incumbent)?;
         if self.out_of_time() {
             return None;
         }
-        let sub_b = solve(self, &b_tensors, &open_b)?;
+        let sub_b = self.solve_side_warm(&b_tensors, &open_b, incumbent)?;
         let rebuilt_scope = NestedEinsum::node(
             vec![sub_a, sub_b],
             EinCode::new(vec![open_a, open_b], scope_open.to_vec()),
@@ -1925,31 +1870,12 @@ pub(crate) fn refine_capped_seeded<L: Label>(
     (tree, report)
 }
 
-/// One-call fixed-work refinement with an exact waist-cut diagnostic.
+/// One-call fixed-work refinement with an exact waist-cut diagnostic and
+/// caller-selected surgery scope.
 ///
 /// The returned [`WaistCallTrace`] is last-write-wins across surgery calls, so
 /// it only stays consistent with the round-level [`WaistReport`] flags when at
 /// most one refinement iteration runs; callers must pass `max_iters <= 1`.
-pub(crate) fn refine_capped_seeded_with_trace<L: Label>(
-    tree: &NestedEinsum<L>,
-    code: &EinCode<L>,
-    sizes: &HashMap<L, usize>,
-    budget: Duration,
-    max_iters: u64,
-    rng_seed: u64,
-) -> (NestedEinsum<L>, WaistReport, Option<WaistCallTrace>) {
-    refine_capped_seeded_with_trace_opts(
-        tree,
-        code,
-        sizes,
-        budget,
-        max_iters,
-        rng_seed,
-        SurgeryOptions::default(),
-    )
-}
-
-/// One-call fixed-work refinement with caller-selected opt-in surgery modes.
 pub(crate) fn refine_capped_seeded_with_trace_opts<L: Label>(
     tree: &NestedEinsum<L>,
     code: &EinCode<L>,
@@ -2063,19 +1989,8 @@ fn refine_capped_seeded_impl<L: Label>(
         let Some(incumbent) = nested_to_expr_tree(&best, &id_label_map) else {
             break;
         };
-        let candidate = if options.surgery.rebuild == RebuildMode::default()
-            && options.surgery.scope == SurgeryScope::default()
-        {
-            refiner.waist_surgery(&incumbent, best_tc)
-        } else {
-            refiner.waist_surgery_opts(
-                &incumbent,
-                best_tc,
-                options.surgery.rebuild,
-                options.surgery.scope,
-                &best,
-            )
-        };
+        let candidate =
+            refiner.waist_surgery_opts(&incumbent, best_tc, options.surgery.scope, &best);
         match candidate {
             Some((new_tree, new_tc)) if new_tc < best_tc - 1e-9 => {
                 best = new_tree;
@@ -2637,27 +2552,24 @@ mod tests {
         assert_eq!(seed.output_labels(&code.ixs), code.iy);
         let seed_tc = contraction_complexity(&seed, &sizes, &code.ixs).tc;
 
-        for rebuild in [RebuildMode::Greedy, RebuildMode::WarmRestricted] {
-            let (refined, report, _) = refine_capped_seeded_with_trace_opts(
-                &seed,
-                &code,
-                &sizes,
-                Duration::MAX,
-                1,
-                RNG_SEED,
-                SurgeryOptions {
-                    rebuild,
-                    scope: SurgeryScope::Local,
-                },
-            );
+        let (refined, report, _) = refine_capped_seeded_with_trace_opts(
+            &seed,
+            &code,
+            &sizes,
+            Duration::MAX,
+            1,
+            RNG_SEED,
+            SurgeryOptions {
+                scope: SurgeryScope::Local,
+            },
+        );
 
-            assert_eq!(
-                report.rebuild_accepts, 1,
-                "fixture must accept one {rebuild:?} local rebuild"
-            );
-            assert!(contraction_complexity(&refined, &sizes, &code.ixs).tc < seed_tc - 1e-9);
-            assert_eq!(refined.output_labels(&code.ixs), code.iy, "{rebuild:?}");
-        }
+        assert_eq!(
+            report.rebuild_accepts, 1,
+            "fixture must accept one local rebuild"
+        );
+        assert!(contraction_complexity(&refined, &sizes, &code.ixs).tc < seed_tc - 1e-9);
+        assert_eq!(refined.output_labels(&code.ixs), code.iy);
     }
 
     #[test]
@@ -2666,29 +2578,26 @@ mod tests {
         let sizes = uniform_sizes(&code, 2);
         let seed = optimize_code(&code, &sizes, &GreedyMethod::default()).unwrap();
         let seed_tc = contraction_complexity(&seed, &sizes, &code.ixs).tc;
-        for rebuild in [RebuildMode::Greedy, RebuildMode::WarmRestricted] {
-            let (refined, report, _) = refine_capped_seeded_with_trace_opts(
-                &seed,
-                &code,
-                &sizes,
-                Duration::MAX,
-                1,
-                RNG_SEED,
-                SurgeryOptions {
-                    rebuild,
-                    scope: SurgeryScope::Local,
-                },
-            );
-            let refined_tc = contraction_complexity(&refined, &sizes, &code.ixs).tc;
-            assert!(refined_tc <= seed_tc + 1e-9);
-            assert!(refined_tc.is_finite());
-            if report.rebuild_accepts > 0 {
-                assert!(refined_tc < seed_tc - 1e-9);
-            }
-            let mut leaves = refined.leaf_indices();
-            leaves.sort_unstable();
-            assert_eq!(leaves, (0..code.num_tensors()).collect::<Vec<_>>());
+        let (refined, report, _) = refine_capped_seeded_with_trace_opts(
+            &seed,
+            &code,
+            &sizes,
+            Duration::MAX,
+            1,
+            RNG_SEED,
+            SurgeryOptions {
+                scope: SurgeryScope::Local,
+            },
+        );
+        let refined_tc = contraction_complexity(&refined, &sizes, &code.ixs).tc;
+        assert!(refined_tc <= seed_tc + 1e-9);
+        assert!(refined_tc.is_finite());
+        if report.rebuild_accepts > 0 {
+            assert!(refined_tc < seed_tc - 1e-9);
         }
+        let mut leaves = refined.leaf_indices();
+        leaves.sort_unstable();
+        assert_eq!(leaves, (0..code.num_tensors()).collect::<Vec<_>>());
     }
 
     #[test]
@@ -3136,7 +3045,9 @@ mod tests {
             capture_trace: false,
             last_call_trace: None,
         };
-        assert!(refiner.rebuild(&[true; 65]).is_none());
+        assert!(refiner
+            .rebuild_warm(&[true; 65], &ExprTree::leaf(vec![0], 0))
+            .is_none());
         assert!(refiner.solve_side(&[], &[]).is_none());
         assert!(matches!(
             refiner.solve_side(&[0], &[0]),
@@ -3468,7 +3379,6 @@ mod tests {
                 f64::INFINITY,
                 &[0, 1],
                 &[],
-                RebuildMode::Greedy,
                 &original,
             )
             .is_none());
@@ -3483,37 +3393,20 @@ mod tests {
                 f64::INFINITY,
                 &[],
                 &[],
-                RebuildMode::Greedy,
                 &original,
             )
             .is_none());
 
         let mut no_new_bottleneck = test_refiner(&code, &sizes, &hyper, &log2);
         assert!(no_new_bottleneck
-            .waist_surgery_local(
-                &incumbent,
-                f64::INFINITY,
-                2.0,
-                &[0, 1],
-                &[],
-                RebuildMode::Greedy,
-                &original,
-            )
+            .waist_surgery_local(&incumbent, f64::INFINITY, 2.0, &[0, 1], &[], &original,)
             .is_none());
         assert_eq!(no_new_bottleneck.report.waist_min_hits, 1);
         assert_eq!(no_new_bottleneck.report.rebuild_attempts, 0);
 
         let mut non_improving = test_refiner(&code, &sizes, &hyper, &log2);
         assert!(non_improving
-            .waist_surgery_local(
-                &incumbent,
-                0.0,
-                f64::INFINITY,
-                &[0, 1],
-                &[],
-                RebuildMode::Greedy,
-                &original,
-            )
+            .waist_surgery_local(&incumbent, 0.0, f64::INFINITY, &[0, 1], &[], &original,)
             .is_none());
         assert_eq!(non_improving.report.rebuild_attempts, 1);
         assert_eq!(non_improving.report.rebuild_accepts, 0);
@@ -3528,7 +3421,6 @@ mod tests {
                 &[],
                 &incumbent,
                 &original,
-                RebuildMode::Greedy,
             )
             .is_none());
     }
