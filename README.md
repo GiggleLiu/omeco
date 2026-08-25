@@ -24,6 +24,8 @@ Originated as a port of [OMEinsumContractionOrders.jl](https://github.com/Tensor
 
 When contracting multiple tensors together, the order of contractions significantly affects computational cost. Finding the optimal contraction order is NP-complete, but good heuristics can find near-optimal solutions quickly.
 
+**Performance.** On the same-server certified benchmark at matched 90 s budgets, OMECO beats [cotengra](https://github.com/jcmgray/cotengra)'s hyper-optimizer on every tested instance — `tc` 36.96 vs 69.04 on the king graph, 47.40 vs 54.03 on surface code `d=21`, 59.91 vs 66.03 on 53-qubit Sycamore (lower `tc` = fewer flops; details in [Benchmarks](#benchmarks)). The reference [Julia implementation](https://github.com/TensorBFS/OMEinsumContractionOrders.jl) wins its matched rows too (39.22 vs 69.04 on the king graph).
+
 This library provides:
 
 - **GreedyMethod**: Fast O(n² log n) greedy algorithm for contraction order
@@ -415,6 +417,23 @@ We benchmark TreeSA performance by comparing the Rust implementation against the
 - Rust TreeSA produces **equivalent tc values** as Julia on all tested problems (within stochastic variation)
 - Rust is **1.2-1.4x faster than Julia on large graphs** (reg3_100, reg3_250) using bitset optimization
 - The `reg3_250` benchmark shows TreeSA reduces tc from ~70 (greedy) to ~46, a **34% improvement**
+
+### Cotengra comparison
+
+Same-server, matched 90 s budgets. The cotengra column is the median of three single-threaded runs of its hyper-optimizer + subtree SA (protocol-matched, so its parallel sampling is starved).
+
+| Instance | OMECO tc | Julia ≤90 s tc | cotengra tc |
+|----------|----------|----------------|-------------|
+| sycamore_53_20_0 | **59.91** | 64.49 | 66.03 |
+| surfacecode_d21 | **47.40** | 48.98 | 54.03 |
+| ksg | **36.96** | 39.22 | 69.04 |
+| dbn_13 | 29.00 | **28.03** | 41.15 |
+| qft_27 | **29.61** | 29.62 | 31.45 |
+
+**Key observations:**
+- OMECO beats cotengra on all five instances, up to **32 bits** on the king graph (≈4×10⁹× fewer flops)
+- The Julia suite beats cotengra on its matched rows too (up to 30 bits on the king graph)
+- On `dbn_13` the Julia treewidth back-end wins outright (28.03, instantly)
 
 To run the benchmarks yourself:
 
