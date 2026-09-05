@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use omeco::{
     CodeOptimizer, ContractionComplexity, EinCode, ExhaustiveSearch, GreedyMethod, NestedEinsum,
-    ScoreFunction, SlicedEinsum, TreeSA, TreeSASlicer, Treewidth,
+    ScoreFunction, SlicedEinsum, SurgeryTreeSA, TreeSA, TreeSASlicer, Treewidth,
 };
 
 /// A contraction order represented as a nested einsum tree.
@@ -669,6 +669,64 @@ impl PyTreeSA {
     }
 }
 
+/// Paper-style Surgery TreeSA optimizer.
+///
+/// Args:
+///     surgery_levels: Number of initial inverse-temperature levels that use
+///                     one greedy cut-surgery proposal in place of each sweep.
+///     treesa: Base TreeSA configuration. If None, uses TreeSA().
+///     retain_best: Return the best internal-TC checkpoint rather than the
+///                  final endpoint. Defaults to False to avoid scoring overhead.
+#[pyclass(name = "SurgeryTreeSA")]
+#[derive(Clone)]
+pub struct PySurgeryTreeSA {
+    inner: SurgeryTreeSA,
+}
+
+#[pymethods]
+impl PySurgeryTreeSA {
+    #[new]
+    #[pyo3(signature = (surgery_levels, treesa=None, retain_best=false))]
+    fn new(surgery_levels: usize, treesa: Option<PyTreeSA>, retain_best: bool) -> Self {
+        let treesa = treesa.map_or_else(TreeSA::default, |config| config.inner);
+        Self {
+            inner: SurgeryTreeSA::new(treesa, surgery_levels).with_retain_best(retain_best),
+        }
+    }
+
+    /// Number of initial levels assigned to surgery.
+    #[getter]
+    fn surgery_levels(&self) -> usize {
+        self.inner.surgery_levels
+    }
+
+    /// Whether the best internal-TC checkpoint is retained.
+    #[getter]
+    fn retain_best(&self) -> bool {
+        self.inner.retain_best
+    }
+
+    /// Base TreeSA configuration.
+    #[getter]
+    fn treesa(&self) -> PyTreeSA {
+        PyTreeSA {
+            inner: self.inner.treesa.clone(),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "SurgeryTreeSA(surgery_levels={}, retain_best={}, treesa={})",
+            self.inner.surgery_levels,
+            self.inner.retain_best,
+            PyTreeSA {
+                inner: self.inner.treesa.clone()
+            }
+            .__repr__()
+        )
+    }
+}
+
 /// Slicing optimizer for reducing space complexity.
 ///
 /// This optimizer iteratively adds slices to reduce memory requirements,
@@ -947,6 +1005,23 @@ fn optimize_treesa(
     };
 
     opt.inner
+        .optimize(&code, &sizes)
+        .map(|inner| PyNestedEinsum { inner })
+        .ok_or_else(|| PyValueError::new_err("Optimization failed"))
+}
+
+/// Optimize with the paper's early-surgery schedule followed by ordinary
+/// TreeSA sweeps on the same beta ladder.
+#[pyfunction]
+fn optimize_surgery_treesa(
+    ixs: Vec<Vec<i64>>,
+    out: Vec<i64>,
+    sizes: HashMap<i64, usize>,
+    optimizer: PySurgeryTreeSA,
+) -> PyResult<PyNestedEinsum> {
+    let code = EinCode::new(ixs, out);
+    optimizer
+        .inner
         .optimize(&code, &sizes)
         .map(|inner| PyNestedEinsum { inner })
         .ok_or_else(|| PyValueError::new_err("Optimization failed"))
@@ -1235,6 +1310,7 @@ enum PyOptimizer {
     Greedy(PyGreedyMethod),
     Exhaustive(PyExhaustiveSearch),
     TreeSA(PyTreeSA),
+    SurgeryTreeSA(PySurgeryTreeSA),
     Treewidth(PyTreewidth),
 }
 
@@ -1281,6 +1357,10 @@ fn optimize_code(
             .inner
             .optimize(&code, &sizes)
             .ok_or_else(|| PyValueError::new_err("Optimization failed")),
+        Some(PyOptimizer::SurgeryTreeSA(opt)) => opt
+            .inner
+            .optimize(&code, &sizes)
+            .ok_or_else(|| PyValueError::new_err("Optimization failed")),
         Some(PyOptimizer::Treewidth(opt)) => omeco::optimize_treewidth(&code, &sizes, &opt.inner)
             .map_err(|err| PyValueError::new_err(err.to_string())),
         None => GreedyMethod::default()
@@ -1301,6 +1381,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyGreedyMethod>()?;
     m.add_class::<PyExhaustiveSearch>()?;
     m.add_class::<PyTreeSA>()?;
+    m.add_class::<PySurgeryTreeSA>()?;
     m.add_class::<PyTreewidth>()?;
     m.add_class::<PyTreeSASlicer>()?;
     m.add_class::<PySimplifyReport>()?;
@@ -1309,6 +1390,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(optimize_greedy, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_exhaustive, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_treesa, m)?)?;
+    m.add_function(wrap_pyfunction!(optimize_surgery_treesa, m)?)?;
     m.add_function(wrap_pyfunction!(optimize_treewidth, m)?)?;
     m.add_function(wrap_pyfunction!(simplify_then_optimize, m)?)?;
     m.add_function(wrap_pyfunction!(waist_refine, m)?)?;

@@ -93,6 +93,53 @@ pub struct TreeSA {
     pub surgery_probability: f64,
 }
 
+/// The Surgery TreeSA schedule described in the paper.
+///
+/// For the first [`Self::surgery_levels`] inverse-temperature levels, every
+/// configured TreeSA sweep is replaced by one greedy global cut-surgery
+/// proposal. The rest of the same cooling schedule uses ordinary TreeSA
+/// sweeps; there is no restart or extra polishing pass. By default each trial
+/// returns its endpoint. With [`Self::retain_best`], it retains the lowest
+/// internal-TC checkpoint (initial tree or sweep endpoint). Trials are ranked
+/// by exact emitted TC; internal TC may omit dangling-label reduction costs.
+///
+/// This is a separate opt-in optimizer so [`TreeSA`] and all of its existing
+/// defaults retain their historical behavior.
+#[derive(Debug, Clone)]
+pub struct SurgeryTreeSA {
+    /// Base TreeSA configuration supplying the initializer, beta schedule,
+    /// trials, sweeps per level, preprocessing, and local-move score.
+    pub treesa: TreeSA,
+    /// Number of initial inverse-temperature levels assigned to surgery.
+    pub surgery_levels: usize,
+    /// Retain the best internal-TC checkpoint instead of the final endpoint.
+    /// Defaults to false to avoid per-sweep scoring and snapshot overhead.
+    pub retain_best: bool,
+}
+
+impl SurgeryTreeSA {
+    /// Wrap a TreeSA configuration with the paper's early-surgery schedule.
+    pub fn new(treesa: TreeSA, surgery_levels: usize) -> Self {
+        Self {
+            treesa,
+            surgery_levels,
+            retain_best: false,
+        }
+    }
+
+    /// Choose whether to return the best internal-TC checkpoint or the endpoint.
+    pub fn with_retain_best(mut self, retain_best: bool) -> Self {
+        self.retain_best = retain_best;
+        self
+    }
+
+    /// Set the number of initial levels assigned to surgery.
+    pub fn with_surgery_levels(mut self, surgery_levels: usize) -> Self {
+        self.surgery_levels = surgery_levels;
+        self
+    }
+}
+
 /// Method for initializing the contraction tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Initializer {
@@ -1073,6 +1120,77 @@ fn optimize_tree_sa_mixed<R: Rng>(
     tree
 }
 
+/// Run the paper's two-phase Surgery TreeSA schedule on one initialized tree.
+/// Surgery and local updates share one RNG and one uninterrupted beta ladder.
+/// Acceptance and best-sweep tracking use internal TC, avoiding conversion to
+/// NestedEinsum at every checkpoint. Internal TC can omit emitted-tree costs
+/// such as dangling-label reductions; final trial selection uses exact TC.
+#[allow(clippy::too_many_arguments)]
+fn optimize_tree_sa_surgery_prefix<R: Rng>(
+    mut tree: ExprTree,
+    log2_sizes: &[f64],
+    betas: &[f64],
+    niters: usize,
+    score: &ScoreFunction,
+    decomp: DecompositionType,
+    rng: &mut R,
+    nedge: usize,
+    surgery: &WaistUpdate,
+    surgery_levels: usize,
+    retain_best: bool,
+) -> ExprTree {
+    let log2_rw_weight = if score.rw_weight > 0.0 {
+        score.rw_weight.log2()
+    } else {
+        f64::NEG_INFINITY
+    };
+    let mut scratch = ScratchSpace::new(nedge);
+    let mut best = retain_best.then(|| tree.clone());
+    let mut current_tc = if retain_best || surgery_levels > 0 {
+        tree_complexity(&tree, log2_sizes).0
+    } else {
+        f64::INFINITY
+    };
+    let mut best_tc = current_tc;
+
+    for (level, &beta) in betas.iter().enumerate() {
+        for _ in 0..niters {
+            if level < surgery_levels {
+                if let Some(candidate) = surgery.propose_greedy(&tree) {
+                    let candidate_tc = tree_complexity(&candidate, log2_sizes).0;
+                    let d_tc = candidate_tc - current_tc;
+                    if rng.random::<f64>() < (-beta * d_tc).exp().min(1.0) {
+                        tree = candidate;
+                        current_tc = candidate_tc;
+                        scratch = ScratchSpace::new(nedge);
+                    }
+                }
+            } else {
+                optimize_subtree_mut(
+                    &mut tree,
+                    beta,
+                    log2_sizes,
+                    score.sc_target,
+                    score.sc_weight,
+                    log2_rw_weight,
+                    decomp,
+                    rng,
+                    &mut scratch,
+                );
+                if retain_best {
+                    current_tc = tree_complexity(&tree, log2_sizes).0;
+                }
+            }
+
+            if retain_best && current_tc < best_tc {
+                best_tc = current_tc;
+                best = Some(tree.clone());
+            }
+        }
+    }
+    best.unwrap_or(tree)
+}
+
 /// Whole-tree analogue of TreeSA's local rewrite energy difference.
 ///
 /// Complexity values stay in log2 units. In particular, this must not call
@@ -1424,6 +1542,69 @@ pub fn optimize_treesa_seeded<L: Label>(
     optimize_treesa_with_seed(code, size_dict, config, seed)
 }
 
+/// Optimize an [`EinCode`] with the paper's early-surgery TreeSA schedule.
+///
+/// The first [`SurgeryTreeSA::surgery_levels`] beta levels use greedy cut
+/// surgery and all remaining levels use normal TreeSA sweeps. A value of zero
+/// uses only local sweeps, as do path decompositions because surgery is not
+/// path-preserving. When `retain_best` is false, these cases dispatch directly
+/// to [`optimize_treesa`], preserving its exact output and RNG stream.
+///
+/// # Panics
+///
+/// Panics if the wrapped TreeSA configuration also enables either historical
+/// surgery extension. Surgery TreeSA has one surgery schedule parameter;
+/// composing independent surgery mechanisms would no longer implement the
+/// paper's algorithm.
+pub fn optimize_surgery_treesa<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &SurgeryTreeSA,
+) -> Option<NestedEinsum<L>> {
+    optimize_surgery_treesa_seeded(code, size_dict, config, 42)
+}
+
+/// Seeded variant of [`optimize_surgery_treesa`]. Trial `i` uses
+/// `seed + i`, matching [`optimize_treesa_seeded`].
+pub fn optimize_surgery_treesa_seeded<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &SurgeryTreeSA,
+    seed: u64,
+) -> Option<NestedEinsum<L>> {
+    assert!(
+        config.treesa.surgery_iters == 0 && config.treesa.surgery_probability == 0.0,
+        "SurgeryTreeSA cannot be combined with TreeSA's other surgery modes"
+    );
+    let is_path = config.treesa.decomposition_type == DecompositionType::Path;
+    if !config.retain_best && (config.surgery_levels == 0 || is_path) {
+        return optimize_treesa_seeded(code, size_dict, &config.treesa, seed);
+    }
+    let surgery_levels = if is_path { 0 } else { config.surgery_levels };
+    let preprocess = config.treesa.preprocess && !is_path;
+    if preprocess {
+        let simplified = simplify(code, size_dict);
+        let reduced = optimize_treesa_core_seeded_with_surgery(
+            &simplified.code,
+            size_dict,
+            &config.treesa,
+            seed,
+            surgery_levels,
+            config.retain_best,
+        )?;
+        return Some(splice(&reduced, &simplified.subtrees));
+    }
+
+    optimize_treesa_core_seeded_with_surgery(
+        code,
+        size_dict,
+        &config.treesa,
+        seed,
+        surgery_levels,
+        config.retain_best,
+    )
+}
+
 fn optimize_treesa_with_seed<L: Label>(
     code: &EinCode<L>,
     size_dict: &HashMap<L, usize>,
@@ -1562,6 +1743,33 @@ fn optimize_treesa_core_seeded<L: Label>(
     config: &TreeSA,
     seed: u64,
 ) -> Option<NestedEinsum<L>> {
+    optimize_treesa_core_seeded_mode(code, size_dict, config, seed, None)
+}
+
+fn optimize_treesa_core_seeded_with_surgery<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    seed: u64,
+    surgery_levels: usize,
+    retain_best: bool,
+) -> Option<NestedEinsum<L>> {
+    optimize_treesa_core_seeded_mode(
+        code,
+        size_dict,
+        config,
+        seed,
+        Some((surgery_levels, retain_best)),
+    )
+}
+
+fn optimize_treesa_core_seeded_mode<L: Label>(
+    code: &EinCode<L>,
+    size_dict: &HashMap<L, usize>,
+    config: &TreeSA,
+    seed: u64,
+    surgery_mode: Option<(usize, bool)>,
+) -> Option<NestedEinsum<L>> {
     assert!(
         config.surgery_probability.is_finite() && (0.0..=1.0).contains(&config.surgery_probability),
         "surgery probability must be finite and in [0, 1]"
@@ -1583,8 +1791,10 @@ fn optimize_treesa_core_seeded<L: Label>(
         .collect();
     let int_ixs = convert_to_int_indices(&code.ixs, &label_map);
     let int_iy: Vec<usize> = code.iy.iter().map(|l| label_map[l]).collect();
-    let surgery = (config.surgery_probability > 0.0
-        && config.decomposition_type == DecompositionType::Tree)
+    let prefix_surgery = surgery_mode.is_some();
+    let surgery = (prefix_surgery
+        || (config.surgery_probability > 0.0
+            && config.decomposition_type == DecompositionType::Tree))
         .then(|| WaistUpdate::new(&int_ixs, &int_iy, &log2_sizes));
 
     // Run parallel trials on a pool whose worker stacks are sized for this
@@ -1642,7 +1852,23 @@ fn optimize_treesa_core_seeded<L: Label>(
 
                 // Optimize. A configured surgery rule replaces local sweeps at
                 // the current beta; it never starts a separate anneal.
-                let optimized = if let Some(surgery) = &surgery {
+                let optimized = if prefix_surgery {
+                    optimize_tree_sa_surgery_prefix(
+                        tree,
+                        &log2_sizes,
+                        &config.betas,
+                        config.niters,
+                        &config.score,
+                        config.decomposition_type,
+                        &mut rng,
+                        nedge,
+                        surgery
+                            .as_ref()
+                            .expect("prefix surgery must be initialized"),
+                        surgery_mode.unwrap().0,
+                        surgery_mode.unwrap().1,
+                    )
+                } else if let Some(surgery) = &surgery {
                     optimize_tree_sa_mixed(
                         tree,
                         &log2_sizes,
@@ -1675,7 +1901,11 @@ fn optimize_treesa_core_seeded<L: Label>(
                 // can select a tree that is worse than another trial's.
                 let nested = expr_tree_to_nested(&optimized, &code.ixs, &labels, &code.iy);
                 let cc = crate::contraction_complexity(&nested, size_dict, &code.ixs);
-                let score = config.score.evaluate(cc.tc, cc.sc, cc.rwc);
+                let score = if prefix_surgery {
+                    cc.tc
+                } else {
+                    config.score.evaluate(cc.tc, cc.sc, cc.rwc)
+                };
 
                 (nested, score)
             })
@@ -4490,5 +4720,159 @@ mod tests {
         assert!(config.score.evaluate(cc.tc, cc.sc, cc.rwc) <= seed_score);
         assert_eq!(report.rounds_run, 1);
         assert_eq!(report.fine_tune_sweeps_total, 16);
+    }
+
+    #[test]
+    fn surgery_treesa_retains_best_internal_tc_checkpoint() {
+        let code = grid_code(3, 3);
+        let sizes = vec![1.0; code.unique_labels().len()];
+        let surgery = WaistUpdate::new(&code.ixs, &code.iy, &sizes);
+        let score = ScoreFunction::default();
+        let mut saw_worse_endpoint = false;
+        for seed in 0..8 {
+            let mut rng = SmallRng::seed_from_u64(seed);
+            let initial = init_random(
+                &code.ixs,
+                &code.iy,
+                sizes.len(),
+                DecompositionType::Tree,
+                &mut rng,
+            );
+            let mut reference_rng = rng.clone();
+            let mut tree = initial.clone();
+            let mut best = tree.clone();
+            let mut best_tc = tree_complexity(&tree, &sizes).0;
+            let mut scratch = ScratchSpace::new(sizes.len());
+            // At beta=0 every finite proposal is accepted. Replay both phases
+            // independently to verify the returned snapshot, not just its cost.
+            for level in 0..2 {
+                for _ in 0..20 {
+                    if level == 0 {
+                        if let Some(candidate) = surgery.propose_greedy(&tree) {
+                            let _accept = reference_rng.random::<f64>();
+                            tree = candidate;
+                            scratch = ScratchSpace::new(sizes.len());
+                        }
+                    } else {
+                        optimize_subtree_mut(
+                            &mut tree,
+                            0.0,
+                            &sizes,
+                            score.sc_target,
+                            score.sc_weight,
+                            f64::NEG_INFINITY,
+                            DecompositionType::Tree,
+                            &mut reference_rng,
+                            &mut scratch,
+                        );
+                    }
+                    let tc = tree_complexity(&tree, &sizes).0;
+                    if tc < best_tc {
+                        best_tc = tc;
+                        best = tree.clone();
+                    }
+                }
+            }
+            saw_worse_endpoint |= tree_complexity(&tree, &sizes).0 > best_tc;
+            let mut endpoint_rng = rng.clone();
+            let endpoint = optimize_tree_sa_surgery_prefix(
+                initial.clone(),
+                &sizes,
+                &[0.0, 0.0],
+                20,
+                &score,
+                DecompositionType::Tree,
+                &mut endpoint_rng,
+                sizes.len(),
+                &surgery,
+                1,
+                false,
+            );
+            assert_eq!(format!("{endpoint:?}"), format!("{tree:?}"));
+            let actual = optimize_tree_sa_surgery_prefix(
+                initial,
+                &sizes,
+                &[0.0, 0.0],
+                20,
+                &score,
+                DecompositionType::Tree,
+                &mut rng,
+                sizes.len(),
+                &surgery,
+                1,
+                true,
+            );
+            assert_eq!(format!("{actual:?}"), format!("{best:?}"));
+            let next = reference_rng.random::<u64>();
+            assert_eq!(rng.random::<u64>(), next);
+            assert_eq!(endpoint_rng.random::<u64>(), next);
+        }
+        assert!(
+            saw_worse_endpoint,
+            "fixture must distinguish best from endpoint"
+        );
+    }
+
+    #[test]
+    fn surgery_treesa_zero_levels_is_byte_identical_to_plain_treesa() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = TreeSA {
+            betas: vec![0.01, 0.2, 1.0, 5.0],
+            ntrials: 2,
+            niters: 2,
+            preprocess: false,
+            ..TreeSA::fast()
+        };
+        let plain = optimize_treesa_seeded(&code, &sizes, &config, 91).unwrap();
+        let surgery =
+            optimize_surgery_treesa_seeded(&code, &sizes, &SurgeryTreeSA::new(config, 0), 91)
+                .unwrap();
+
+        assert_eq!(
+            crate::json::to_json_string(&surgery).unwrap(),
+            crate::json::to_json_string(&plain).unwrap()
+        );
+    }
+
+    #[test]
+    fn surgery_treesa_is_deterministic_valid_and_ratcheted() {
+        let code = grid_code(5, 5);
+        let sizes: HashMap<usize, usize> = code
+            .unique_labels()
+            .into_iter()
+            .map(|label| (label, 2))
+            .collect();
+        let base = TreeSA {
+            betas: vec![0.01, 0.1, 0.5, 2.0, 8.0],
+            ntrials: 1,
+            niters: 2,
+            preprocess: false,
+            ..TreeSA::fast()
+        };
+        let initializer = optimize_greedy(&code, &sizes, &GreedyMethod::default()).unwrap();
+        let initializer_tc = crate::contraction_complexity(&initializer, &sizes, &code.ixs).tc;
+        let config = SurgeryTreeSA::new(base, 3).with_retain_best(true);
+
+        let first = optimize_surgery_treesa_seeded(&code, &sizes, &config, 1234).unwrap();
+        let again = optimize_surgery_treesa_seeded(&code, &sizes, &config, 1234).unwrap();
+        let first_tc = crate::contraction_complexity(&first, &sizes, &code.ixs).tc;
+        let mut leaves = first.leaf_indices();
+        leaves.sort_unstable();
+
+        assert_eq!(
+            crate::json::to_json_string(&first).unwrap(),
+            crate::json::to_json_string(&again).unwrap()
+        );
+        assert!(first_tc <= initializer_tc);
+        assert_eq!(leaves, (0..code.num_tensors()).collect::<Vec<_>>());
+        assert_eq!(first.output_labels(&code.ixs), code.iy);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot be combined")]
+    fn surgery_treesa_rejects_composed_surgery_modes() {
+        let (code, sizes) = load_benchmark_graph("petersen");
+        let config = SurgeryTreeSA::new(TreeSA::fast().with_surgery_probability(0.1), 2);
+        let _ = optimize_surgery_treesa(&code, &sizes, &config);
     }
 }

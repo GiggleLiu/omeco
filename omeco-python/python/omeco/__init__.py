@@ -18,6 +18,8 @@ Classes:
         TreeSA(ntrials=10, niters=50, betas=None, score=None,
                preprocess=True, surgery_iters=0, surgery_probability=0.0)
         TreeSA.fast(score=None)
+    SurgeryTreeSA: Paper-style early surgery followed by ordinary TreeSA.
+        SurgeryTreeSA(surgery_levels, treesa=None, retain_best=False)
 
     Treewidth: Scalable treewidth-heuristic elimination-order optimizer.
         Treewidth(algorithm="min_degree")
@@ -71,6 +73,7 @@ from omeco._core import (
     GreedyMethod,
     ExhaustiveSearch,
     TreeSA,
+    SurgeryTreeSA,
     Treewidth,
     TreeSASlicer,
     SimplifyReport,
@@ -78,6 +81,7 @@ from omeco._core import (
     # Functions
     optimize_code,
     optimize_exhaustive,
+    optimize_surgery_treesa,
     optimize_treewidth,
     contraction_complexity,
     sliced_complexity,
@@ -96,12 +100,14 @@ __all__ = [
     "GreedyMethod",
     "ExhaustiveSearch",
     "TreeSA",
+    "SurgeryTreeSA",
     "Treewidth",
     "TreeSASlicer",
     "SimplifyReport",
     "WaistReport",
     "optimize_code",
     "optimize_exhaustive",
+    "optimize_surgery_treesa",
     "optimize_treewidth",
     "contraction_complexity",
     "sliced_complexity",

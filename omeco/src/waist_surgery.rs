@@ -362,6 +362,45 @@ impl WaistUpdate {
         let nested = expr_to_nested_counted(&grafted, &self.code.ixs, &self.code.iy);
         nested_to_expr_tree(&nested, &self.label_map)
     }
+
+    /// Propose the deterministic leaf-SPR move used by Surgery TreeSA.
+    ///
+    /// Unlike [`Self::propose`], this follows the paper's selectors exactly:
+    /// the maximum-gain boundary tensor is moved (excluding only moves that
+    /// empty a side), then attached to the opposite-side subtree with maximum
+    /// shared-index weight, breaking ties toward the smaller subtree.
+    pub(crate) fn propose_greedy(&self, incumbent: &ExprTree) -> Option<ExprTree> {
+        let (_, a_leaves) = extract_waist(incumbent, &self.log2_sizes)?;
+        let n = self.hyper.n;
+        if a_leaves.is_empty() || a_leaves.len() >= n {
+            return None;
+        }
+        let mut current = vec![false; n];
+        for tensor in a_leaves {
+            if tensor < n {
+                current[tensor] = true;
+            }
+        }
+
+        let part = single_cut_move_greedy(&self.hyper, current.clone())?;
+        let moved_tensor = current
+            .iter()
+            .zip(&part)
+            .position(|(before, after)| before != after)?;
+        let target_side = part[moved_tensor];
+        let (pruned, moved_leaf) = detach_leaf(incumbent, moved_tensor)?;
+        let attachment = choose_attachment_greedy(
+            &pruned,
+            &part,
+            target_side,
+            &self.hyper.tlabels[moved_tensor],
+            &self.hyper,
+        )?;
+        let grafted = graft_leaf(pruned, &attachment, moved_leaf)?;
+
+        let nested = expr_to_nested_counted(&grafted, &self.code.ixs, &self.code.iy);
+        nested_to_expr_tree(&nested, &self.label_map)
+    }
 }
 
 // =============================================================================
@@ -611,6 +650,55 @@ fn single_cut_move<R: Rng>(
     Some(part)
 }
 
+/// Paper selector for the tensor crossing the waist. Ties are resolved by
+/// tensor id so a fixed input tree produces a fixed proposal.
+fn single_cut_move_greedy(hyper: &Hyper, mut part: Vec<bool>) -> Option<Vec<bool>> {
+    let mut cnt_a = vec![0u32; hyper.log2.len()];
+    for (tensor, &in_a) in part.iter().enumerate() {
+        if in_a {
+            for &label in &hyper.tlabels[tensor] {
+                cnt_a[label] += 1;
+            }
+        }
+    }
+    let size_a = part.iter().filter(|&&in_a| in_a).count();
+    let mut best: Option<(f64, usize)> = None;
+    for (tensor, &tensor_in_a) in part.iter().enumerate().take(hyper.n) {
+        if (tensor_in_a && size_a <= 1) || (!tensor_in_a && size_a >= hyper.n - 1) {
+            continue;
+        }
+        let boundary = hyper.tlabels[tensor].iter().any(|&label| {
+            let degree = hyper.label_tensors[label].len() as u32;
+            cnt_a[label] > 0 && cnt_a[label] < degree
+        });
+        if !boundary {
+            continue;
+        }
+        let mut gain = 0.0;
+        for &label in &hyper.tlabels[tensor] {
+            if hyper.is_out[label] {
+                continue;
+            }
+            let degree = hyper.label_tensors[label].len() as u32;
+            let (same, other) = if tensor_in_a {
+                (cnt_a[label], degree - cnt_a[label])
+            } else {
+                (degree - cnt_a[label], cnt_a[label])
+            };
+            gain += hyper.log2[label] * ((other >= 1) as i32 - (same >= 2) as i32) as f64;
+        }
+        let replace = best.as_ref().map_or(true, |&(best_gain, best_tensor)| {
+            gain > best_gain || (gain == best_gain && tensor < best_tensor)
+        });
+        if replace {
+            best = Some((gain, tensor));
+        }
+    }
+    let (_, tensor) = best?;
+    part[tensor] = !part[tensor];
+    Some(part)
+}
+
 /// Detach one leaf and suppress the unary branch left at its former parent.
 /// All other subtrees are cloned without changing their relative topology.
 fn detach_leaf(tree: &ExprTree, tensor: usize) -> Option<(ExprTree, ExprTree)> {
@@ -725,6 +813,82 @@ fn choose_attachment<R: Rng>(
     } else {
         Some(top.swap_remove(rng.random_range(0..top.len())).path)
     }
+}
+
+/// Paper selector for the landing subtree. The path is the final stable tie
+/// breaker after shared-index weight and subtree size.
+fn choose_attachment_greedy(
+    tree: &ExprTree,
+    part: &[bool],
+    target_side: bool,
+    moved_labels: &[usize],
+    hyper: &Hyper,
+) -> Option<Vec<bool>> {
+    fn visit(
+        tree: &ExprTree,
+        part: &[bool],
+        target_side: bool,
+        moved_labels: &[usize],
+        hyper: &Hyper,
+        path: &mut Vec<bool>,
+        best: &mut Option<AttachmentCandidate>,
+    ) -> (bool, usize) {
+        let (all_target, span) = match tree {
+            ExprTree::Leaf(info) => (
+                info.tensor_id.and_then(|tensor| part.get(tensor).copied()) == Some(target_side),
+                1,
+            ),
+            ExprTree::Node { left, right, .. } => {
+                path.push(false);
+                let (left_target, left_span) =
+                    visit(left, part, target_side, moved_labels, hyper, path, best);
+                path.pop();
+                path.push(true);
+                let (right_target, right_span) =
+                    visit(right, part, target_side, moved_labels, hyper, path, best);
+                path.pop();
+                (left_target && right_target, left_span + right_span)
+            }
+        };
+
+        if all_target {
+            let shared_weight: f64 = moved_labels
+                .iter()
+                .filter(|&&label| !hyper.is_out[label] && tree.labels().contains(&label))
+                .map(|&label| hyper.log2[label])
+                .sum();
+            if shared_weight > 0.0 {
+                let candidate = AttachmentCandidate {
+                    shared_weight,
+                    span,
+                    path: path.clone(),
+                };
+                let replace = best.as_ref().map_or(true, |incumbent| {
+                    candidate.shared_weight > incumbent.shared_weight
+                        || (candidate.shared_weight == incumbent.shared_weight
+                            && (candidate.span < incumbent.span
+                                || (candidate.span == incumbent.span
+                                    && candidate.path < incumbent.path)))
+                });
+                if replace {
+                    *best = Some(candidate);
+                }
+            }
+        }
+        (all_target, span)
+    }
+
+    let mut best = None;
+    visit(
+        tree,
+        part,
+        target_side,
+        moved_labels,
+        hyper,
+        &mut Vec::new(),
+        &mut best,
+    );
+    best.map(|candidate| candidate.path)
 }
 
 /// Attach `leaf` as a sibling of the subtree at `path`.
@@ -3206,6 +3370,34 @@ mod tests {
         );
         let hyper = Hyper::build(&disconnected, &label_map, &[1.0; 4], 4);
         assert!(single_cut_move(&hyper, vec![true, true, false, false], 1, 3, &mut rng).is_none());
+    }
+
+    #[test]
+    fn test_paper_selectors_take_max_gain_then_smallest_attachment() {
+        let code = EinCode::new(
+            vec![vec![0usize], vec![1], vec![0], vec![1]],
+            Vec::<usize>::new(),
+        );
+        let label_map: HashMap<usize, usize> = [(0, 0), (1, 1)].into();
+        let hyper = Hyper::build(&code, &label_map, &[5.0, 1.0], 2);
+        let before = vec![true, true, false, false];
+
+        // Tensors 0 and 2 tie for the largest cut gain; stable tensor-id
+        // tie-breaking selects tensor 0.
+        let after = single_cut_move_greedy(&hyper, before).unwrap();
+        assert_eq!(after, vec![false, true, false, false]);
+
+        let destination = ExprTree::node(
+            ExprTree::leaf(vec![0], 2),
+            ExprTree::leaf(vec![1], 3),
+            vec![0, 1],
+        );
+        // The whole destination subtree and leaf 2 share index 0 with the
+        // moved tensor. Equal q is broken in favor of the smaller leaf.
+        assert_eq!(
+            choose_attachment_greedy(&destination, &after, false, &[0], &hyper),
+            Some(vec![false])
+        );
     }
 
     #[test]

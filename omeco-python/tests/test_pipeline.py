@@ -1,6 +1,6 @@
 from omeco import (
-    TreeSA, GreedyMethod, optimize_code, contraction_complexity,
-    simplify_then_optimize, waist_refine,
+    TreeSA, SurgeryTreeSA, GreedyMethod, optimize_code, contraction_complexity,
+    optimize_surgery_treesa, simplify_then_optimize, waist_refine,
 )
 
 CHAIN_IXS = [[0, 1], [1, 2], [2, 3], [3, 4]]
@@ -20,6 +20,22 @@ def test_treesa_pipeline_defaults():
 def test_treesa_default_keeps_all_leaves():
     tree = optimize_code(CHAIN_IXS, CHAIN_OUT, CHAIN_SIZES, TreeSA(ntrials=1, niters=5))
     assert tree.leaf_count() == 4
+
+
+def test_surgery_treesa_is_explicit_and_keeps_all_leaves():
+    base = TreeSA(ntrials=1, niters=1, betas=[0.01, 0.1, 1.0], preprocess=False)
+    opt = SurgeryTreeSA(2, base)
+    assert opt.surgery_levels == 2
+    assert opt.retain_best is False
+    retained = SurgeryTreeSA(2, base, retain_best=True)
+    assert retained.retain_best is True
+    assert "retain_best=true" in repr(retained)
+    assert optimize_code(CHAIN_IXS, CHAIN_OUT, CHAIN_SIZES, retained).leaf_count() == 4
+    assert opt.treesa.niters == 1
+    tree = optimize_code(CHAIN_IXS, CHAIN_OUT, CHAIN_SIZES, opt)
+    assert tree.leaf_count() == 4
+    direct = optimize_surgery_treesa(CHAIN_IXS, CHAIN_OUT, CHAIN_SIZES, opt)
+    assert direct.leaf_count() == 4
 
 
 def test_simplify_then_optimize_reports_shrink():

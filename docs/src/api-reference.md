@@ -211,6 +211,24 @@ TreeSA.fast()
 TreeSA(ntrials=10, niters=100, score=ScoreFunction(sc_target=28.0))
 ```
 
+#### `SurgeryTreeSA`
+
+```python
+class SurgeryTreeSA:
+    def __init__(self, surgery_levels: int, treesa: Optional[TreeSA] = None)
+```
+
+Implements the paper schedule in one uninterrupted annealing run: greedy cut
+surgery replaces the sweeps at the first `surgery_levels` inverse-temperature
+levels, and ordinary TreeSA sweeps run at every remaining level. The lowest-TC
+tree visited is retained.
+
+```python
+# The paper evaluation uses one update per beta level.
+optimizer = SurgeryTreeSA(45, TreeSA(ntrials=20, niters=1, preprocess=False))
+tree = optimize_code(ixs, out, sizes, optimizer)
+```
+
 #### `TreeSASlicer`
 
 ```python

@@ -176,8 +176,9 @@ pub use preprocess::{simplify, simplify_then_optimize, splice, Simplified, Simpl
 pub use score::ScoreFunction;
 pub use slicer::{slice_code, CodeSlicer, Slicer, TreeSASlicer};
 pub use treesa::{
-    optimize_treesa, optimize_treesa_seeded, prepare_warm_anneal, warm_exprtree_to_nested,
-    Initializer, TreeSA, WarmAnnealCtx,
+    optimize_surgery_treesa, optimize_surgery_treesa_seeded, optimize_treesa,
+    optimize_treesa_seeded, prepare_warm_anneal, warm_exprtree_to_nested, Initializer,
+    SurgeryTreeSA, TreeSA, WarmAnnealCtx,
 };
 pub use treewidth::{
     optimize_treewidth, EliminationAlgorithm, EliminationOrder, Treewidth, TreewidthError,
@@ -213,6 +214,16 @@ impl CodeOptimizer for TreeSA {
         size_dict: &HashMap<L, usize>,
     ) -> Option<NestedEinsum<L>> {
         optimize_treesa(code, size_dict, self)
+    }
+}
+
+impl CodeOptimizer for SurgeryTreeSA {
+    fn optimize<L: Label>(
+        &self,
+        code: &EinCode<L>,
+        size_dict: &HashMap<L, usize>,
+    ) -> Option<NestedEinsum<L>> {
+        optimize_surgery_treesa(code, size_dict, self)
     }
 }
 

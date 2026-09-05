@@ -60,7 +60,7 @@ that's never worse — see the
 page for what each stage does and when surgery helps:
 
 ```python
-from omeco import optimize_code, contraction_complexity, TreeSA
+from omeco import optimize_code, contraction_complexity, SurgeryTreeSA, TreeSA
 
 ixs = [[0, 1], [1, 2], [2, 3]]
 out = [0, 3]
@@ -69,6 +69,10 @@ sizes = {0: 100, 1: 200, 2: 50, 3: 100}
 tree = optimize_code(ixs, out, sizes, TreeSA())        # full default pipeline
 better = optimize_code(ixs, out, sizes, TreeSA(surgery_iters=3))  # + 3 anneal-surgery rounds
 mixed = optimize_code(ixs, out, sizes, TreeSA(surgery_probability=0.001))  # 0.1% surgery updates
+# Paper schedule: surgery for 45 beta levels, then ordinary TreeSA sweeps.
+paper = optimize_code(
+    ixs, out, sizes, SurgeryTreeSA(45, TreeSA(niters=1, preprocess=False))
+)
 print(contraction_complexity(tree, ixs, sizes))
 ```
 
@@ -114,7 +118,7 @@ result that's never worse — see the
 page for what each stage does and when surgery helps:
 
 ```rust
-use omeco::{EinCode, TreeSA, optimize_code, contraction_complexity};
+use omeco::{EinCode, SurgeryTreeSA, TreeSA, optimize_code, contraction_complexity};
 use std::collections::HashMap;
 
 let code = EinCode::new(
@@ -136,6 +140,15 @@ let mixed = optimize_code(
     &code,
     &sizes,
     &TreeSA::default().with_surgery_probability(0.001),
+).unwrap();
+// Paper schedule: surgery for 45 beta levels, then ordinary TreeSA sweeps.
+let paper = optimize_code(
+    &code,
+    &sizes,
+    &SurgeryTreeSA::new(
+        TreeSA::default().with_niters(1).with_preprocess(false),
+        45,
+    ),
 ).unwrap();
 let complexity = contraction_complexity(&tree, &sizes, &code.ixs);
 println!("Time: 2^{:.2}, Space: 2^{:.2}", complexity.tc, complexity.sc);
